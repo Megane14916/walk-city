@@ -8,11 +8,11 @@ React フロントエンドと Supabase バックエンドを別担当者が並�
 
 ## 2. 通信方式
 
-| 用途 | 推奨方式 |
-|---|---|
-| Google ログイン | Supabase Auth SDK |
-| Google Health 歩数同期 | Supabase Edge Function |
-| 購入・配置・移動 | Supabase RPC / DB Function |
+| 用途                         | 推奨方式                      |
+| ---------------------------- | ----------------------------- |
+| Google ログイン              | Supabase Auth SDK             |
+| Google Health 歩数同期       | Supabase Edge Function        |
+| 購入・配置・移動             | Supabase RPC / DB Function    |
 | カタログ・街・ランキング読取 | Supabase SDK、View または RPC |
 
 フロントエンドのサービス層では通信方式の違いを隠し、TypeScript の一貫した関数として公開する。
@@ -54,37 +54,37 @@ Supabase SDK の生レスポンスを UI で直接扱わず、サービス層で
 type ApiResult<T> =
   | { ok: true; data: T }
   | {
-      ok: false
+      ok: false;
       error: {
-        code: ApiErrorCode
-        message: string
-        details?: Record<string, unknown>
-      }
-    }
+        code: ApiErrorCode;
+        message: string;
+        details?: Record<string, unknown>;
+      };
+    };
 ```
 
 `message` は表示可能な一般メッセージとし、UI 分岐には安定した `code` を使用する。
 
 ```ts
 type ApiErrorCode =
-  | 'UNAUTHENTICATED'
-  | 'OAUTH_CANCELLED'
-  | 'OAUTH_STATE_MISMATCH'
-  | 'HEALTH_NOT_CONNECTED'
-  | 'HEALTH_PERMISSION_REQUIRED'
-  | 'HEALTH_PROVIDER_ERROR'
-  | 'INVALID_INPUT'
-  | 'CATALOG_ITEM_DISABLED'
-  | 'PRICE_NOT_SET'
-  | 'INSUFFICIENT_COINS'
-  | 'OUT_OF_MAP'
-  | 'LAND_LOCKED'
-  | 'CELL_OCCUPIED'
-  | 'ROAD_REQUIRED'
-  | 'NOT_OWNER'
-  | 'NOT_FOUND'
-  | 'CONFLICT'
-  | 'INTERNAL_ERROR'
+  | "UNAUTHENTICATED"
+  | "OAUTH_CANCELLED"
+  | "OAUTH_STATE_MISMATCH"
+  | "HEALTH_NOT_CONNECTED"
+  | "HEALTH_PERMISSION_REQUIRED"
+  | "HEALTH_PROVIDER_ERROR"
+  | "INVALID_INPUT"
+  | "CATALOG_ITEM_DISABLED"
+  | "PRICE_NOT_SET"
+  | "INSUFFICIENT_COINS"
+  | "OUT_OF_MAP"
+  | "LAND_LOCKED"
+  | "CELL_OCCUPIED"
+  | "ROAD_REQUIRED"
+  | "NOT_OWNER"
+  | "NOT_FOUND"
+  | "CONFLICT"
+  | "INTERNAL_ERROR";
 ```
 
 ## 5. 共通データ型
@@ -93,23 +93,23 @@ type ApiErrorCode =
 
 ```ts
 type UserSummary = {
-  id: string
-  displayName: string
-}
+  id: string;
+  displayName: string;
+};
 ```
 
 ### `TownSummary`
 
 ```ts
 type TownSummary = {
-  id: string
-  owner: UserSummary
-  name: string
-  coins?: number       // 自分の街だけに含める
-  population: number
-  mapWidth: 100
-  mapHeight: 100
-}
+  id: string;
+  owner: UserSummary;
+  name: string;
+  coins?: number; // 自分の街だけに含める
+  population: number;
+  mapWidth: 100;
+  mapHeight: 100;
+};
 ```
 
 ### `BuildingEffect`
@@ -117,18 +117,18 @@ type TownSummary = {
 ```ts
 type BuildingEffect = {
   type:
-    | 'population_flat'
-    | 'step_coin_bonus_flat'
-    | 'residential_population_bonus'
-    | 'enables_adjacent_construction'
-    | string
-  value: number | null
-  targetCategory: string | null
-  scope: string | null
-  stackingRule: string | null
-  description: string
-  metadata: Record<string, unknown>
-}
+    | "population_flat"
+    | "step_coin_bonus_flat"
+    | "residential_population_bonus"
+    | "enables_adjacent_construction"
+    | string;
+  value: number | null;
+  targetCategory: string | null;
+  scope: string | null;
+  stackingRule: string | null;
+  description: string;
+  metadata: Record<string, unknown>;
+};
 ```
 
 `type` は将来追加されるため、フロントエンドでは未知の文字列を受け入れる。
@@ -137,31 +137,31 @@ type BuildingEffect = {
 
 ```ts
 type BuildingCatalogItem = {
-  code: string
-  name: string
-  category: string
-  width: 1 | 2
-  height: 1 | 2
-  costCoins: number | null
-  enabled: boolean
-  description: string
-  effects: BuildingEffect[]
-  assetKey: string
-  catalogVersion: number
-}
+  code: string;
+  name: string;
+  category: string;
+  width: 1 | 2;
+  height: 1 | 2;
+  costCoins: number | null;
+  enabled: boolean;
+  description: string;
+  effects: BuildingEffect[];
+  assetKey: string;
+  catalogVersion: number;
+};
 ```
 
 ### `PlacedBuilding`
 
 ```ts
 type PlacedBuilding = {
-  id: string
-  buildingTypeCode: string
-  anchorX: number
-  anchorY: number
-  createdAt: string
-  updatedAt: string
-}
+  id: string;
+  buildingTypeCode: string;
+  anchorX: number;
+  anchorY: number;
+  createdAt: string;
+  updatedAt: string;
+};
 ```
 
 サイズ・効果はカタログを参照する。購入後の価格は公開レスポンスへ含めない。
@@ -172,11 +172,11 @@ type PlacedBuilding = {
 
 ```ts
 type UnlockedArea = {
-  x: number
-  y: number
-  width: number
-  height: number
-}
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 ```
 
 初期状態では 20×20 の矩形を一つ返す。開始位置は TBD。
@@ -185,22 +185,22 @@ type UnlockedArea = {
 
 ```ts
 type TownDetail = {
-  town: TownSummary
-  buildings: PlacedBuilding[]
-  unlockedAreas: UnlockedArea[]
-  obstacles: MapObstacle[]
-  catalogVersion: number
-  editable: boolean
-}
+  town: TownSummary;
+  buildings: PlacedBuilding[];
+  unlockedAreas: UnlockedArea[];
+  obstacles: MapObstacle[];
+  catalogVersion: number;
+  editable: boolean;
+};
 
 type MapObstacle = {
-  id: string
-  type: string
-  anchorX: number
-  anchorY: number
-  width: number
-  height: number
-}
+  id: string;
+  type: string;
+  anchorX: number;
+  anchorY: number;
+  width: number;
+  height: number;
+};
 ```
 
 障害物仕様が決まるまでは `obstacles: []` を返す。
@@ -209,22 +209,22 @@ type MapObstacle = {
 
 ```ts
 type StepSyncStatus = {
-  date: string
-  timezone: string
-  steps: number
-  newlyRewardedSteps: number
-  coinsAwarded: number
-  coinBalance: number
-  appliedBonuses: AppliedBonus[]
-  syncedAt: string
-}
+  date: string;
+  timezone: string;
+  steps: number;
+  newlyRewardedSteps: number;
+  coinsAwarded: number;
+  coinBalance: number;
+  appliedBonuses: AppliedBonus[];
+  syncedAt: string;
+};
 
 type AppliedBonus = {
-  sourceBuildingType: string
-  sourceCount: number
-  effectType: string
-  amount: number
-}
+  sourceBuildingType: string;
+  sourceCount: number;
+  effectType: string;
+  amount: number;
+};
 ```
 
 ## 6. 認証 API
@@ -235,9 +235,9 @@ Supabase Auth SDK を使用して Google OAuth を開始する。
 
 ```ts
 supabase.auth.signInWithOAuth({
-  provider: 'google',
-  options: { redirectTo }
-})
+  provider: "google",
+  options: { redirectTo },
+});
 ```
 
 Google ログインと Google Health 連携に必要な同意・スコープが異なる場合、歩数連携は別操作として提供する。具体的なスコープは採用する Google Health API の決定後に確定する。
@@ -254,18 +254,18 @@ Supabase Auth のセッションを終了する。Google Health 連携は解除�
 type GoogleIntegrationState = {
   session: {
     user: UserSummary & {
-      email: string
-      avatarUrl: string | null
-    }
-    expiresAt: string
-  } | null
+      email: string;
+      avatarUrl: string | null;
+    };
+    expiresAt: string;
+  } | null;
   healthConnection: {
-    status: 'connected' | 'not_connected' | 'permission_required'
-    scopes: string[]
-    connectedAt: string | null
-    lastSyncedAt: string | null
-  } | null
-}
+    status: "connected" | "not_connected" | "permission_required";
+    scopes: string[];
+    connectedAt: string | null;
+    lastSyncedAt: string | null;
+  } | null;
+};
 ```
 
 未ログイン時は `session` と `healthConnection` を `null` とする。Googleのアクセストークン、更新トークン、クライアントシークレットを含めない。
@@ -276,8 +276,8 @@ Supabase JWTを検証後、歩数読み取り専用スコープのGoogle OAuth�
 
 ```ts
 type StartGoogleHealthConnectionResult =
-  | { next: 'redirect'; authorizationUrl: string }
-  | { next: 'connected'; state: GoogleIntegrationState }
+  | { next: "redirect"; authorizationUrl: string }
+  | { next: "connected"; state: GoogleIntegrationState };
 ```
 
 実APIは `redirect`、フロントエンド用モックは外部遷移を省略して `connected` を返す。詳細は [Google認証機能DesignDoc.md](./Google認証機能DesignDoc.md) を参照する。
@@ -294,12 +294,12 @@ type StartGoogleHealthConnectionResult =
 
 ```ts
 type Dashboard = {
-  user: UserSummary
-  town: TownSummary
-  todaySteps: number | null
-  lastStepSyncAt: string | null
-  healthConnectionStatus: 'connected' | 'not_connected' | 'permission_required'
-}
+  user: UserSummary;
+  town: TownSummary;
+  todaySteps: number | null;
+  lastStepSyncAt: string | null;
+  healthConnectionStatus: "connected" | "not_connected" | "permission_required";
+};
 ```
 
 ### `getBuildingCatalog()`
@@ -308,16 +308,16 @@ type Dashboard = {
 
 初期カタログ:
 
-| code | 名前 | サイズ | 効果 |
-|---|---|---:|---|
-| `small_house` | 住宅（小） | 1×1 | 人口 +10 |
-| `small_park` | 公園（小） | 1×1 | なし |
-| `hospital` | 病院 | 2×2 | なし |
-| `commercial` | 商業施設 | 1×1 | コイン増加、値 TBD |
-| `farm` | 農場 | 2×2 | 人口 +5 |
-| `road` | 道路 | 1×1 | 周辺建築許可、範囲 TBD |
-| `town_hall` | 役所 | 2×2 | 住宅（小）1軒あたり人口 +20、範囲・重複 TBD |
-| `factory` | 工場 | 2×2 | コイン増加、値 TBD |
+| code          | 名前       | サイズ | 効果                                        |
+| ------------- | ---------- | -----: | ------------------------------------------- |
+| `small_house` | 住宅（小） |    1×1 | 人口 +10                                    |
+| `small_park`  | 公園（小） |    1×1 | なし                                        |
+| `hospital`    | 病院       |    2×2 | なし                                        |
+| `commercial`  | 商業施設   |    1×1 | コイン増加、値 TBD                          |
+| `farm`        | 農場       |    2×2 | 人口 +5                                     |
+| `road`        | 道路       |    1×1 | 周辺建築許可、範囲 TBD                      |
+| `town_hall`   | 役所       |    2×2 | 住宅（小）1軒あたり人口 +20、範囲・重複 TBD |
+| `factory`     | 工場       |    2×2 | コイン増加、値 TBD                          |
 
 価格 TBD の間は全項目を `costCoins: null`、`enabled: false` とする。
 
@@ -335,24 +335,24 @@ type Dashboard = {
 
 ```ts
 type RankingRequest = {
-  limit?: number
-  cursor?: string
-}
+  limit?: number;
+  cursor?: string;
+};
 
 type RankingEntry = {
-  rank: number
-  userId: string
-  displayName: string
-  townId: string
-  townName: string
-  population: number
-  isCurrentUser: boolean
-}
+  rank: number;
+  userId: string;
+  displayName: string;
+  townId: string;
+  townName: string;
+  population: number;
+  isCurrentUser: boolean;
+};
 
 type RankingPage = {
-  entries: RankingEntry[]
-  nextCursor: string | null
-}
+  entries: RankingEntry[];
+  nextCursor: string | null;
+};
 ```
 
 上限件数、同率順位、カーソル仕様は TBD。レスポンス型はページングを追加しても画面の関数を変更しなくて済む形にする。
@@ -403,22 +403,22 @@ Supabase Edge Function `sync-health-steps` を呼び出す。クライアント�
 
 ```ts
 type PlaceBuildingInput = {
-  buildingTypeCode: string
-  anchorX: number
-  anchorY: number
-  requestId: string
-}
+  buildingTypeCode: string;
+  anchorX: number;
+  anchorY: number;
+  requestId: string;
+};
 ```
 
 `requestId` はクライアントで生成する UUID とし、再送による二重購入を防ぐ。
 
 ```ts
 type TownMutationResult = {
-  building: PlacedBuilding
-  coinBalance: number
-  population: number
-  updatedAt: string
-}
+  building: PlacedBuilding;
+  coinBalance: number;
+  population: number;
+  updatedAt: string;
+};
 ```
 
 サーバーは、種別・有効状態・価格、マップ境界、開放範囲、衝突、道路条件、残高を検証する。
@@ -427,11 +427,11 @@ type TownMutationResult = {
 
 ```ts
 type MoveBuildingInput = {
-  buildingId: string
-  anchorX: number
-  anchorY: number
-  requestId: string
-}
+  buildingId: string;
+  anchorX: number;
+  anchorY: number;
+  requestId: string;
+};
 ```
 
 成功レスポンスは `TownMutationResult`。移動では購入費を消費しない。所有権、境界、開放範囲、衝突、道路条件を再検証する。
@@ -442,9 +442,9 @@ type MoveBuildingInput = {
 
 ```ts
 type UnlockLandInput = {
-  areaId: string
-  requestId: string
-}
+  areaId: string;
+  requestId: string;
+};
 ```
 
 クライアントがコイン・アイテム・必要歩数を指定しない。`areaId` に対応するサーバー設定から条件を検証する。
