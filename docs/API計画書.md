@@ -1,284 +1,460 @@
-# 散歩×街づくりゲーム 共有API・データ契約書
+# Walk City API 設計書
 
-## 1. 目的
+## 1. この文書の目的
 
-フロントエンドとバックエンドを別担当者が並行開発できるように、画面が利用するデータ、操作、エラー形式を固定する。
+React フロントエンドと Supabase バックエンドを別担当者が並行開発するための共有契約を定義する。
 
-この契約書を変更するときは、必ず両担当者が合意し、変更履歴を残す。
+この文書の型・操作・エラーコードを変更するときは両担当者で共有する。ゲームバランス値は API が返す設定を正とし、フロントエンドへ複製しない。
 
-## 2. MVPの前提
+## 2. 通信方式
 
-- Webアプリケーション、スマートフォン優先
-- 歩数は手入力
-- 1日3,000歩以上で「散歩1回」と判定
-- 週間目標は3回、未達ペナルティなし
-- 段階報酬は1,000歩、3,000歩、5,000歩、8,000歩
-- 街は20×20マス、中央10×10から開始
-- 見下ろし型ドット絵、グリッドへの自由配置
-- 木と池は固定障害物
-- 人口は配置済み建物の人口ポイント合計
-- 他ユーザーの街を訪問できる
-- 1ユーザーにつき各街へ1回いいねできる
-- 総人口と今週増えた人口をランキング表示
-- 建物の売却、回転、複数マス建物はMVP対象外
+| 用途 | 推奨方式 |
+|---|---|
+| Google ログイン | Supabase Auth SDK |
+| Google Health 歩数同期 | Supabase Edge Function |
+| 購入・配置・移動 | Supabase RPC / DB Function |
+| カタログ・街・ランキング読取 | Supabase SDK、View または RPC |
+
+フロントエンドのサービス層では通信方式の違いを隠し、TypeScript の一貫した関数として公開する。
 
 ## 3. 共通ルール
 
-### 日付と週
+### 認証
 
-- 日付判定のタイムゾーンは `Asia/Tokyo` に統一する
-- 週は月曜日00:00から日曜日23:59までとする
-- 日付は `YYYY-MM-DD` 形式で返す
-- 日時はISO 8601形式で返す
+- 認証が必要な操作には Supabase セッションの JWT を使用する。
+- リクエスト本文の `userId` を更新権限の根拠にしない。
+- 自分の街を更新する API は JWT のユーザーから対象の街を解決する。
 
 ### 座標
 
-- 左上を `(0, 0)` とする
-- `x` は右方向、`y` は下方向
-- 有効範囲は `0 <= x < 20`、`0 <= y < 20`
-- 木・池・ロック中マス・配置済みマスには建築できない
+- 原点は左上 `(0, 0)`。
+- `x` は右、`y` は下へ増える。
+- マップは最大 100×100、座標範囲は `0 <= x < 100`、`0 <= y < 100`。
+- 配置座標は建物矩形の左上アンカー。
+- 建物サイズはカタログの `width` と `height` を使用する。
+- 回転値は送らない。
 
-### 数値の管理
+### 数値
 
-- コイン、人口、報酬獲得状態はバックエンドを正とする
-- フロントエンドは表示用に予測してよいが、成功レスポンスで必ず置き換える
-- 報酬額や建物効果はバックエンドの設定値を利用し、両側へ別々にハードコードしない
+- コイン、歩数、人口、座標、幅、高さは JSON の整数として扱う。
+- コイン、人口、価格は 0 以上。
+- 未確定価格は `null` で返し、同時に `enabled: false` とする。
 
-## 4. 共通レスポンス形式
+### 日時
 
-成功:
+- 日時は ISO 8601 文字列で返す。
+- 歩数集計の日付は `YYYY-MM-DD`。
+- 日付境界のタイムゾーンは TBD。決定後、API の `timezone` として明示する。
 
-```json
-{
-  "data": {}
+## 4. レスポンスとエラー
+
+Supabase SDK の生レスポンスを UI で直接扱わず、サービス層で次の型へ正規化する。
+
+```ts
+type ApiResult<T> =
+  | { ok: true; data: T }
+  | {
+      ok: false
+      error: {
+        code: ApiErrorCode
+        message: string
+        details?: Record<string, unknown>
+      }
+    }
+```
+
+`message` は表示可能な一般メッセージとし、UI 分岐には安定した `code` を使用する。
+
+```ts
+type ApiErrorCode =
+  | 'UNAUTHENTICATED'
+  | 'HEALTH_NOT_CONNECTED'
+  | 'HEALTH_PERMISSION_REQUIRED'
+  | 'HEALTH_PROVIDER_ERROR'
+  | 'INVALID_INPUT'
+  | 'CATALOG_ITEM_DISABLED'
+  | 'PRICE_NOT_SET'
+  | 'INSUFFICIENT_COINS'
+  | 'OUT_OF_MAP'
+  | 'LAND_LOCKED'
+  | 'CELL_OCCUPIED'
+  | 'ROAD_REQUIRED'
+  | 'NOT_OWNER'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
+  | 'INTERNAL_ERROR'
+```
+
+## 5. 共通データ型
+
+### `UserSummary`
+
+```ts
+type UserSummary = {
+  id: string
+  displayName: string
 }
 ```
 
-失敗:
+### `TownSummary`
+
+```ts
+type TownSummary = {
+  id: string
+  owner: UserSummary
+  name: string
+  coins?: number       // 自分の街だけに含める
+  population: number
+  mapWidth: 100
+  mapHeight: 100
+}
+```
+
+### `BuildingEffect`
+
+```ts
+type BuildingEffect = {
+  type:
+    | 'population_flat'
+    | 'step_coin_bonus_flat'
+    | 'residential_population_bonus'
+    | 'enables_adjacent_construction'
+    | string
+  value: number | null
+  targetCategory: string | null
+  scope: string | null
+  stackingRule: string | null
+  description: string
+  metadata: Record<string, unknown>
+}
+```
+
+`type` は将来追加されるため、フロントエンドでは未知の文字列を受け入れる。
+
+### `BuildingCatalogItem`
+
+```ts
+type BuildingCatalogItem = {
+  code: string
+  name: string
+  category: string
+  width: 1 | 2
+  height: 1 | 2
+  costCoins: number | null
+  enabled: boolean
+  description: string
+  effects: BuildingEffect[]
+  assetKey: string
+  catalogVersion: number
+}
+```
+
+### `PlacedBuilding`
+
+```ts
+type PlacedBuilding = {
+  id: string
+  buildingTypeCode: string
+  anchorX: number
+  anchorY: number
+  createdAt: string
+  updatedAt: string
+}
+```
+
+サイズ・効果はカタログを参照する。購入後の価格は公開レスポンスへ含めない。
+
+### `UnlockedArea`
+
+土地開放の保存方式が未確定のため、クライアントには描画しやすい矩形として返す。
+
+```ts
+type UnlockedArea = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+```
+
+初期状態では 20×20 の矩形を一つ返す。開始位置は TBD。
+
+### `TownDetail`
+
+```ts
+type TownDetail = {
+  town: TownSummary
+  buildings: PlacedBuilding[]
+  unlockedAreas: UnlockedArea[]
+  obstacles: MapObstacle[]
+  catalogVersion: number
+  editable: boolean
+}
+
+type MapObstacle = {
+  id: string
+  type: string
+  anchorX: number
+  anchorY: number
+  width: number
+  height: number
+}
+```
+
+障害物仕様が決まるまでは `obstacles: []` を返す。
+
+### `StepSyncStatus`
+
+```ts
+type StepSyncStatus = {
+  date: string
+  timezone: string
+  steps: number
+  newlyRewardedSteps: number
+  coinsAwarded: number
+  coinBalance: number
+  appliedBonuses: AppliedBonus[]
+  syncedAt: string
+}
+
+type AppliedBonus = {
+  sourceBuildingType: string
+  sourceCount: number
+  effectType: string
+  amount: number
+}
+```
+
+## 6. 認証 API
+
+### `signInWithGoogle()`
+
+Supabase Auth SDK を使用して Google OAuth を開始する。
+
+```ts
+supabase.auth.signInWithOAuth({
+  provider: 'google',
+  options: { redirectTo }
+})
+```
+
+Google ログインと Google Health 連携に必要な同意・スコープが異なる場合、歩数連携は別操作として提供する。具体的なスコープは採用する Google Health API の決定後に確定する。
+
+### `signOut()`
+
+Supabase Auth のセッションを終了する。Google Health 連携の解除まで行うかは TBD。
+
+## 7. 読み取り API
+
+### `getDashboard()`
+
+用途: ホーム初期表示。
+
+```ts
+type Dashboard = {
+  user: UserSummary
+  town: TownSummary
+  todaySteps: number | null
+  lastStepSyncAt: string | null
+  healthConnectionStatus: 'connected' | 'not_connected' | 'permission_required'
+}
+```
+
+### `getBuildingCatalog()`
+
+用途: ショップと建物表示。レスポンスは `BuildingCatalogItem[]`。
+
+初期カタログ:
+
+| code | 名前 | サイズ | 効果 |
+|---|---|---:|---|
+| `small_house` | 住宅（小） | 1×1 | 人口 +10 |
+| `small_park` | 公園（小） | 1×1 | なし |
+| `hospital` | 病院 | 2×2 | なし |
+| `commercial` | 商業施設 | 1×1 | コイン増加、値 TBD |
+| `farm` | 農場 | 2×2 | 人口 +5 |
+| `road` | 道路 | 1×1 | 周辺建築許可、範囲 TBD |
+| `town_hall` | 役所 | 2×2 | 住宅（小）1軒あたり人口 +20、範囲・重複 TBD |
+| `factory` | 工場 | 2×2 | コイン増加、値 TBD |
+
+価格 TBD の間は全項目を `costCoins: null`、`enabled: false` とする。
+
+### `getMyTown()`
+
+用途: 自分の街の表示・編集。レスポンスは `TownDetail`。`town.coins` を含み、`editable: true`。
+
+### `getPublicTown(userId)`
+
+用途: 他ユーザーの街の閲覧。レスポンスは `TownDetail`。`town.coins` を含めず、`editable: false`。
+
+存在しない、または将来非公開設定が追加された街には `NOT_FOUND` を返す。
+
+### `getPopulationRanking(input)`
+
+```ts
+type RankingRequest = {
+  limit?: number
+  cursor?: string
+}
+
+type RankingEntry = {
+  rank: number
+  userId: string
+  displayName: string
+  townId: string
+  townName: string
+  population: number
+  isCurrentUser: boolean
+}
+
+type RankingPage = {
+  entries: RankingEntry[]
+  nextCursor: string | null
+}
+```
+
+上限件数、同率順位、カーソル仕様は TBD。レスポンス型はページングを追加しても画面の関数を変更しなくて済む形にする。
+
+## 8. 歩数同期 API
+
+### `syncSteps()`
+
+Supabase Edge Function `sync-health-steps` を呼び出す。クライアントから歩数値、コイン量、対象ユーザー ID は送らない。
+
+リクエスト:
+
+```json
+{}
+```
+
+成功レスポンス: `StepSyncStatus`
 
 ```json
 {
-  "error": {
-    "code": "INSUFFICIENT_COINS",
-    "message": "コインが不足しています",
-    "details": {}
+  "ok": true,
+  "data": {
+    "date": "2026-08-25",
+    "timezone": "Asia/Tokyo",
+    "steps": 6500,
+    "newlyRewardedSteps": 1500,
+    "coinsAwarded": 0,
+    "coinBalance": 0,
+    "appliedBonuses": [],
+    "syncedAt": "2026-08-25T12:00:00+09:00"
   }
 }
 ```
 
-主なエラーコード:
+例のコイン値は変換率未決定のため 0 としている。実装時はサーバー設定から計算する。
 
-| コード | 用途 |
-|---|---|
-| `UNAUTHORIZED` | 未ログイン |
-| `INVALID_INPUT` | 入力値不正 |
-| `ALREADY_CLAIMED` | 報酬取得済み |
-| `REWARD_NOT_REACHED` | 必要歩数未達 |
-| `INSUFFICIENT_COINS` | コイン不足 |
-| `BUILDING_LOCKED` | 建物未解放 |
-| `CELL_LOCKED` | 土地未開放 |
-| `CELL_OCCUPIED` | 木・池・建物と衝突 |
-| `NOT_OWNER` | 他人のデータを変更しようとした |
-| `ALREADY_LIKED` | いいね済み |
-| `CANNOT_LIKE_SELF` | 自分の街へのいいね |
-| `NOT_FOUND` | 対象なし |
+冪等性:
 
-## 5. 主要データ型
+- 同じ Google Health データを再同期しても追加付与しない。
+- 新しい歩数が増えている場合だけ未精算差分を処理する。
+- ネットワーク再送や二重クリックでも残高を二重更新しない。
 
-### UserSummary
+## 9. 街編集 API
 
-```json
-{
-  "id": "user-uuid",
-  "displayName": "さくら",
-  "townName": "ひだまり村",
-  "coins": 250,
-  "population": 35,
-  "weeklyWalkCount": 2,
-  "weeklyGoal": 3
+### `placeBuilding(input)`
+
+購入と配置を一括で行う。
+
+```ts
+type PlaceBuildingInput = {
+  buildingTypeCode: string
+  anchorX: number
+  anchorY: number
+  requestId: string
 }
 ```
 
-### WalkStatus
+`requestId` はクライアントで生成する UUID とし、再送による二重購入を防ぐ。
 
-```json
-{
-  "date": "2026-08-23",
-  "steps": 5200,
-  "qualifiedAsWalk": true,
-  "claimedTiers": [1000, 3000],
-  "availableTiers": [5000],
-  "nextTier": 8000
+```ts
+type TownMutationResult = {
+  building: PlacedBuilding
+  coinBalance: number
+  population: number
+  updatedAt: string
 }
 ```
 
-### RewardTier
+サーバーは、種別・有効状態・価格、マップ境界、開放範囲、衝突、道路条件、残高を検証する。
 
-値は仮設定。初日の結合前に確定する。
+### `moveBuilding(input)`
 
-```json
-{
-  "steps": 3000,
-  "coins": 100,
-  "buildingTickets": 0
+```ts
+type MoveBuildingInput = {
+  buildingId: string
+  anchorX: number
+  anchorY: number
+  requestId: string
 }
 ```
 
-### BuildingCatalogItem
+成功レスポンスは `TownMutationResult`。移動では購入費を消費しない。所有権、境界、開放範囲、衝突、道路条件を再検証する。
 
-```json
-{
-  "type": "house",
-  "name": "民家",
-  "costCoins": 100,
-  "costTickets": 0,
-  "populationValue": 10,
-  "requiredPopulation": 0,
-  "spriteKey": "house"
+### `unlockLand(input)`（予約）
+
+土地開放ルールの決定後に有効化する。
+
+```ts
+type UnlockLandInput = {
+  areaId: string
+  requestId: string
 }
 ```
 
-### PlacedBuilding
+クライアントがコイン・アイテム・必要歩数を指定しない。`areaId` に対応するサーバー設定から条件を検証する。
 
-```json
-{
-  "id": "building-uuid",
-  "type": "house",
-  "x": 3,
-  "y": 5,
-  "populationValue": 10,
-  "createdAt": "2026-08-23T12:34:56+09:00"
-}
+### 建物削除
+
+仕様が TBD のため API を定義しない。売却、返金、人口再計算のルール確定後に追加する。
+
+## 10. 配置ルールの共有
+
+フロントエンドはカタログのサイズと取得済み街データから事前プレビューできる。ただし次の最終判定は常にサーバーが行う。
+
+```text
+矩形が 100×100 内
+  AND 全セルが開放済み
+  AND 全セルが未占有
+  AND 障害物と非衝突
+  AND 道路ルールを満たす
+  AND コインが十分
 ```
 
-### Town
+道路の周辺定義は TBD。確定前はクライアントとサーバーへ別々の仮定を実装しない。
 
-```json
-{
-  "id": "town-uuid",
-  "owner": {
-    "id": "user-uuid",
-    "displayName": "さくら"
-  },
-  "name": "ひだまり村",
-  "population": 35,
-  "weeklyPopulationGrowth": 15,
-  "likesCount": 7,
-  "likedByMe": false,
-  "unlockLevel": 0,
-  "buildings": [],
-  "terrainVersion": 1,
-  "editable": true
-}
-```
+## 11. API 契約テスト
 
-## 6. 操作/API
+- カタログに 1×1 と 2×2 が正しい型で含まれる。
+- 効果なし建物は `effects: []` で返る。
+- 未知の効果タイプを含むレスポンスをフロントが読み込める。
+- 自分の街だけ `coins` が返る。
+- 公開街に歩数、コイン、Google 連携情報が含まれない。
+- 歩数同期の再送で二重付与されない。
+- 2×2 建物の境界・衝突エラーコードが一致する。
+- 同じ `requestId` の配置再送で二重購入されない。
+- 他ユーザーの配置物を移動できない。
+- ランキング人口と街詳細人口が一致する。
 
-実装がSupabaseの場合、HTTP APIではなくRPCやSDK呼び出しに置き換えてよい。ただし引数と戻り値はこの契約に合わせる。
+## 12. 変更管理
 
-### `getCurrentUser()`
+- API 型はフロントエンドとバックエンドで共有するか、自動生成することが望ましい。
+- 破壊的変更では型または関数のバージョンを上げる。
+- 建物価格・効果値の変更はカタログのバージョンを上げる。
+- 未確定事項が決まったら、この文書、バックエンド設計書、該当テストを同時に更新する。
 
-- 用途: ヘッダー、ホーム初期表示
-- 戻り値: `UserSummary`
+## 13. 未確定事項
 
-### `updateProfile(displayName, townName)`
-
-- 用途: 初回設定、プロフィール変更
-- 検証: 空文字禁止、最大文字数を設定
-- 戻り値: 更新後の `UserSummary`
-
-### `getTodayWalkStatus()`
-
-- 用途: 今日の歩数と報酬状態の表示
-- 戻り値: `WalkStatus`
-
-### `submitSteps(steps)`
-
-- 用途: 今日の歩数入力
-- 入力: 0以上100,000以下の整数
-- 同日の再送信: 現在値以上のみ許可する
-- 戻り値: 更新後の `WalkStatus` と `UserSummary`
-
-### `claimReward(tierSteps)`
-
-- 用途: 段階報酬の受け取り
-- 入力例: `{ "tierSteps": 3000 }`
-- 処理: 歩数確認、二重取得確認、残高更新を一括実行
-- 戻り値: `WalkStatus`、更新後残高、獲得内容
-
-### `getBuildingCatalog()`
-
-- 用途: 建築ショップ
-- 戻り値: `BuildingCatalogItem[]`
-
-### `getMyTown()`
-
-- 用途: 自分の街の表示
-- 戻り値: `Town`
-
-### `placeBuilding(type, x, y)`
-
-- 用途: 建物購入と配置
-- 処理: 解放条件、残高、マス衝突を検証し、支払いと配置を一括実行
-- 戻り値: 作成した `PlacedBuilding`、更新後コイン、人口
-
-### `moveBuilding(buildingId, x, y)`
-
-- 用途: 自分の建物の移動
-- 処理: 所有権と移動先マスを検証
-- 戻り値: 更新後の `PlacedBuilding`
-
-### `getRankings(type)`
-
-- `type`: `population` または `weeklyGrowth`
-- 戻り値: 順位、ユーザーID、ユーザー名、街名、人口値の配列
-- MVP表示件数: 上位20件
-
-### `getTownByUserId(userId)`
-
-- 用途: 他ユーザーの街を訪問
-- 戻り値: `editable: false` の `Town`
-
-### `likeTown(townId)`
-
-- 用途: 街へいいね
-- 制約: 自分の街不可、同じ組み合わせは1回のみ
-- 戻り値: `likesCount`、`likedByMe`
-
-## 7. 初期建物カタログ案
-
-| type | 表示名 | コイン | 人口 | 解放条件 |
-|---|---:|---:|---:|---:|
-| `house` | 民家 | 100 | 10 | 最初から |
-| `field` | 畑 | 150 | 5 | 最初から |
-| `bakery` | パン屋 | 250 | 20 | 人口20 |
-| `park` | 公園 | 400 | 30 | 人口50 |
-| `townhall` | 役場 | 700 | 50 | 人口100 |
-
-数値はデモバランス確認後に変更可能とする。
-
-## 8. 固定地形
-
-- MVPでは全ユーザーが同じ固定地形を使用する
-- 木と池の座標はフロントエンドのバージョン管理されたJSONに置く
-- `terrainVersion` が一致しない場合は表示を止め、更新を促す
-- 配置APIでも同じ障害物座標を検証する
-
-## 9. 結合テストシナリオ
-
-1. 新規ユーザーを作成する
-2. 今日の歩数を3,200歩で登録する
-3. 1,000歩と3,000歩報酬を取得する
-4. 同じ報酬を再取得し、`ALREADY_CLAIMED` になることを確認する
-5. 民家を空きマスへ配置する
-6. 同じマスへの配置が `CELL_OCCUPIED` になることを確認する
-7. 再読み込み後も民家と残高が保持されることを確認する
-8. 別ユーザーから街を訪問する
-9. いいねを送り、二重いいねが拒否されることを確認する
-10. 人口ランキングへ反映されることを確認する
-
-## 10. 変更履歴
-
-| 日付 | 変更 | 担当 |
-|---|---|---|
-| 2026-08-23 | 初版 | チーム |
+- Google Health API と必要スコープ
+- 日付境界のタイムゾーン
+- 歩数からコインへの変換式
+- 商業施設・工場のボーナス式
+- 全建物のコスト
+- 役所効果の範囲と重複ルール
+- 道路の隣接ルール
+- 土地開放ルールと初期 20×20 の位置
+- 障害物、建物削除
+- ランキングの同率・ページング仕様
