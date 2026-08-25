@@ -68,6 +68,8 @@ type ApiResult<T> =
 ```ts
 type ApiErrorCode =
   | 'UNAUTHENTICATED'
+  | 'OAUTH_CANCELLED'
+  | 'OAUTH_STATE_MISMATCH'
   | 'HEALTH_NOT_CONNECTED'
   | 'HEALTH_PERMISSION_REQUIRED'
   | 'HEALTH_PROVIDER_ERROR'
@@ -242,7 +244,47 @@ Google ログインと Google Health 連携に必要な同意・スコープが�
 
 ### `signOut()`
 
-Supabase Auth のセッションを終了する。Google Health 連携の解除まで行うかは TBD。
+Supabase Auth のセッションを終了する。Google Health 連携は解除せず、同じユーザーが再ログインしたときに接続状態を復元する。
+
+### `getGoogleIntegrationState()`
+
+用途: GoogleログインとGoogle Health連携状態の復元。
+
+```ts
+type GoogleIntegrationState = {
+  session: {
+    user: UserSummary & {
+      email: string
+      avatarUrl: string | null
+    }
+    expiresAt: string
+  } | null
+  healthConnection: {
+    status: 'connected' | 'not_connected' | 'permission_required'
+    scopes: string[]
+    connectedAt: string | null
+    lastSyncedAt: string | null
+  } | null
+}
+```
+
+未ログイン時は `session` と `healthConnection` を `null` とする。Googleのアクセストークン、更新トークン、クライアントシークレットを含めない。
+
+### `startGoogleHealthConnection()`
+
+Supabase JWTを検証後、歩数読み取り専用スコープのGoogle OAuth認可URLを生成する。
+
+```ts
+type StartGoogleHealthConnectionResult =
+  | { next: 'redirect'; authorizationUrl: string }
+  | { next: 'connected'; state: GoogleIntegrationState }
+```
+
+実APIは `redirect`、フロントエンド用モックは外部遷移を省略して `connected` を返す。詳細は [Google認証機能DesignDoc.md](./Google認証機能DesignDoc.md) を参照する。
+
+### `disconnectGoogleHealth()`
+
+保存済みGoogle Health認可情報を失効・削除し、接続状態を `not_connected` にする。Supabaseのログインセッションは終了しない。
 
 ## 7. 読み取り API
 

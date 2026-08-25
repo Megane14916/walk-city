@@ -270,6 +270,7 @@ erDiagram
 
 ## 12. 関連文書
 
+- [Google 認証・Google Health 連携機能 Design Doc](./Google認証機能DesignDoc.md)
 - [Map 機能 Design Doc](./map機能DesignDoc.md)
 - [フロントエンド設計書](./フロントエンド.md)
 - [バックエンド設計書](./バックエンド.md)
