@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { paths } from './app/paths'
 import {
   mockGoogleIntegrationApi,
   type DailySteps,
@@ -369,6 +371,9 @@ function App() {
               >
                 今は連携しない
               </button>
+              <Link className="text-button no-underline" to={paths.ranking}>
+                人口ランキングを見る
+              </Link>
             </div>
           ) : (
             <div className="screen-card connected-screen">
@@ -422,6 +427,9 @@ function App() {
               >
                 {pending === 'disconnecting' ? '解除中…' : 'Google Healthの連携を解除'}
               </button>
+              <Link className="text-button no-underline" to={paths.ranking}>
+                人口ランキングを見る →
+              </Link>
             </div>
           )}
 
