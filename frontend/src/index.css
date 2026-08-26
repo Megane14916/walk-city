@@ -1,5 +1,22 @@
 @import "tailwindcss";
 
+@theme {
+  --animate-onboarding-enter: onboarding-enter .42s cubic-bezier(.2, .7, .3, 1) both;
+  --animate-loading-mark: loading-mark 1.1s ease-in-out infinite alternate;
+
+  @keyframes onboarding-enter {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes loading-mark {
+    to {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 28px rgba(33, 91, 77, .18);
+    }
+  }
+}
+
 :root {
   font-family: "Avenir Next", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
   color: #183b37;
