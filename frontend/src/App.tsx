@@ -388,6 +388,14 @@ function App() {
               <div className="success-kicker"><span>✓</span> 接続が完了しました</div>
               <h1>街づくりの準備が<br />できました。</h1>
 
+              <Link
+                className="primary-button town-entry-button no-underline"
+                to={paths.root}
+              >
+                <span>自分の街を見る</span>
+                <b aria-hidden="true">→</b>
+              </Link>
+
               <div className="steps-card">
                 <div
                   className="steps-ring"
@@ -429,9 +437,6 @@ function App() {
               </button>
               <Link className="text-button no-underline" to={paths.ranking}>
                 人口ランキングを見る →
-              </Link>
-              <Link className="text-button no-underline" to={paths.root}>
-                自分の街を見る →
               </Link>
             </div>
           )}

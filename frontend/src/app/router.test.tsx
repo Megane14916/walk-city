@@ -72,6 +72,37 @@ describe('AppRoutes', () => {
     expect(screen.queryByRole('button', { name: /配置/ })).toBeNull()
   })
 
+  it('shows the town button after Health connection and opens My Town', async () => {
+    renderRoute(paths.login)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Googleで続ける' }),
+    )
+    const connectButton = await screen.findByRole('button', {
+      name: 'Google Healthと連携する',
+    })
+
+    expect(
+      screen.queryByRole('link', { name: /自分の街を見る/ }),
+    ).toBeNull()
+
+    fireEvent.click(connectButton)
+
+    const townLink = await screen.findByRole('link', {
+      name: /自分の街を見る/,
+    })
+    expect(townLink.getAttribute('href')).toBe(paths.root)
+
+    fireEvent.click(townLink)
+
+    expect(
+      await screen.findByRole('heading', { name: 'グリーンタウン' }),
+    ).not.toBeNull()
+    expect(
+      screen.getByRole('application', { name: /グリーンタウンのマップ/ }),
+    ).not.toBeNull()
+  })
+
   it('opens ranking over the town map instead of replacing it', async () => {
     await mockGoogleIntegrationApi.signInWithGoogle()
     renderRoute(paths.root)

@@ -182,6 +182,7 @@ button:disabled { cursor: wait; opacity: .58; }
 }
 .primary-button:hover:not(:disabled) { transform: translateY(-2px); background: #0b322f; box-shadow: 0 16px 34px rgba(9,54,51,.23); }
 .primary-button b { margin-left: auto; font-size: 20px; }
+.town-entry-button { box-sizing: border-box; margin-top: 24px; }
 .google-button { color: #25302e; background: #fff; border: 1px solid #dedfd8; box-shadow: 0 10px 25px rgba(19,43,39,.07); }
 .google-button:hover:not(:disabled) { background: #fff; box-shadow: 0 14px 32px rgba(19,43,39,.11); }
 
