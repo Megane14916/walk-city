@@ -35,7 +35,13 @@ export function UserPage() {
         {userId}
       </code>
       <Link
-        className="mt-2 inline-flex min-h-11 items-center rounded-xl bg-[#123f3c] px-5 text-xs font-extrabold text-white no-underline hover:bg-[#0b322f]"
+        className="inline-flex min-h-11 items-center rounded-xl bg-[#123f3c] px-5 text-xs font-extrabold text-white no-underline hover:bg-[#0b322f]"
+        to={paths.town(userId)}
+      >
+        このユーザーの街を訪問
+      </Link>
+      <Link
+        className="text-xs font-extrabold text-[#357762]"
         to={paths.ranking}
       >
         ← ランキングへ戻る

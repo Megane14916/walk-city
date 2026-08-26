@@ -1,9 +1,11 @@
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, matchPath, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { paths } from '../paths'
 
 export function GameLayout() {
   const location = useLocation()
-  const isTownDashboard = location.pathname === paths.root
+  const isTownDashboard =
+    location.pathname === paths.root ||
+    matchPath(paths.townPattern, location.pathname) !== null
 
   if (isTownDashboard) {
     return (
@@ -58,7 +60,7 @@ export function GameLayout() {
             </NavLink>
             <Link
               className="rounded-[10px] px-3.5 py-2 text-xs font-extrabold text-[#68736f] no-underline hover:bg-white hover:text-[#214d45] max-[360px]:px-2 max-[360px]:text-[10px]"
-              to={paths.login}
+              to={paths.healthConnect}
             >
               <span className="max-[360px]:hidden">連携設定</span>
               <span className="hidden max-[360px]:inline">設定</span>

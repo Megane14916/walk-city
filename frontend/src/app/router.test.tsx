@@ -10,6 +10,8 @@ import {
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GoogleIntegrationApi } from '../features/auth/api'
+import { MOCK_PUBLIC_USER_ID } from '../mocks/data/towns'
+import { MOCK_AUTH_USER } from '../mocks/data/users'
 import {
   createMockGoogleIntegrationApi,
   mockGoogleIntegrationApi,
@@ -49,6 +51,10 @@ afterEach(() => {
 describe('paths', () => {
   it('encodes user IDs in one centralized path helper', () => {
     expect(paths.user('user/with space')).toBe('/users/user%2Fwith%20space')
+  })
+
+  it('encodes user IDs for public town links', () => {
+    expect(paths.town('user/with space')).toBe('/town/user%2Fwith%20space')
   })
 })
 
@@ -99,6 +105,31 @@ describe('AppRoutes', () => {
     expect(
       await screen.findByRole('heading', {
         name: /歩数を街の力に変えましょう。/,
+      }),
+    ).not.toBeNull()
+  })
+
+  it('finishes an authenticated OAuth callback at Health connection', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+    })
+    renderRoute(paths.authCallback, api)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /歩数を街の力に変えましょう。/,
+      }),
+    ).not.toBeNull()
+  })
+
+  it('returns an unauthenticated OAuth callback to login', async () => {
+    const api = createMockGoogleIntegrationApi({ latencyMs: 0 })
+    renderRoute(paths.authCallback, api)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /今日の一歩から、街づくりを始めよう。/,
       }),
     ).not.toBeNull()
   })
@@ -228,6 +259,26 @@ describe('AppRoutes', () => {
       screen.getByRole('application', { name: /グリーンタウンのマップ/ }),
     ).not.toBeNull()
     expect(screen.queryByRole('button', { name: /配置/ })).toBeNull()
+  })
+
+  it('loads a public town without private steps or coins', async () => {
+    await mockGoogleIntegrationApi.signInWithGoogle()
+    renderRoute(paths.town(MOCK_PUBLIC_USER_ID))
+
+    expect(
+      await screen.findByRole('heading', { name: 'ブルータウン' }),
+    ).not.toBeNull()
+    expect(screen.queryByText('今日の歩数')).toBeNull()
+    expect(screen.queryByText('所持コイン数')).toBeNull()
+  })
+
+  it('replaces an own public-town URL with the authenticated root town', async () => {
+    await mockGoogleIntegrationApi.signInWithGoogle()
+    renderRoute(paths.town(MOCK_AUTH_USER.id))
+
+    expect(
+      await screen.findByRole('heading', { name: 'グリーンタウン' }),
+    ).not.toBeNull()
   })
 
   it('opens ranking over the town map instead of replacing it', async () => {
