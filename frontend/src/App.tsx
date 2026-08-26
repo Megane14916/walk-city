@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { paths } from './app/paths'
+import type { GoogleIntegrationState } from './features/auth/api'
+import type { DailySteps } from './features/health/types'
 import {
   mockGoogleIntegrationApi,
-  type GoogleIntegrationState,
   type MockGoogleOperation,
-} from './features/auth/api'
-import type { DailySteps } from './features/health/types'
+} from './mocks/services'
 import './App.css'
 
 const TIMEZONE = 'Australia/Sydney'

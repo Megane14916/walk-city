@@ -1,16 +1,18 @@
 import {
   GOOGLE_HEALTH_ACTIVITY_READ_SCOPE,
   type GoogleIntegrationApi,
-} from './google-integration-api'
-import type { ApiResult } from '../../../types/common'
-import type { DailySteps, GetDailyStepsInput } from '../../health/types'
+} from '../../features/auth/api'
 import type {
   AuthSession,
   GoogleHealthConnection,
   GoogleIntegrationErrorCode,
   GoogleIntegrationState,
   StartGoogleHealthConnectionResult,
-} from '../types'
+} from '../../features/auth/types'
+import type { DailySteps, GetDailyStepsInput } from '../../features/health/types'
+import type { ApiResult } from '../../types/common'
+import { MOCK_DAILY_STEPS_BY_DATE } from '../data/health'
+import { MOCK_AUTH_USER } from '../data/users'
 
 export type MockGoogleOperation =
   | 'getGoogleIntegrationState'
@@ -24,6 +26,7 @@ export type MockGoogleIntegrationApiOptions = {
   latencyMs?: number
   initiallySignedIn?: boolean
   initiallyHealthConnected?: boolean
+  initialHealthConnectionStatus?: GoogleHealthConnection['status']
   stepsByDate?: Record<string, number>
   now?: () => Date
 }
@@ -35,19 +38,6 @@ export type MockGoogleIntegrationApi = GoogleIntegrationApi & {
   ): void
   setSteps(date: string, steps: number): void
   reset(): void
-}
-
-const MOCK_USER = {
-  id: 'mock-user-001',
-  displayName: 'Walk City テストユーザー',
-  email: 'walker@example.com',
-  avatarUrl: null,
-}
-
-const DEFAULT_STEPS_BY_DATE: Record<string, number> = {
-  '2026-08-23': 4321,
-  '2026-08-24': 7890,
-  '2026-08-25': 6500,
 }
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -86,9 +76,11 @@ export function createMockGoogleIntegrationApi(
   const latencyMs = options.latencyMs ?? 150
   const now = options.now ?? (() => new Date())
   const initialSignedIn = options.initiallySignedIn ?? false
-  const initialHealthConnected = options.initiallyHealthConnected ?? false
+  const initialHealthStatus =
+    options.initialHealthConnectionStatus ??
+    (options.initiallyHealthConnected ? 'connected' : 'not_connected')
   const initialSteps = {
-    ...DEFAULT_STEPS_BY_DATE,
+    ...MOCK_DAILY_STEPS_BY_DATE,
     ...options.stepsByDate,
   }
   const failures = new Map<
@@ -97,8 +89,9 @@ export function createMockGoogleIntegrationApi(
   >()
 
   let signedIn = initialSignedIn
-  let healthConnected = initialHealthConnected
-  let connectedAt = initialHealthConnected ? now().toISOString() : null
+  let healthStatus = initialHealthStatus
+  let connectedAt =
+    initialHealthStatus === 'not_connected' ? null : now().toISOString()
   let lastSyncedAt: string | null = null
   let stepsByDate = { ...initialSteps }
 
@@ -111,7 +104,7 @@ export function createMockGoogleIntegrationApi(
     if (!signedIn) return null
 
     return {
-      user: { ...MOCK_USER },
+      user: { ...MOCK_AUTH_USER },
       expiresAt: new Date(now().getTime() + 60 * 60 * 1000).toISOString(),
     }
   }
@@ -119,19 +112,30 @@ export function createMockGoogleIntegrationApi(
   const healthConnection = (): GoogleHealthConnection | null => {
     if (!signedIn) return null
 
-    return healthConnected
-      ? {
-          status: 'connected',
-          scopes: [GOOGLE_HEALTH_ACTIVITY_READ_SCOPE],
-          connectedAt,
-          lastSyncedAt,
-        }
-      : {
-          status: 'not_connected',
-          scopes: [],
-          connectedAt: null,
-          lastSyncedAt: null,
-        }
+    if (healthStatus === 'connected') {
+      return {
+        status: healthStatus,
+        scopes: [GOOGLE_HEALTH_ACTIVITY_READ_SCOPE],
+        connectedAt,
+        lastSyncedAt,
+      }
+    }
+
+    if (healthStatus === 'permission_required') {
+      return {
+        status: healthStatus,
+        scopes: [],
+        connectedAt,
+        lastSyncedAt,
+      }
+    }
+
+    return {
+      status: healthStatus,
+      scopes: [],
+      connectedAt: null,
+      lastSyncedAt: null,
+    }
   }
 
   const state = (): GoogleIntegrationState => {
@@ -183,7 +187,7 @@ export function createMockGoogleIntegrationApi(
       if (failed) return failed
       if (!signedIn) return failure('UNAUTHENTICATED')
 
-      healthConnected = true
+      healthStatus = 'connected'
       connectedAt = now().toISOString()
       return success({ next: 'connected', state: state() })
     },
@@ -196,7 +200,7 @@ export function createMockGoogleIntegrationApi(
       if (failed) return failed
       if (!signedIn) return failure('UNAUTHENTICATED')
 
-      healthConnected = false
+      healthStatus = 'not_connected'
       connectedAt = null
       lastSyncedAt = null
       return success(state())
@@ -207,7 +211,12 @@ export function createMockGoogleIntegrationApi(
       const failed = configuredFailure<DailySteps>('getDailySteps')
       if (failed) return failed
       if (!signedIn) return failure('UNAUTHENTICATED')
-      if (!healthConnected) return failure('HEALTH_NOT_CONNECTED')
+      if (healthStatus === 'not_connected') {
+        return failure('HEALTH_NOT_CONNECTED')
+      }
+      if (healthStatus === 'permission_required') {
+        return failure('HEALTH_PERMISSION_REQUIRED')
+      }
       if (!DATE_PATTERN.test(input.date) || input.timezone.trim() === '') {
         return failure('INVALID_INPUT')
       }
@@ -238,8 +247,9 @@ export function createMockGoogleIntegrationApi(
     reset() {
       failures.clear()
       signedIn = initialSignedIn
-      healthConnected = initialHealthConnected
-      connectedAt = initialHealthConnected ? now().toISOString() : null
+      healthStatus = initialHealthStatus
+      connectedAt =
+        initialHealthStatus === 'not_connected' ? null : now().toISOString()
       lastSyncedAt = null
       stepsByDate = { ...initialSteps }
     },

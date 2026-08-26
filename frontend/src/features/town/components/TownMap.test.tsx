@@ -8,17 +8,20 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
-import { createMockGoogleIntegrationApi } from '../../auth/api'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MOCK_BUILDING_CATALOG,
   MOCK_MY_TOWN,
 } from '../../../mocks/data/towns'
+import { createMockGoogleIntegrationApi } from '../../../mocks/services'
 import { createMockTownApi } from '../../../mocks/services/town'
 import { TownMap } from './TownMap'
 import { TownOverview } from './TownOverview'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('TownMap', () => {
   it('renders placed roads and buildings with accessible names', () => {
@@ -98,12 +101,14 @@ describe('TownOverview', () => {
   })
 
   it('shows today steps after Health is connected', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-08-25T10:00:00.000Z'))
     const api = createMockTownApi({ latencyMs: 0 })
     const googleApi = createMockGoogleIntegrationApi({
       latencyMs: 0,
       initiallySignedIn: true,
       initiallyHealthConnected: true,
-      stepsByDate: { '2026-08-26': 6500 },
+      stepsByDate: { '2026-08-25': 6500 },
       now: () => new Date('2026-08-25T10:00:00.000Z'),
     })
     render(<TownOverview api={api} googleApi={googleApi} />)

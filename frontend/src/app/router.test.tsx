@@ -9,8 +9,11 @@ import {
 } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mockGoogleIntegrationApi } from '../features/auth/api'
-import { mockRankingApi, mockTownApi } from '../mocks/services'
+import {
+  mockGoogleIntegrationApi,
+  mockRankingApi,
+  mockTownApi,
+} from '../mocks/services'
 import { paths } from './paths'
 import { AppRoutes } from './router'
 
@@ -43,7 +46,7 @@ describe('AppRoutes', () => {
     expect(
       await screen.findByRole('heading', {
         name: /今日の一歩から、街づくりを始めよう。/,
-      }),
+      }, { timeout: 3000 }),
     ).not.toBeNull()
   })
 

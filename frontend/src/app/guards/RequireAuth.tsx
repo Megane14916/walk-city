@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { mockGoogleIntegrationApi } from '../../features/auth/api'
+import { mockGoogleIntegrationApi } from '../../mocks/services'
 import { paths } from '../paths'
 
 type AuthGuardState =
