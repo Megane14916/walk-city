@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 対象プロダクト | Walk City |
-| ステータス | Draft（フロントエンド・バックエンドレビュー待ち） |
+| ステータス | In Progress（手順1・2完了） |
 | 作成日 | 2026-08-26 |
 | 対象 | 全ユーザー人口ランキングの取得・表示、追加取得、ユーザー／街への遷移 |
 | 関連 API | `getPopulationRanking`、遷移先で使用する `getPublicTown` |
@@ -36,10 +36,12 @@
 一方、次の基盤は未導入または未分割である。
 
 - ルーティングライブラリとルート定義
-- `app/`、`components/`、`features/ranking/`、`mocks/`、共有 `types/` の実体
+- `app/`、共通 `components/`、`features/ranking/` の UI／Hook、ランキング用モックの実体
 - Supabase JavaScript Client と共通 Supabase Client
 - API 実装を環境変数で切り替える Provider
 - テストランナーと React コンポーネントテスト環境
+
+共通 `types/common.ts` と `types/user.ts`、Town 機能の `features/town/`、`mocks/data/`、`mocks/services/` は最新の main で追加済みである。ランキング実装はこの構成を踏襲し、API 契約を `features/ranking/api/` に置く。`types/common.ts` の `ApiErrorCode`、`ApiError`、`ApiResult` と `types/user.ts` の `UserSummary` を重複定義しない。
 
 ランキング機能の実装では、既存の認証デモを壊さず、ランキングに必要な最小限の共通基盤を切り出す。認証機能全体の再設計や Map 機能の実装までは本機能の変更に含めない。
 
@@ -71,7 +73,7 @@
 - 匿名ユーザーへのランキング公開
 - ランキング専用のプロフィール編集
 
-`/users/:userId` と `/town/:userId` の完全な画面実装はユーザー／Map 機能の責務とする。ランキング機能は正しい URL を生成し、遷移できるところまでを担当する。
+`/users/:userId` と `/town/:userId` の完全な画面実装はユーザー／Map 機能の責務とする。今回の手順6では `/users/:userId` に仮の `UserPage` を用意し、ランキングから正しい URL へ遷移できるところまでを担当する。`/town/:userId` は後続実装とする。
 
 ## 4. 用語
 
@@ -252,7 +254,7 @@ type ApiResult<T> =
     }
 ```
 
-既存認証 API にある機能固有の `ApiResult` は、ランキング追加時にコピーしない。互換性を保ちながら `src/types/common.ts` へ共通化し、認証とランキングの双方が同じ型を参照する。
+`ApiErrorCode` と `ApiResult` は最新の main で `src/types/common.ts` に追加済みである。手順2では同ファイルに `ApiError` を追加し、ランキングはこれらの共通型を参照する。既存認証 API には機能固有の `ApiResult` が残っているため、認証側の共通型への移行は認証機能の変更時に互換性を確認して行い、ランキング側へ複製しない。
 
 ### 8.2 ランキング型
 
@@ -487,13 +489,15 @@ VITE_API_MODE=supabase → SupabaseRankingApi
 frontend/src/
 ├── app/
 │   ├── routes/
-│   │   └── RankingPage.tsx
-│   ├── providers/
-│   │   └── ApiProvider.tsx
+│   │   ├── RankingPage.tsx
+│   │   └── UserPage.tsx            # 今回は仮画面
 │   ├── paths.ts
 │   └── router.tsx
 ├── features/
 │   └── ranking/
+│       ├── api/
+│       │   ├── index.ts
+│       │   └── ranking-api.ts
 │       ├── components/
 │       │   ├── PopulationRanking.tsx
 │       │   ├── RankingList.tsx
@@ -503,32 +507,28 @@ frontend/src/
 │       │   └── RankingLoadMore.tsx
 │       ├── hooks/
 │       │   └── usePopulationRanking.ts
-│       ├── services/
-│       │   ├── ranking.ts
-│       │   └── supabaseRanking.ts
-│       ├── index.ts
 │       └── types.ts
 ├── mocks/
 │   ├── data/
 │   │   └── rankings.ts
 │   └── services/
 │       └── ranking.ts
-├── types/
-│   └── common.ts
-└── lib/
-    ├── api-error.ts
-    └── supabase.ts
+└── types/
+    ├── common.ts
+    └── user.ts
 ```
 
-実装時にファイル数を減らすことはできるが、Page、表示、Hook、API 契約、実 API、モックデータ、モック API の責務は混在させない。
+上記は今回の手順2〜6の対象構成である。実装時にファイル数を減らすことはできるが、Page、表示、Hook、API 契約、モックデータ、モック API の責務は混在させない。
+
+`lib/supabase.ts`、Supabase 用ランキング API、API Provider、`VITE_API_MODE` による切り替えは、実 API 接続を行う手順7以降の対象とし、今回の手順2〜6では実装しない。
 
 既存コードへの主な変更:
 
-- `package.json`: ルーター、Supabase Client、テスト基盤の依存関係と scripts を追加
+- `package.json`: 手順6でルーターを追加。Supabase Clientとテスト基盤は後続手順で追加
 - `src/main.tsx`: Provider と Router のエントリへ変更
 - `src/App.tsx`: 認証デモを保持しながら Page／機能コンポーネントへ分離
 - `src/index.css`: アプリ全体の基本スタイルのみ維持
-- `.env.example`: API モードと Supabase 公開環境変数を記載
+- `.env.example`: API モードと Supabase 公開環境変数は実 API 接続時に記載
 
 ## 13. 処理フロー
 
@@ -701,8 +701,8 @@ erDiagram
 
 ### 16.1 実装順序
 
-1. バックエンド担当と物理 API、同率順位、安定ソート、カーソル仕様を合意する。
-2. `ApiResult`、`ApiError`、`RankingEntry`、`RankingPage`、`RankingApi` を定義する。
+1. フロントエンド契約として、同率順位、安定表示順、20件単位、不透明カーソル、公開項目、遷移先を合意する。物理 API とカーソル内部形式は実 API 接続前にバックエンド担当と合意する。
+2. 既存の共通 `ApiResult`、`ApiErrorCode` を再利用し、不足する `ApiError` と `RankingEntry`、`RankingPage`、`RankingRequest`、`RankingApi` を定義する。
 3. 25件以上のモックデータと `MockRankingApi` を実装し、契約テストを作る。
 4. `usePopulationRanking` とページ結合・競合防止を実装する。
 5. `RankingItem`、`RankingList`、各状態 UI を実装する。
@@ -733,21 +733,30 @@ erDiagram
 |---|---|---|
 | 同率・カーソル仕様が未合意 | ページ境界の重複・欠落、手戻り | 実 API 前にバックエンド担当と決定し API 文書を更新 |
 | 現行 `App.tsx` が認証画面に密結合 | ルーター導入時の回帰 | 既存動作をテストまたは手動確認し、段階的に Page へ切り出す |
-| 共通 `ApiResult` の重複 | エラー型と UI 分岐の不整合 | ランキング追加時に共通型へ統合し、認証 import も更新 |
+| 認証 API に残る `ApiResult` の重複 | エラー型と UI 分岐の不整合 | ランキングは共通型のみを使用し、認証側は認証機能の変更時に互換性を確認して移行 |
 | Supabase 物理 API が未完成 | 実データ接続が遅延 | `RankingApi` とモックを先行し、アダプターだけ後から接続 |
 | 人口更新中のページング | 重複・欠落 | 安定カーソル、`userId` 重複排除、手動更新を提供 |
 | 長い名前や多言語 | レイアウト崩れ | 省略規則、アクセシブルな全文、320 px幅テスト |
 
-## 18. レビュー時に決定する事項
+## 18. 合意済み事項と後続決定事項
 
-実装着手前に、特に次の4点をフロントエンド・バックエンド間で決定する。
+### 18.1 今回の実装で合意済み
 
-1. 同人口は同順位とするか、安定順に一意の順位を付けるか。
-2. View／RPC の物理名、引数、snake_case の応答スキーマ。
-3. カーソルの生成方式と1回の最大取得件数。
-4. `/users/:userId` の初期画面をランキング実装と同時に用意するか、別機能として後続実装するか。
+- 同人口は同順位とし、`1, 2, 2, 4` の形式で表示する。
+- 安定表示順は人口降順、表示名昇順、ユーザー ID 昇順とする。
+- 初回・追加取得とも20件単位とする。
+- カーソルはフロントエンドから見て不透明な文字列とする。
+- `/ranking` は認証必須とする。
+- 公開項目は順位、ユーザー ID、表示名、街 ID、街名、人口、自分判定に限定する。
+- ランキング項目は `/users/:userId` へ遷移し、今回の手順6では仮の `UserPage` を用意する。
+- `/town/:userId` の画面は後続のユーザー／Map 機能で実装する。
 
-本書の推奨案は「同人口は同順位」「表示順は人口降順、表示名昇順、ユーザー ID 昇順」「初回・追加取得は20件」「カーソルは不透明」とする。UI とモックはこの推奨案で先行可能だが、実 API 接続前に正式合意を得る。
+### 18.2 実 API 接続前に決定する事項
+
+- View／RPC の物理名、引数、snake_case の応答スキーマ
+- カーソルの内部生成・検証方式
+- API が許可する最大取得件数
+- 順位算出とページ取得におけるスナップショット整合性の範囲
 
 ## 19. 関連文書
 

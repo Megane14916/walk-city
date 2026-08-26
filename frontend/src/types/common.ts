@@ -18,13 +18,15 @@ export type ApiErrorCode =
   | 'CONFLICT'
   | 'INTERNAL_ERROR'
 
+export type ApiError = {
+  code: ApiErrorCode
+  message: string
+  details?: Record<string, unknown>
+}
+
 export type ApiResult<T> =
   | { ok: true; data: T }
   | {
       ok: false
-      error: {
-        code: ApiErrorCode
-        message: string
-        details?: Record<string, unknown>
-      }
+      error: ApiError
     }
