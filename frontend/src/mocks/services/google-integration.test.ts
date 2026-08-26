@@ -68,4 +68,69 @@ describe('createMockGoogleIntegrationApi', () => {
     api.reset()
     expect(await api.signInWithGoogle()).toMatchObject({ ok: true })
   })
+
+  it('notifies active auth subscribers and stops after unsubscribe', async () => {
+    const api = createMockGoogleIntegrationApi({ latencyMs: 0 })
+    let notifications = 0
+    const unsubscribe = api.subscribeToAuthChanges(() => {
+      notifications += 1
+    })
+
+    await api.signInWithGoogle()
+    expect(notifications).toBe(1)
+
+    unsubscribe()
+    await api.signOut()
+    expect(notifications).toBe(1)
+  })
+
+  it('preserves Health connection across logout and a later login', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+      initiallyHealthConnected: true,
+    })
+
+    await api.signOut()
+    const signedOut = await api.getGoogleIntegrationState()
+    expect(signedOut).toMatchObject({
+      ok: true,
+      data: { session: null, healthConnection: null },
+    })
+
+    const signedIn = await api.signInWithGoogle()
+    expect(signedIn).toMatchObject({
+      ok: true,
+      data: { healthConnection: { status: 'connected' } },
+    })
+  })
+
+  it('validates step overrides and restores them on reset', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+      initiallyHealthConnected: true,
+      stepsByDate: { '2026-08-25': 100 },
+      now: () => FIXED_NOW,
+    })
+
+    expect(() => api.setSteps('invalid', 10)).toThrow()
+    expect(() => api.setSteps('2026-08-25', -1)).toThrow()
+
+    api.setSteps('2026-08-25', 999)
+    expect(
+      await api.getDailySteps({
+        date: '2026-08-25',
+        timezone: 'Australia/Sydney',
+      }),
+    ).toMatchObject({ ok: true, data: { steps: 999 } })
+
+    api.reset()
+    expect(
+      await api.getDailySteps({
+        date: '2026-08-25',
+        timezone: 'Australia/Sydney',
+      }),
+    ).toMatchObject({ ok: true, data: { steps: 100 } })
+  })
 })

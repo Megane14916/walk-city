@@ -59,6 +59,14 @@ describe('paths', () => {
 })
 
 describe('AppRoutes', () => {
+  it('keeps the login action hidden while restoring the session', () => {
+    const api = createMockGoogleIntegrationApi({ latencyMs: 50 })
+    renderRoute(paths.login, api)
+
+    expect(screen.getByText('街への入り口を準備しています…')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Googleで続ける' })).toBeNull()
+  })
+
   it('shows Health connection UI after Google login without double submission', async () => {
     const signInSpy = vi.spyOn(mockGoogleIntegrationApi, 'signInWithGoogle')
     renderRoute(paths.login)
@@ -150,6 +158,29 @@ describe('AppRoutes', () => {
     ).not.toBeNull()
   })
 
+  it('keeps the game available after Health OAuth is cancelled', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+    })
+    api.setFailure('startGoogleHealthConnection', 'OAUTH_CANCELLED')
+    renderRoute(paths.healthConnect, api)
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Google Healthと連携する',
+      }),
+    )
+    expect(
+      await screen.findByText('Google認証がキャンセルされました。'),
+    ).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '今は連携しない' }))
+    expect(
+      await screen.findByRole('heading', { name: 'グリーンタウン' }),
+    ).not.toBeNull()
+  })
+
   it('shows a re-consent action when Health permission is required', async () => {
     const api = createMockGoogleIntegrationApi({
       latencyMs: 0,
@@ -224,6 +255,36 @@ describe('AppRoutes', () => {
       }),
     ).not.toBeNull()
     expect(screen.getByText('Walk City テストユーザー')).not.toBeNull()
+  })
+
+  it('does not disconnect Health when the user only logs out', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+      initiallyHealthConnected: true,
+    })
+    renderRoute(paths.healthConnect, api)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'ログアウト' }))
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Googleで続ける' }),
+    )
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /街づくりの準備ができました。/,
+      }),
+    ).not.toBeNull()
+  })
+
+  it('redirects unauthenticated Health connection requests to login', async () => {
+    renderRoute(paths.healthConnect)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /今日の一歩から、街づくりを始めよう。/,
+      }),
+    ).not.toBeNull()
   })
 
   it('redirects an unauthenticated ranking request to login', async () => {
