@@ -8,36 +8,59 @@ import { RankingLoadMore } from './RankingLoadMore'
 export type PopulationRankingProps = {
   api: RankingApi
   getUserHref: (userId: string) => string
+  variant?: 'page' | 'panel'
 }
 
 export function PopulationRanking({
   api,
   getUserHref,
+  variant = 'page',
 }: PopulationRankingProps) {
   const ranking = usePopulationRanking(api)
+  const isPanel = variant === 'panel'
 
   return (
     <section
-      className="mx-auto w-full max-w-[980px] px-[clamp(18px,4vw,42px)] pt-[clamp(28px,5vw,64px)] pb-12 text-[#183b37] max-[620px]:px-3.5"
+      className={
+        isPanel
+          ? 'mx-auto w-full px-5 pt-5 pb-8 text-[#183b37]'
+          : 'mx-auto w-full max-w-[980px] px-[clamp(18px,4vw,42px)] pt-[clamp(28px,5vw,64px)] pb-12 text-[#183b37] max-[620px]:px-3.5'
+      }
       aria-labelledby="ranking-title"
     >
-      <header className="mb-[26px] flex items-end justify-between gap-6 max-[620px]:items-start">
+      <header
+        className={
+          isPanel
+            ? 'mb-5 pr-12'
+            : 'mb-[26px] flex items-end justify-between gap-6 max-[620px]:items-start'
+        }
+      >
         <div>
           <span className="mb-[9px] block text-[11px] font-black tracking-[.18em] text-[#438c76]">
             CITY LEADERBOARD
           </span>
           <h1
-            className="m-0 text-[clamp(32px,5vw,48px)] leading-[1.1] tracking-[-.05em] text-[#102f2d]"
+            className={
+              isPanel
+                ? 'm-0 whitespace-nowrap text-[32px] leading-[1.1] tracking-[-.05em] text-[#102f2d]'
+                : 'm-0 text-[clamp(32px,5vw,48px)] leading-[1.1] tracking-[-.05em] text-[#102f2d]'
+            }
             id="ranking-title"
           >
             人口ランキング
           </h1>
-          <p className="mt-3 mb-0 text-sm text-[#6d7773] max-[620px]:max-w-[230px] max-[620px]:text-xs max-[620px]:leading-[1.6]">
+          <p
+            className={
+              isPanel
+                ? 'mt-2 mb-0 text-xs leading-5 text-[#6d7773]'
+                : 'mt-3 mb-0 text-sm text-[#6d7773] max-[620px]:max-w-[230px] max-[620px]:text-xs max-[620px]:leading-[1.6]'
+            }
+          >
             みんなの街の成長を見て、新しい街を訪れてみよう。
           </p>
         </div>
         <button
-          className="inline-flex min-h-[43px] min-w-[104px] items-center justify-center gap-2 rounded-xl border border-[#d6dbd4] bg-[rgba(255,255,255,.74)] px-4 text-xs font-extrabold text-[#315f56] transition-[background,border-color,transform] duration-200 hover:-translate-y-px hover:border-[#98b9ac] hover:bg-white disabled:cursor-wait disabled:opacity-60 max-[620px]:min-w-[82px] max-[620px]:px-3"
+          className={`inline-flex min-h-[43px] min-w-[104px] items-center justify-center gap-2 rounded-xl border border-[#d6dbd4] bg-[rgba(255,255,255,.74)] px-4 text-xs font-extrabold text-[#315f56] transition-[background,border-color,transform] duration-200 hover:-translate-y-px hover:border-[#98b9ac] hover:bg-white disabled:cursor-wait disabled:opacity-60 max-[620px]:min-w-[82px] max-[620px]:px-3 ${isPanel ? 'mt-3' : ''}`}
           type="button"
           onClick={() => void ranking.refresh()}
           disabled={ranking.isInitialLoading || ranking.isRefreshing}
