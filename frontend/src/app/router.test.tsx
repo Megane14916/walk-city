@@ -8,8 +8,10 @@ import {
   waitFor,
 } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { GoogleIntegrationApi } from '../features/auth/api'
 import {
+  createMockGoogleIntegrationApi,
   mockGoogleIntegrationApi,
   mockRankingApi,
   mockTownApi,
@@ -18,10 +20,13 @@ import { paths } from './paths'
 import { ApiProvider, AuthProvider } from './providers'
 import { AppRoutes } from './router'
 
-function renderRoute(path: string) {
+function renderRoute(
+  path: string,
+  googleIntegrationApi: GoogleIntegrationApi = mockGoogleIntegrationApi,
+) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <ApiProvider services={{ googleIntegrationApi: mockGoogleIntegrationApi }}>
+      <ApiProvider services={{ googleIntegrationApi }}>
         <AuthProvider>
           <AppRoutes />
         </AuthProvider>
@@ -36,7 +41,10 @@ beforeEach(() => {
   mockTownApi.reset()
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe('paths', () => {
   it('encodes user IDs in one centralized path helper', () => {
@@ -45,6 +53,148 @@ describe('paths', () => {
 })
 
 describe('AppRoutes', () => {
+  it('shows Health connection UI after Google login without double submission', async () => {
+    const signInSpy = vi.spyOn(mockGoogleIntegrationApi, 'signInWithGoogle')
+    renderRoute(paths.login)
+
+    const loginButton = await screen.findByRole('button', {
+      name: 'Googleで続ける',
+    })
+    fireEvent.click(loginButton)
+    fireEvent.click(loginButton)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /歩数を街の力に変えましょう。/,
+      }),
+    ).not.toBeNull()
+    expect(signInSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a retryable login error after OAuth cancellation', async () => {
+    mockGoogleIntegrationApi.setFailure('signInWithGoogle', 'OAUTH_CANCELLED')
+    renderRoute(paths.login)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Googleで続ける' }),
+    )
+    expect(
+      await screen.findByText('Google認証がキャンセルされました。'),
+    ).not.toBeNull()
+
+    mockGoogleIntegrationApi.setFailure('signInWithGoogle', null)
+    fireEvent.click(screen.getByRole('button', { name: 'Googleで続ける' }))
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /歩数を街の力に変えましょう。/,
+      }),
+    ).not.toBeNull()
+  })
+
+  it('redirects an authenticated login request to Health connection', async () => {
+    await mockGoogleIntegrationApi.signInWithGoogle()
+    renderRoute(paths.login)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /歩数を街の力に変えましょう。/,
+      }),
+    ).not.toBeNull()
+  })
+
+  it('allows a user to skip Health connection and continue to town', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+    })
+    renderRoute(paths.healthConnect, api)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: '今は連携しない' }),
+    )
+
+    expect(
+      await screen.findByRole('heading', { name: 'グリーンタウン' }),
+    ).not.toBeNull()
+  })
+
+  it('shows a re-consent action when Health permission is required', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+      initialHealthConnectionStatus: 'permission_required',
+    })
+    renderRoute(paths.healthConnect, api)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /歩数の読み取りを再許可してください。/,
+      }),
+    ).not.toBeNull()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Google Healthを再連携する' }),
+    )
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /街づくりの準備ができました。/,
+      }),
+    ).not.toBeNull()
+  })
+
+  it('continues to town from the connected completion state', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+      initiallyHealthConnected: true,
+    })
+    renderRoute(paths.healthConnect, api)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: '街づくりを始める' }),
+    )
+
+    expect(
+      await screen.findByRole('heading', { name: 'グリーンタウン' }),
+    ).not.toBeNull()
+  })
+
+  it('confirms Health disconnection without signing the user out', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+      initiallyHealthConnected: true,
+    })
+    renderRoute(paths.healthConnect, api)
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Google Healthの連携を解除',
+      }),
+    )
+    expect(
+      screen.getByRole('alertdialog', {
+        name: 'Google Health連携の解除確認',
+      }),
+    ).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Google Healthの連携を解除' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: '連携を解除する' }))
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /歩数を街の力に変えましょう。/,
+      }),
+    ).not.toBeNull()
+    expect(screen.getByText('Walk City テストユーザー')).not.toBeNull()
+  })
+
   it('redirects an unauthenticated ranking request to login', async () => {
     renderRoute(paths.ranking)
 

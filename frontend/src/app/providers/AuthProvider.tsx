@@ -54,12 +54,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signInWithGoogle = useCallback(async () => {
     const result = await googleIntegrationApi.signInWithGoogle()
-    return applyResult(result)
+    return result.ok ? applyResult(result) : result
   }, [applyResult, googleIntegrationApi])
 
   const signOut = useCallback(async () => {
     const result = await googleIntegrationApi.signOut()
-    return applyResult(result)
+    return result.ok ? applyResult(result) : result
   }, [applyResult, googleIntegrationApi])
 
   useEffect(() => {
