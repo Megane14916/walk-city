@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
-import type {
-  DailySteps,
-  GoogleIntegrationApi,
-} from '../../auth/api'
+import type { GoogleIntegrationApi } from '../../auth/api'
+import type { DailySteps } from '../../health/types'
 
 const TIMEZONE = 'Australia/Sydney'
 
@@ -36,7 +34,7 @@ export function useDailyStepsSummary(
     if (!api) return
 
     void api
-      .getState()
+      .getGoogleIntegrationState()
       .then(async (stateResult) => {
         if (!active) return
         const isConnected =

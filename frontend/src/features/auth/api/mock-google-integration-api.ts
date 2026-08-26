@@ -1,18 +1,19 @@
 import {
   GOOGLE_HEALTH_ACTIVITY_READ_SCOPE,
-  type ApiResult,
-  type AuthSession,
-  type DailySteps,
-  type GetDailyStepsInput,
-  type GoogleHealthConnection,
   type GoogleIntegrationApi,
-  type GoogleIntegrationErrorCode,
-  type GoogleIntegrationState,
-  type StartGoogleHealthConnectionResult,
 } from './google-integration-api'
+import type { ApiResult } from '../../../types/common'
+import type { DailySteps, GetDailyStepsInput } from '../../health/types'
+import type {
+  AuthSession,
+  GoogleHealthConnection,
+  GoogleIntegrationErrorCode,
+  GoogleIntegrationState,
+  StartGoogleHealthConnectionResult,
+} from '../types'
 
 export type MockGoogleOperation =
-  | 'getState'
+  | 'getGoogleIntegrationState'
   | 'signInWithGoogle'
   | 'signOut'
   | 'startGoogleHealthConnection'
@@ -149,9 +150,9 @@ export function createMockGoogleIntegrationApi(
   }
 
   return {
-    async getState() {
+    async getGoogleIntegrationState() {
       await wait()
-      return configuredFailure('getState') ?? success(state())
+      return configuredFailure('getGoogleIntegrationState') ?? success(state())
     },
 
     async signInWithGoogle() {

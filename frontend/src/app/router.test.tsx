@@ -113,7 +113,10 @@ describe('AppRoutes', () => {
   })
 
   it('allows retry when session restoration fails', async () => {
-    mockGoogleIntegrationApi.setFailure('getState', 'INTERNAL_ERROR')
+    mockGoogleIntegrationApi.setFailure(
+      'getGoogleIntegrationState',
+      'INTERNAL_ERROR',
+    )
     renderRoute(paths.ranking)
 
     expect(
@@ -122,7 +125,7 @@ describe('AppRoutes', () => {
       }),
     ).not.toBeNull()
 
-    mockGoogleIntegrationApi.setFailure('getState', null)
+    mockGoogleIntegrationApi.setFailure('getGoogleIntegrationState', null)
     fireEvent.click(screen.getByRole('button', { name: '再試行' }))
 
     expect(

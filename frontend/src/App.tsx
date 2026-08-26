@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom'
 import { paths } from './app/paths'
 import {
   mockGoogleIntegrationApi,
-  type DailySteps,
   type GoogleIntegrationState,
   type MockGoogleOperation,
 } from './features/auth/api'
+import type { DailySteps } from './features/health/types'
 import './App.css'
 
 const TIMEZONE = 'Australia/Sydney'
@@ -116,7 +116,7 @@ function App() {
 
   useEffect(() => {
     let active = true
-    void mockGoogleIntegrationApi.getState().then((result) => {
+    void mockGoogleIntegrationApi.getGoogleIntegrationState().then((result) => {
       if (!active) return
       if (result.ok) setIntegration(result.data)
       else setError(result.error.message)
@@ -189,7 +189,8 @@ function App() {
     if (result.ok) {
       setDailySteps(result.data)
       setNotice('今日の歩数を更新しました。')
-      const stateResult = await mockGoogleIntegrationApi.getState()
+      const stateResult =
+        await mockGoogleIntegrationApi.getGoogleIntegrationState()
       if (stateResult.ok) setIntegration(stateResult.data)
     } else {
       setError(result.error.message)
@@ -231,7 +232,7 @@ function App() {
     mockGoogleIntegrationApi.reset()
     setArmedScenario(null)
     setDailySteps(null)
-    const result = await mockGoogleIntegrationApi.getState()
+    const result = await mockGoogleIntegrationApi.getGoogleIntegrationState()
     if (result.ok) {
       setIntegration(result.data)
       setNotice('モックを最初の状態に戻しました。')

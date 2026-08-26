@@ -21,7 +21,7 @@ export function RequireAuth({ children }: RequireAuthProps) {
   useEffect(() => {
     let active = true
 
-    void mockGoogleIntegrationApi.getState().then((result) => {
+    void mockGoogleIntegrationApi.getGoogleIntegrationState().then((result) => {
       if (!active) return
       if (!result.ok) {
         setState({ status: 'error', message: result.error.message })
