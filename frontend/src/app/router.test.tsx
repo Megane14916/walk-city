@@ -15,12 +15,15 @@ import {
   mockTownApi,
 } from '../mocks/services'
 import { paths } from './paths'
+import { ApiProvider } from './providers'
 import { AppRoutes } from './router'
 
 function renderRoute(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <AppRoutes />
+      <ApiProvider services={{ googleIntegrationApi: mockGoogleIntegrationApi }}>
+        <AppRoutes />
+      </ApiProvider>
     </MemoryRouter>,
   )
 }

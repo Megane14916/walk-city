@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { mockGoogleIntegrationApi } from '../../mocks/services'
 import { paths } from '../paths'
+import { useApi } from '../providers'
 
 type AuthGuardState =
   | { status: 'checking' }
@@ -14,6 +14,7 @@ export type RequireAuthProps = {
 }
 
 export function RequireAuth({ children }: RequireAuthProps) {
+  const { googleIntegrationApi } = useApi()
   const location = useLocation()
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState<AuthGuardState>({ status: 'checking' })
@@ -21,7 +22,7 @@ export function RequireAuth({ children }: RequireAuthProps) {
   useEffect(() => {
     let active = true
 
-    void mockGoogleIntegrationApi.getGoogleIntegrationState().then((result) => {
+    void googleIntegrationApi.getGoogleIntegrationState().then((result) => {
       if (!active) return
       if (!result.ok) {
         setState({ status: 'error', message: result.error.message })
@@ -38,7 +39,7 @@ export function RequireAuth({ children }: RequireAuthProps) {
     return () => {
       active = false
     }
-  }, [attempt])
+  }, [attempt, googleIntegrationApi])
 
   if (state.status === 'checking') {
     return (

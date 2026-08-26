@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { paths } from './app/paths'
+import { useApi } from './app/providers'
 import type { GoogleIntegrationState } from './features/auth/api'
 import type { DailySteps } from './features/health/types'
-import {
-  mockGoogleIntegrationApi,
-  type MockGoogleOperation,
-} from './mocks/services'
 import './App.css'
 
 const TIMEZONE = 'Australia/Sydney'
@@ -19,10 +16,7 @@ type PendingAction =
   | 'syncing'
   | 'disconnecting'
   | 'signing-out'
-  | 'resetting'
   | null
-
-type ArmedScenario = 'oauth-cancelled' | 'health-error' | null
 
 function todayInSydney() {
   return new Intl.DateTimeFormat('en-CA', {
@@ -89,13 +83,13 @@ function ProgressSteps({ connected }: { connected: boolean }) {
 }
 
 function App() {
+  const { googleIntegrationApi } = useApi()
   const [integration, setIntegration] =
     useState<GoogleIntegrationState | null>(null)
   const [dailySteps, setDailySteps] = useState<DailySteps | null>(null)
   const [pending, setPending] = useState<PendingAction>('initializing')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [armedScenario, setArmedScenario] = useState<ArmedScenario>(null)
 
   const [today] = useState(() => todayInSydney())
   const session = integration?.session ?? null
@@ -107,16 +101,9 @@ function App() {
     setNotice(null)
   }
 
-  const applyFailure = (
-    operation: MockGoogleOperation,
-    code: 'OAUTH_CANCELLED' | 'HEALTH_PROVIDER_ERROR' | null,
-  ) => {
-    mockGoogleIntegrationApi.setFailure(operation, code)
-  }
-
   useEffect(() => {
     let active = true
-    void mockGoogleIntegrationApi.getGoogleIntegrationState().then((result) => {
+    void googleIntegrationApi.getGoogleIntegrationState().then((result) => {
       if (!active) return
       if (result.ok) setIntegration(result.data)
       else setError(result.error.message)
@@ -125,16 +112,16 @@ function App() {
     return () => {
       active = false
     }
-  }, [])
+  }, [googleIntegrationApi])
 
   const handleSignIn = async () => {
     clearMessages()
     setPending('signing-in')
-    const result = await mockGoogleIntegrationApi.signInWithGoogle()
+    const result = await googleIntegrationApi.signInWithGoogle()
     if (result.ok) {
       setIntegration(result.data)
       if (result.data.healthConnection?.status === 'connected') {
-        const stepsResult = await mockGoogleIntegrationApi.getDailySteps({
+        const stepsResult = await googleIntegrationApi.getDailySteps({
           date: today,
           timezone: TIMEZONE,
         })
@@ -150,10 +137,7 @@ function App() {
   const handleConnect = async () => {
     clearMessages()
     setPending('connecting')
-    const result =
-      await mockGoogleIntegrationApi.startGoogleHealthConnection()
-    applyFailure('startGoogleHealthConnection', null)
-    setArmedScenario(null)
+    const result = await googleIntegrationApi.startGoogleHealthConnection()
 
     if (!result.ok) {
       setError(result.error.message)
@@ -167,7 +151,7 @@ function App() {
     }
 
     setIntegration(result.data.state)
-    const stepsResult = await mockGoogleIntegrationApi.getDailySteps({
+    const stepsResult = await googleIntegrationApi.getDailySteps({
       date: today,
       timezone: TIMEZONE,
     })
@@ -179,18 +163,15 @@ function App() {
   const handleSync = async () => {
     clearMessages()
     setPending('syncing')
-    const result = await mockGoogleIntegrationApi.getDailySteps({
+    const result = await googleIntegrationApi.getDailySteps({
       date: today,
       timezone: TIMEZONE,
     })
-    applyFailure('getDailySteps', null)
-    setArmedScenario(null)
-
     if (result.ok) {
       setDailySteps(result.data)
       setNotice('今日の歩数を更新しました。')
       const stateResult =
-        await mockGoogleIntegrationApi.getGoogleIntegrationState()
+        await googleIntegrationApi.getGoogleIntegrationState()
       if (stateResult.ok) setIntegration(stateResult.data)
     } else {
       setError(result.error.message)
@@ -201,7 +182,7 @@ function App() {
   const handleDisconnect = async () => {
     clearMessages()
     setPending('disconnecting')
-    const result = await mockGoogleIntegrationApi.disconnectGoogleHealth()
+    const result = await googleIntegrationApi.disconnectGoogleHealth()
     if (result.ok) {
       setIntegration(result.data)
       setDailySteps(null)
@@ -215,7 +196,7 @@ function App() {
   const handleSignOut = async () => {
     clearMessages()
     setPending('signing-out')
-    const result = await mockGoogleIntegrationApi.signOut()
+    const result = await googleIntegrationApi.signOut()
     if (result.ok) {
       setIntegration(result.data)
       setDailySteps(null)
@@ -224,34 +205,6 @@ function App() {
       setError(result.error.message)
     }
     setPending(null)
-  }
-
-  const handleReset = async () => {
-    clearMessages()
-    setPending('resetting')
-    mockGoogleIntegrationApi.reset()
-    setArmedScenario(null)
-    setDailySteps(null)
-    const result = await mockGoogleIntegrationApi.getGoogleIntegrationState()
-    if (result.ok) {
-      setIntegration(result.data)
-      setNotice('モックを最初の状態に戻しました。')
-    }
-    setPending(null)
-  }
-
-  const armOAuthCancellation = () => {
-    applyFailure('startGoogleHealthConnection', 'OAUTH_CANCELLED')
-    setArmedScenario('oauth-cancelled')
-    setNotice('次のHealth連携で「認証キャンセル」を再現します。')
-    setError(null)
-  }
-
-  const armHealthError = () => {
-    applyFailure('getDailySteps', 'HEALTH_PROVIDER_ERROR')
-    setArmedScenario('health-error')
-    setNotice('次の歩数更新で「Google Health通信エラー」を再現します。')
-    setError(null)
   }
 
   const stepPercent = Math.min(
@@ -289,7 +242,6 @@ function App() {
             <span className="brand-icon">W</span>
             <b>Walk City</b>
           </div>
-          <span className="demo-badge"><i /> Mock API</span>
         </header>
 
         <div className="auth-content">
@@ -442,29 +394,6 @@ function App() {
             {!error && notice && <p className="notice-message"><span>✓</span>{notice}</p>}
           </div>
 
-          <details className="mock-tools">
-            <summary>モックテスト用メニュー</summary>
-            <p>外部サービスへ接続せず、代表的な状態を再現できます。</p>
-            <div>
-              <button type="button" onClick={handleReset} disabled={pending !== null}>最初から</button>
-              {!isConnected && session && (
-                <button
-                  className={armedScenario === 'oauth-cancelled' ? 'is-armed' : ''}
-                  type="button"
-                  onClick={armOAuthCancellation}
-                  disabled={pending !== null}
-                >次の連携をキャンセル</button>
-              )}
-              {isConnected && (
-                <button
-                  className={armedScenario === 'health-error' ? 'is-armed' : ''}
-                  type="button"
-                  onClick={armHealthError}
-                  disabled={pending !== null}
-                >次の歩数更新を失敗</button>
-              )}
-            </div>
-          </details>
         </div>
 
         <footer className="auth-footer">
