@@ -34,6 +34,14 @@ type DateValue = {
   day: number;
 };
 
+// Google Health API の range 指定で必要になる time オブジェクト。
+type TimeValue = {
+  hours: number;
+  minutes: number;
+  seconds: number;
+  nanos: number;
+};
+
 // 日付を `YYYY-MM-DD` 形式の文字列へ変換する。
 function formatDate(date: Date): string {
   const year = date.getFullYear();
@@ -58,6 +66,16 @@ function toDateValue(date: Date): DateValue {
     year: date.getFullYear(),
     month: date.getMonth() + 1,
     day: date.getDate(),
+  };
+}
+
+// Date を Google API の range.time 形式へ変換する。
+function toTimeValue(date: Date): TimeValue {
+  return {
+    hours: date.getHours(),
+    minutes: date.getMinutes(),
+    seconds: date.getSeconds(),
+    nanos: 0,
   };
 }
 
@@ -154,19 +172,38 @@ async function fetchStepsFromGoogleHealth(
   accessToken: string,
   startDate: string,
   endDate: string,
-  timezone: string,
 ) {
-  // 指定がなければ過去7日をデフォルト対象にする。
-  const fromDate = parseDate(startDate, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
-  const toDate = parseDate(endDate, new Date());
+  // 1日分のみ取得するため、開始日を 0:00:00 に固定する。
+  const baseDate = parseDate(startDate || endDate, new Date());
+  const dayStart = new Date(baseDate);
+  dayStart.setHours(0, 0, 0, 0);
 
-  // Google Health API のリクエスト形式に合わせて日付範囲を組み立てる。
+  // 終了時刻は「取得開始時刻の1秒前」を基本にする。
+  // ただし日付境界を跨がないように同日の 23:59:59 を上限として丸める。
+  const fetchedAtMinusOneSecond = new Date(Date.now() - 1_000);
+  const dayEndLimit = new Date(dayStart);
+  dayEndLimit.setHours(23, 59, 59, 999);
+  const cappedEnd = new Date(Math.min(fetchedAtMinusOneSecond.getTime(), dayEndLimit.getTime()));
+  const effectiveEnd = cappedEnd.getTime() < dayStart.getTime() ? dayStart : cappedEnd;
+
+  // Google Health API のリクエスト形式に合わせて 1日レンジを組み立てる。
   const body = {
-    dailyRollUp: {
-      startDate: toDateValue(fromDate),
-      endDate: toDateValue(toDate),
-      timeZone: timezone,
+    range: {
+      start: {
+        date: toDateValue(dayStart),
+        time: {
+          hours: 0,
+          minutes: 0,
+          seconds: 0,
+          nanos: 0,
+        },
+      },
+      end: {
+        date: toDateValue(effectiveEnd),
+        time: toTimeValue(effectiveEnd),
+      },
     },
+    windowSizeDays: 1,
   };
 
   const response = await fetch(GOOGLE_HEALTH_API_URL, {
@@ -232,13 +269,13 @@ export default {
     }
 
     const timezone = payload.timezone ?? DEFAULT_TIMEZONE;
-    const startDate = payload.startDate ?? formatDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
-    const endDate = payload.endDate ?? formatDate(new Date());
+    const startDate = payload.startDate ?? formatDate(new Date());
+    const endDate = payload.endDate ?? startDate;
 
     try {
       // Google の refresh token から access token を取得して、歩数データを取得する。
       const accessToken = await getGoogleAccessToken();
-      const data = await fetchStepsFromGoogleHealth(accessToken, startDate, endDate, timezone);
+      const data = await fetchStepsFromGoogleHealth(accessToken, startDate, endDate);
 
       // 返す JSON はゲーム側で扱いやすいように、必要な情報だけを平坦化して返す。
       return Response.json({
