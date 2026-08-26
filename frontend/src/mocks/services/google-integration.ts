@@ -87,6 +87,7 @@ export function createMockGoogleIntegrationApi(
     MockGoogleOperation,
     GoogleIntegrationErrorCode
   >()
+  const authListeners = new Set<() => void>()
 
   let signedIn = initialSignedIn
   let healthStatus = initialHealthStatus
@@ -153,6 +154,10 @@ export function createMockGoogleIntegrationApi(
     return code ? failure<T>(code) : null
   }
 
+  const notifyAuthChange = () => {
+    for (const listener of authListeners) listener()
+  }
+
   return {
     async getGoogleIntegrationState() {
       await wait()
@@ -167,6 +172,7 @@ export function createMockGoogleIntegrationApi(
       if (failed) return failed
 
       signedIn = true
+      notifyAuthChange()
       return success(state())
     },
 
@@ -176,7 +182,13 @@ export function createMockGoogleIntegrationApi(
       if (failed) return failed
 
       signedIn = false
+      notifyAuthChange()
       return success(state())
+    },
+
+    subscribeToAuthChanges(listener) {
+      authListeners.add(listener)
+      return () => authListeners.delete(listener)
     },
 
     async startGoogleHealthConnection() {
@@ -252,6 +264,7 @@ export function createMockGoogleIntegrationApi(
         initialHealthStatus === 'not_connected' ? null : now().toISOString()
       lastSyncedAt = null
       stepsByDate = { ...initialSteps }
+      notifyAuthChange()
     },
   }
 }

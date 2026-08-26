@@ -1,4 +1,4 @@
-import type { ApiErrorCode } from '../../types/common'
+import type { ApiError, ApiErrorCode } from '../../types/common'
 import type { UserSummary } from '../../types/user'
 
 export type GoogleIntegrationErrorCode = Extract<
@@ -34,6 +34,12 @@ export type GoogleIntegrationState = {
   session: AuthSession | null
   healthConnection: GoogleHealthConnection | null
 }
+
+export type AuthState =
+  | { status: 'initializing' }
+  | { status: 'authenticated'; session: AuthSession }
+  | { status: 'unauthenticated' }
+  | { status: 'error'; error: ApiError }
 
 export type StartGoogleHealthConnectionResult =
   | { next: 'redirect'; authorizationUrl: string }

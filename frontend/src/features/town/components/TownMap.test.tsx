@@ -111,7 +111,16 @@ describe('TownOverview', () => {
       stepsByDate: { '2026-08-25': 6500 },
       now: () => new Date('2026-08-25T10:00:00.000Z'),
     })
-    render(<TownOverview api={api} googleApi={googleApi} />)
+    const integrationResult = await googleApi.getGoogleIntegrationState()
+    if (!integrationResult.ok) throw new Error(integrationResult.error.message)
+
+    render(
+      <TownOverview
+        api={api}
+        googleApi={googleApi}
+        googleIntegrationState={integrationResult.data}
+      />,
+    )
 
     expect(await screen.findByText('6,500歩')).not.toBeNull()
   })

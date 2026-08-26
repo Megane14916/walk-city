@@ -1,4 +1,5 @@
 export * from './api-context'
 export * from './ApiProvider'
+export * from './AuthProvider'
 export * from './create-api-services'
 export * from './useApi'

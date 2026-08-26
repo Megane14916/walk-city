@@ -14,6 +14,7 @@ export const GOOGLE_HEALTH_ACTIVITY_READ_SCOPE =
  */
 export interface GoogleIntegrationApi {
   getGoogleIntegrationState(): Promise<ApiResult<GoogleIntegrationState>>
+  subscribeToAuthChanges(listener: () => void): () => void
   signInWithGoogle(): Promise<ApiResult<GoogleIntegrationState>>
   signOut(): Promise<ApiResult<GoogleIntegrationState>>
   startGoogleHealthConnection(): Promise<

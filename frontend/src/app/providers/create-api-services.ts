@@ -43,6 +43,18 @@ function createLazySupabaseGoogleIntegrationApi(
     async getGoogleIntegrationState() {
       return (await loadService()).getGoogleIntegrationState()
     },
+    subscribeToAuthChanges(listener) {
+      let unsubscribe: (() => void) | null = null
+      let active = true
+      void loadService().then((service) => {
+        if (!active) return
+        unsubscribe = service.subscribeToAuthChanges(listener)
+      })
+      return () => {
+        active = false
+        unsubscribe?.()
+      }
+    },
     async signInWithGoogle() {
       return (await loadService()).signInWithGoogle()
     },

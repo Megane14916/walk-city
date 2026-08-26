@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { paths } from './app/paths'
 import { useApi } from './app/providers'
-import type { GoogleIntegrationState } from './features/auth/api'
+import { useAuth } from './features/auth/hooks'
 import type { DailySteps } from './features/health/types'
 import './App.css'
 
@@ -10,7 +10,6 @@ const TIMEZONE = 'Australia/Sydney'
 const DAILY_GOAL = 10_000
 
 type PendingAction =
-  | 'initializing'
   | 'signing-in'
   | 'connecting'
   | 'syncing'
@@ -84,16 +83,22 @@ function ProgressSteps({ connected }: { connected: boolean }) {
 
 function App() {
   const { googleIntegrationApi } = useApi()
-  const [integration, setIntegration] =
-    useState<GoogleIntegrationState | null>(null)
+  const {
+    state: authState,
+    integrationState,
+    refresh,
+    signInWithGoogle,
+    signOut,
+  } = useAuth()
   const [dailySteps, setDailySteps] = useState<DailySteps | null>(null)
-  const [pending, setPending] = useState<PendingAction>('initializing')
+  const [pending, setPending] = useState<PendingAction>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
   const [today] = useState(() => todayInSydney())
-  const session = integration?.session ?? null
-  const healthConnection = integration?.healthConnection ?? null
+  const session =
+    authState.status === 'authenticated' ? authState.session : null
+  const healthConnection = integrationState?.healthConnection ?? null
   const isConnected = healthConnection?.status === 'connected'
 
   const clearMessages = () => {
@@ -101,25 +106,11 @@ function App() {
     setNotice(null)
   }
 
-  useEffect(() => {
-    let active = true
-    void googleIntegrationApi.getGoogleIntegrationState().then((result) => {
-      if (!active) return
-      if (result.ok) setIntegration(result.data)
-      else setError(result.error.message)
-      setPending(null)
-    })
-    return () => {
-      active = false
-    }
-  }, [googleIntegrationApi])
-
   const handleSignIn = async () => {
     clearMessages()
     setPending('signing-in')
-    const result = await googleIntegrationApi.signInWithGoogle()
+    const result = await signInWithGoogle()
     if (result.ok) {
-      setIntegration(result.data)
       if (result.data.healthConnection?.status === 'connected') {
         const stepsResult = await googleIntegrationApi.getDailySteps({
           date: today,
@@ -150,7 +141,7 @@ function App() {
       return
     }
 
-    setIntegration(result.data.state)
+    await refresh()
     const stepsResult = await googleIntegrationApi.getDailySteps({
       date: today,
       timezone: TIMEZONE,
@@ -170,9 +161,7 @@ function App() {
     if (result.ok) {
       setDailySteps(result.data)
       setNotice('今日の歩数を更新しました。')
-      const stateResult =
-        await googleIntegrationApi.getGoogleIntegrationState()
-      if (stateResult.ok) setIntegration(stateResult.data)
+      await refresh()
     } else {
       setError(result.error.message)
     }
@@ -184,7 +173,7 @@ function App() {
     setPending('disconnecting')
     const result = await googleIntegrationApi.disconnectGoogleHealth()
     if (result.ok) {
-      setIntegration(result.data)
+      await refresh()
       setDailySteps(null)
       setNotice('Google Healthの連携を解除しました。')
     } else {
@@ -196,9 +185,8 @@ function App() {
   const handleSignOut = async () => {
     clearMessages()
     setPending('signing-out')
-    const result = await googleIntegrationApi.signOut()
+    const result = await signOut()
     if (result.ok) {
-      setIntegration(result.data)
       setDailySteps(null)
       setNotice('ログアウトしました。')
     } else {
@@ -245,7 +233,7 @@ function App() {
         </header>
 
         <div className="auth-content">
-          {pending === 'initializing' ? (
+          {authState.status === 'initializing' ? (
             <div className="loading-state" aria-live="polite">
               <span className="loading-mark">W</span>
               <p>街への入り口を準備しています…</p>
@@ -390,8 +378,10 @@ function App() {
           )}
 
           <div className="message-area" aria-live="polite">
-            {error && <p className="error-message"><span>!</span>{error}</p>}
-            {!error && notice && <p className="notice-message"><span>✓</span>{notice}</p>}
+            {(error || authState.status === 'error') && (
+              <p className="error-message"><span>!</span>{error ?? (authState.status === 'error' ? authState.error.message : '')}</p>
+            )}
+            {!error && authState.status !== 'error' && notice && <p className="notice-message"><span>✓</span>{notice}</p>}
           </div>
 
         </div>

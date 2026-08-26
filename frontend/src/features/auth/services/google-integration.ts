@@ -201,6 +201,13 @@ export function createSupabaseGoogleIntegrationApi(
   return {
     getGoogleIntegrationState,
 
+    subscribeToAuthChanges(listener) {
+      const { data } = supabase.auth.onAuthStateChange(() => {
+        globalThis.queueMicrotask(listener)
+      })
+      return () => data.subscription.unsubscribe()
+    },
+
     async signInWithGoogle() {
       const redirectTo =
         options.redirectTo ?? `${globalThis.location.origin}/auth/callback`

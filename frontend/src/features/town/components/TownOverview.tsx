@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { GoogleIntegrationApi } from '../../auth/api'
+import type { GoogleIntegrationState } from '../../auth/types'
 import type { RankingApi } from '../../ranking/api'
 import { PopulationRanking } from '../../ranking/components'
 import type { TownApi } from '../api'
@@ -9,6 +10,7 @@ import { TownMap } from './TownMap'
 export type TownOverviewProps = {
   api: TownApi
   googleApi?: GoogleIntegrationApi
+  googleIntegrationState?: GoogleIntegrationState | null
   rankingApi?: RankingApi
   getUserHref?: (userId: string) => string
 }
@@ -22,11 +24,12 @@ function formatNumber(value: number): string {
 export function TownOverview({
   api,
   googleApi,
+  googleIntegrationState,
   rankingApi,
   getUserHref = (userId) => `/users/${encodeURIComponent(userId)}`,
 }: TownOverviewProps) {
   const state = useTownOverview(api)
-  const steps = useDailyStepsSummary(googleApi)
+  const steps = useDailyStepsSummary(googleApi, googleIntegrationState)
   const [activePanel, setActivePanel] = useState<DashboardPanel>(null)
 
   if (state.isLoading) {
