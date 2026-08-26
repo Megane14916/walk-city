@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 対象プロダクト | Walk City |
-| ステータス | In Progress（手順1〜4完了） |
+| ステータス | In Progress（手順1〜5完了） |
 | 作成日 | 2026-08-26 |
 | 対象 | 全ユーザー人口ランキングの取得・表示、追加取得、ユーザー／街への遷移 |
 | 関連 API | `getPopulationRanking`、遷移先で使用する `getPublicTown` |
@@ -36,7 +36,7 @@
 一方、次の基盤は未導入または未分割である。
 
 - ルーティングライブラリとルート定義
-- `app/`、共通 `components/`、`features/ranking/` の画面 UI
+- `app/`、共通レイアウト、`RankingPage` とランキング UI のルート接続
 - Supabase JavaScript Client と共通 Supabase Client
 - API 実装を環境変数で切り替える Provider
 
@@ -482,6 +482,8 @@ VITE_API_MODE=supabase → SupabaseRankingApi
 | `RankingLoadMore` | 追加取得、追加中、追加失敗、全件取得済み |
 
 `RankingItem` はデータ取得を行わず、`RankingEntry` と遷移先を Props で受け取る。`RankingList` はページング状態を持たず、表示だけを担当する。
+
+ランキング固有のスタイルは Tailwind CSS のユーティリティクラスで実装し、`ranking.css` のような機能専用 CSS ファイルは作成しない。レスポンシブ指定、フォーカス表示、ローディングアニメーション、`prefers-reduced-motion` 対応も Tailwind の variant と utility で表現する。既存の認証画面が使用する `App.css` の移行はランキング機能の対象外とする。
 
 ## 12. ディレクトリと変更予定ファイル
 
