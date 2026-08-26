@@ -1,0 +1,30 @@
+export type ApiErrorCode =
+  | 'UNAUTHENTICATED'
+  | 'OAUTH_CANCELLED'
+  | 'OAUTH_STATE_MISMATCH'
+  | 'HEALTH_NOT_CONNECTED'
+  | 'HEALTH_PERMISSION_REQUIRED'
+  | 'HEALTH_PROVIDER_ERROR'
+  | 'INVALID_INPUT'
+  | 'CATALOG_ITEM_DISABLED'
+  | 'PRICE_NOT_SET'
+  | 'INSUFFICIENT_COINS'
+  | 'OUT_OF_MAP'
+  | 'LAND_LOCKED'
+  | 'CELL_OCCUPIED'
+  | 'ROAD_REQUIRED'
+  | 'NOT_OWNER'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
+  | 'INTERNAL_ERROR'
+
+export type ApiResult<T> =
+  | { ok: true; data: T }
+  | {
+      ok: false
+      error: {
+        code: ApiErrorCode
+        message: string
+        details?: Record<string, unknown>
+      }
+    }
