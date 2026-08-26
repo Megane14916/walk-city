@@ -28,3 +28,25 @@
 - 要件についてはdocsのマークダウンを参照してください。
 - なお、名称や内容が変更となる場合があるため、適宜確認してください。
 - また必要に応じて、SupabaseのドキュメントやGoogle Health APIのドキュメントも参照してください。
+
+# ディレクトリ構造
+- 本プロジェクトでは、以下のディレクトリ構造を採用しています。
+
+```
+-.github/
+  copilot-instructions.md # 本ファイル
+- docs/ # 一部ファイルのみ抜粋
+  - API計画書.md
+  - architecture.md
+  - バックエンド.md
+- frontend/ # ここは操作しないこと
+  - src/
+    - components/ # Reactコンポーネントを格納するディレクトリ
+    - pages/ # ページコンポーネントを格納するディレクトリ
+    - App.tsx # Reactアプリケーションのエントリーポイント
+    - index.tsx # Reactアプリケーションのルートファイル
+- supabase/
+  - functions/
+    - google_health_fetch/
+      - index.ts # Google Health APIから歩数データを取得するためのSupabase Edge Function
+```
