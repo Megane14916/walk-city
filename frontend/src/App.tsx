@@ -430,6 +430,9 @@ function App() {
               <Link className="text-button no-underline" to={paths.ranking}>
                 人口ランキングを見る →
               </Link>
+              <Link className="text-button no-underline" to={paths.root}>
+                自分の街を見る →
+              </Link>
             </div>
           )}
 

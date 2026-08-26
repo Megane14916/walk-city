@@ -10,7 +10,7 @@ import {
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mockGoogleIntegrationApi } from '../features/auth/api'
-import { mockRankingApi } from '../mocks/services'
+import { mockRankingApi, mockTownApi } from '../mocks/services'
 import { paths } from './paths'
 import { AppRoutes } from './router'
 
@@ -25,6 +25,7 @@ function renderRoute(path: string) {
 beforeEach(() => {
   mockGoogleIntegrationApi.reset()
   mockRankingApi.reset()
+  mockTownApi.reset()
 })
 
 afterEach(cleanup)
@@ -56,6 +57,34 @@ describe('AppRoutes', () => {
     await waitFor(() =>
       expect(screen.getAllByRole('listitem')).toHaveLength(20),
     )
+  })
+
+  it('shows the read-only town map at the authenticated root route', async () => {
+    await mockGoogleIntegrationApi.signInWithGoogle()
+    renderRoute(paths.root)
+
+    expect(
+      await screen.findByRole('heading', { name: 'グリーンタウン' }),
+    ).not.toBeNull()
+    expect(
+      screen.getByRole('application', { name: /グリーンタウンのマップ/ }),
+    ).not.toBeNull()
+    expect(screen.queryByRole('button', { name: /配置/ })).toBeNull()
+  })
+
+  it('opens ranking over the town map instead of replacing it', async () => {
+    await mockGoogleIntegrationApi.signInWithGoogle()
+    renderRoute(paths.root)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    fireEvent.click(screen.getByRole('button', { name: /ランキング/ }))
+
+    expect(
+      await screen.findByRole('heading', { name: '人口ランキング' }),
+    ).not.toBeNull()
+    expect(
+      screen.getByRole('application', { name: /グリーンタウンのマップ/ }),
+    ).not.toBeNull()
   })
 
   it('navigates from a ranking item to the placeholder user page', async () => {
