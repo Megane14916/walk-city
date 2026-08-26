@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 対象プロダクト | Walk City |
-| ステータス | In Progress（手順1〜3完了） |
+| ステータス | In Progress（手順1〜4完了） |
 | 作成日 | 2026-08-26 |
 | 対象 | 全ユーザー人口ランキングの取得・表示、追加取得、ユーザー／街への遷移 |
 | 関連 API | `getPopulationRanking`、遷移先で使用する `getPublicTown` |
@@ -36,12 +36,11 @@
 一方、次の基盤は未導入または未分割である。
 
 - ルーティングライブラリとルート定義
-- `app/`、共通 `components/`、`features/ranking/` の UI／Hook、ランキング用モックの実体
+- `app/`、共通 `components/`、`features/ranking/` の画面 UI
 - Supabase JavaScript Client と共通 Supabase Client
 - API 実装を環境変数で切り替える Provider
-- React コンポーネントテスト用の Testing Library と jsdom 環境
 
-共通 `types/common.ts` と `types/user.ts`、Town 機能の `features/town/`、`mocks/data/`、`mocks/services/` は最新の main で追加済みである。ランキング実装はこの構成を踏襲し、API 契約を `features/ranking/api/` に置く。`types/common.ts` の `ApiErrorCode`、`ApiError`、`ApiResult` と `types/user.ts` の `UserSummary` を重複定義しない。手順3で Vitest と `test` script を追加済みである。
+共通 `types/common.ts` と `types/user.ts`、Town 機能の `features/town/`、`mocks/data/`、`mocks/services/` は最新の main で追加済みである。ランキング実装はこの構成を踏襲し、API 契約を `features/ranking/api/` に置く。`types/common.ts` の `ApiErrorCode`、`ApiError`、`ApiResult` と `types/user.ts` の `UserSummary` を重複定義しない。手順3で Vitest、手順4で Testing Library と jsdom を追加済みである。
 
 ランキング機能の実装では、既存の認証デモを壊さず、ランキングに必要な最小限の共通基盤を切り出す。認証機能全体の再設計や Map 機能の実装までは本機能の変更に含めない。
 
@@ -357,6 +356,7 @@ type PopulationRankingState = {
   isRefreshing: boolean
   isLoadingMore: boolean
   initialError: ApiError | null
+  refreshError: ApiError | null
   loadMoreError: ApiError | null
   hasNextPage: boolean
   refresh: () => Promise<void>
@@ -524,7 +524,7 @@ frontend/src/
 
 既存コードへの主な変更:
 
-- `package.json`: 手順3で Vitest、手順6でルーターを追加。Testing Library、jsdom、Supabase Clientは必要となる後続手順で追加
+- `package.json`: 手順3で Vitest、手順4で Testing Library と jsdom、手順6でルーターを追加。Supabase Clientは実 API 接続時に追加
 - `src/main.tsx`: Provider と Router のエントリへ変更
 - `src/App.tsx`: 認証デモを保持しながら Page／機能コンポーネントへ分離
 - `src/index.css`: アプリ全体の基本スタイルのみ維持
@@ -641,7 +641,7 @@ erDiagram
 
 ## 15. テスト計画
 
-具体的なテストツールは Vitest、React Testing Library、jsdom を採用する。手順3で Vitest と `test` scriptを追加し、モック API 契約テストを実装済みである。React コンポーネントを検証する手順5で Testing Library と jsdom を追加する。
+具体的なテストツールは Vitest、React Testing Library、jsdom を採用する。手順3で Vitest と `test` scriptを追加してモック API 契約テストを実装し、手順4で Testing Library と jsdom を追加して Hook テストを実装済みである。同じ環境を手順5のコンポーネントテストでも使用する。
 
 ### 15.1 単体テスト
 
