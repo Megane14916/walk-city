@@ -8,6 +8,8 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it } from 'vitest'
 import { MOCK_RANKING_ENTRIES } from '../../../mocks/data/rankings'
 import { createMockRankingApi } from '../../../mocks/services/ranking'
@@ -19,6 +21,10 @@ const getUserHref = (userId: string) => `/users/${encodeURIComponent(userId)}`
 
 afterEach(cleanup)
 
+function renderWithRouter(ui: ReactElement) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>)
+}
+
 describe('RankingItem', () => {
   it('shows the API values and identifies the current user in text', () => {
     const currentUser = MOCK_RANKING_ENTRIES.find(
@@ -26,7 +32,7 @@ describe('RankingItem', () => {
     )
     if (!currentUser) throw new Error('current-user fixture is required')
 
-    render(
+    renderWithRouter(
       <ol>
         <RankingItem
           entry={currentUser}
@@ -50,7 +56,7 @@ describe('RankingItem', () => {
     )
     if (!longEntry) throw new Error('long-name fixture is required')
 
-    render(
+    renderWithRouter(
       <ol>
         <RankingItem entry={longEntry} href={getUserHref(longEntry.userId)} />
       </ol>,
@@ -64,7 +70,7 @@ describe('RankingItem', () => {
 describe('RankingList', () => {
   it('keeps API order and displays tied ranks unchanged', () => {
     const tiedEntries = MOCK_RANKING_ENTRIES.slice(3, 5)
-    render(
+    renderWithRouter(
       <RankingList entries={tiedEntries} getUserHref={getUserHref} />,
     )
 
@@ -80,7 +86,7 @@ describe('RankingList', () => {
 describe('PopulationRanking', () => {
   it('shows a loading state and then the first page', async () => {
     const api = createMockRankingApi({ latencyMs: 10 })
-    render(<PopulationRanking api={api} getUserHref={getUserHref} />)
+    renderWithRouter(<PopulationRanking api={api} getUserHref={getUserHref} />)
 
     expect(
       screen.getByRole('status', { name: '人口ランキングを読み込み中' }),
@@ -96,7 +102,7 @@ describe('PopulationRanking', () => {
 
   it('loads the remaining entries and announces completion', async () => {
     const api = createMockRankingApi({ latencyMs: 0 })
-    render(<PopulationRanking api={api} getUserHref={getUserHref} />)
+    renderWithRouter(<PopulationRanking api={api} getUserHref={getUserHref} />)
     await waitFor(() =>
       expect(screen.getAllByRole('listitem')).toHaveLength(20),
     )
@@ -113,7 +119,7 @@ describe('PopulationRanking', () => {
 
   it('shows the empty state without load-more controls', async () => {
     const api = createMockRankingApi({ latencyMs: 0, entries: [] })
-    render(<PopulationRanking api={api} getUserHref={getUserHref} />)
+    renderWithRouter(<PopulationRanking api={api} getUserHref={getUserHref} />)
 
     expect(
       await screen.findByRole('heading', {
@@ -128,7 +134,7 @@ describe('PopulationRanking', () => {
   it('retries an initial error', async () => {
     const api = createMockRankingApi({ latencyMs: 0 })
     api.setFailure('initial', 'INTERNAL_ERROR', { once: true })
-    render(<PopulationRanking api={api} getUserHref={getUserHref} />)
+    renderWithRouter(<PopulationRanking api={api} getUserHref={getUserHref} />)
 
     expect(
       await screen.findByRole('heading', {
@@ -144,7 +150,7 @@ describe('PopulationRanking', () => {
 
   it('keeps the first page visible when load more fails and can retry', async () => {
     const api = createMockRankingApi({ latencyMs: 0 })
-    render(<PopulationRanking api={api} getUserHref={getUserHref} />)
+    renderWithRouter(<PopulationRanking api={api} getUserHref={getUserHref} />)
     await waitFor(() =>
       expect(screen.getAllByRole('listitem')).toHaveLength(20),
     )
@@ -165,7 +171,7 @@ describe('PopulationRanking', () => {
 
   it('keeps the ranking visible when refresh fails', async () => {
     const api = createMockRankingApi({ latencyMs: 0 })
-    render(<PopulationRanking api={api} getUserHref={getUserHref} />)
+    renderWithRouter(<PopulationRanking api={api} getUserHref={getUserHref} />)
     await waitFor(() =>
       expect(screen.getAllByRole('listitem')).toHaveLength(20),
     )

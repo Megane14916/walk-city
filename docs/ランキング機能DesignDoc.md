@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 対象プロダクト | Walk City |
-| ステータス | In Progress（手順1〜5完了） |
+| ステータス | Implemented（今回対象の手順1〜6完了） |
 | 作成日 | 2026-08-26 |
 | 対象 | 全ユーザー人口ランキングの取得・表示、追加取得、ユーザー／街への遷移 |
 | 関連 API | `getPopulationRanking`、遷移先で使用する `getPublicTown` |
@@ -207,6 +207,8 @@
 | `/town/:userId` | `TownPage` | 必須 | ユーザーページから街を訪問。Map 機能の責務 |
 | `/login` | `LoginPage` | 不要 | 未認証時の遷移先 |
 
+手順6時点では `TownPage` が未実装のため、`/town/:userId` はまだルート登録しない。既存の認証・Health デモを `/login` に割り当て、`/` は暫定的に `/login` へ置換遷移する。Town 機能の画面実装時に、上位設計どおり `/` を認証必須の自分の街へ置き換える。
+
 ### 7.2 遷移ルール
 
 ```text
@@ -232,9 +234,9 @@
 
 ### 7.3 初期実装の依存関係
 
-ルーティングには React Router を採用し、`react-router-dom` を依存関係へ追加する。ルートガード、URL 解釈、リンク生成は `app/` に閉じ込め、ランキングコンポーネントへルーター固有 API を広げすぎない。
+ルーティングには React Router を採用し、`react-router-dom` を依存関係へ追加する。ルートガード、URL 解釈、リンク生成は `app/` に閉じ込める。SPA 遷移を行う `Link` の利用は `RankingItem` に限定し、URL 文字列は `app/paths.ts` で生成して Props として渡す。
 
-既存 `src/App.tsx` の認証・Health デモは、ルーター導入時に `LoginPage` または既存機能コンポーネントとして保持する。ランキング実装のために認証モックの振る舞いを削除しない。
+既存 `src/App.tsx` の認証・Health デモは、手順6では挙動を維持したまま `/login` の要素として使用する。ログイン済み状態からランキングへ移れるリンクだけを追加し、認証モックの振る舞いを削除しない。`LoginPage` へのファイル分割は認証機能を整理するときに行う。
 
 ## 8. フロントエンド API 契約
 
@@ -490,9 +492,14 @@ VITE_API_MODE=supabase → SupabaseRankingApi
 ```text
 frontend/src/
 ├── app/
+│   ├── guards/
+│   │   └── RequireAuth.tsx
+│   ├── layouts/
+│   │   └── GameLayout.tsx
 │   ├── routes/
 │   │   ├── RankingPage.tsx
-│   │   └── UserPage.tsx            # 今回は仮画面
+│   │   ├── UserPage.tsx            # 今回は仮画面
+│   │   └── NotFoundPage.tsx
 │   ├── paths.ts
 │   └── router.tsx
 ├── features/
@@ -527,8 +534,8 @@ frontend/src/
 既存コードへの主な変更:
 
 - `package.json`: 手順3で Vitest、手順4で Testing Library と jsdom、手順6でルーターを追加。Supabase Clientは実 API 接続時に追加
-- `src/main.tsx`: Provider と Router のエントリへ変更
-- `src/App.tsx`: 認証デモを保持しながら Page／機能コンポーネントへ分離
+- `src/main.tsx`: Router のエントリへ変更。Provider は手順7以降で追加
+- `src/App.tsx`: 認証デモを `/login` で保持し、ランキングへの SPA リンクを追加
 - `src/index.css`: アプリ全体の基本スタイルのみ維持
 - `.env.example`: API モードと Supabase 公開環境変数は実 API 接続時に記載
 

@@ -1,4 +1,5 @@
 import type { RankingEntry } from '../types'
+import { Link } from 'react-router-dom'
 
 const populationFormatter = new Intl.NumberFormat('ja-JP')
 
@@ -30,13 +31,13 @@ export function RankingItem({ entry, href }: RankingItemProps) {
 
   return (
     <li>
-      <a
+      <Link
         className={`group grid min-h-[82px] grid-cols-[60px_44px_minmax(0,1fr)_132px_22px] items-center gap-3.5 px-5 py-3 pl-[18px] text-inherit no-underline transition-[background,transform] duration-200 hover:bg-[#f6faf7] focus-visible:relative focus-visible:z-10 focus-visible:outline-3 focus-visible:outline-offset-[-3px] focus-visible:outline-[rgba(40,124,100,.32)] max-[620px]:min-h-[77px] max-[620px]:grid-cols-[42px_38px_minmax(0,1fr)_auto] max-[620px]:gap-[9px] max-[620px]:px-3 max-[620px]:py-2.5 max-[620px]:pl-[9px] ${
           entry.isCurrentUser
             ? 'bg-gradient-to-r from-[#eaf5ef] to-[#f7faf5] shadow-[inset_4px_0_#479477] hover:from-[#e1f1e9] hover:to-[#f3f8f2]'
             : ''
         }`}
-        href={href}
+        to={href}
         aria-current={entry.isCurrentUser ? 'true' : undefined}
         aria-label={`${entry.rank}位、${entry.displayName}、${entry.townName}、人口${populationFormatter.format(entry.population)}人${entry.isCurrentUser ? '、あなた' : ''}`}
       >
@@ -97,7 +98,7 @@ export function RankingItem({ entry, href }: RankingItemProps) {
         >
           →
         </span>
-      </a>
+      </Link>
     </li>
   )
 }
