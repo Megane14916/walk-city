@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 対象プロダクト | Walk City |
-| ステータス | Phase 0 基本契約確定（Phase 1 着手可能） |
+| ステータス | Phase 1 実装完了（Phase 2 着手可能） |
 | 作成日 | 2026-08-27 |
 | 対象 | Edge Function による歩数同期・コイン付与結果の取得、Town 画面への反映 |
 | 関連 API | `syncSteps()` / Supabase Edge Function `sync-health-steps` |
@@ -549,12 +549,24 @@ mock モードでは `MockStepSyncApi` と `MockTownApi` が同じ `MockWalkCity
 - JWT 検証失敗、Health 未連携、権限不足の具体的な HTTP status
 - ローカル Function URL、CORS、Secrets、fixture の利用方法
 
-### Phase 1: 型と API 境界
+### Phase 1: 型と API 境界（完了）
 
-1. `StepSyncStatus` と `AppliedBonus` を `features/health/types.ts` に追加する。
-2. `StepSyncApi` を `features/health/api/` に追加する。
-3. 型ガードと envelope parser を実装する。
-4. Supabase 実 API のサービス単体テストを追加する。
+1. `StepSyncStatus` と `AppliedBonus` を `features/health/types.ts` に追加した。
+2. `StepSyncApi` を `features/health/api/` に追加した。
+3. `Asia/Tokyo`、非負 safe integer、日付・日時、ボーナス配列を検証する型ガードを実装した。
+4. `{ ok: true, data }` と `{ ok: false, error }` だけを受け付ける envelope parser を実装した。
+5. `sync-health-steps` を空本文で呼ぶ `createSupabaseStepSyncApi()` を実装した。
+6. `FunctionsHttpError` の本文、401、fetch／relay障害、未知の障害を `ApiResult` へ正規化した。
+7. Supabase 実 API のサービス単体テスト17件を追加した。
+
+Phase 1 完了時の検証結果:
+
+| コマンド | 結果 |
+|---|---|
+| `npm test -- --run src/features/health/services/step-sync.test.ts` | 17件成功 |
+| `npm test` | 13ファイル、112件すべて成功 |
+| `npm run lint` | 成功 |
+| `npm run build` | 成功 |
 
 ### Phase 2: Supabase / Mock 実装と Provider
 
