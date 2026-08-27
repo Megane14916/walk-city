@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ApiError } from '../../../types/common'
+import type { ApiError, ApiResult } from '../../../types/common'
 import type { TownApi } from '../api'
-import type { BuildingCatalogItem, TownDetail } from '../types'
+import type {
+  BuildingCatalogItem,
+  PlaceBuildingInput,
+  TownDetail,
+  TownMutationResult,
+} from '../types'
 
 type TownOverviewData = {
   town: TownDetail
@@ -12,6 +17,9 @@ export type TownOverviewState = {
   data: TownOverviewData | null
   isLoading: boolean
   error: ApiError | null
+  placeBuilding: (
+    input: PlaceBuildingInput,
+  ) => Promise<ApiResult<TownMutationResult>>
   retry: () => void
 }
 
@@ -87,11 +95,58 @@ export function useTownOverview(
     setAttempt((current) => current + 1)
   }, [])
 
+  const placeBuilding = useCallback(
+    async (
+      input: PlaceBuildingInput,
+    ): Promise<ApiResult<TownMutationResult>> => {
+      let result: ApiResult<TownMutationResult>
+
+      try {
+        result = await api.placeBuilding(input)
+      } catch {
+        return { ok: false, error: UNEXPECTED_ERROR }
+      }
+
+      if (!result.ok) return result
+
+      setData((current) => {
+        if (!current) return current
+
+        const buildings = current.town.buildings.some(
+          (building) => building.id === result.data.building.id,
+        )
+          ? current.town.buildings.map((building) =>
+              building.id === result.data.building.id
+                ? result.data.building
+                : building,
+            )
+          : [...current.town.buildings, result.data.building]
+
+        return {
+          ...current,
+          town: {
+            ...current.town,
+            town: {
+              ...current.town.town,
+              coins: result.data.coinBalance,
+              population: result.data.population,
+            },
+            buildings,
+          },
+        }
+      })
+
+      return result
+    },
+    [api],
+  )
+
   const isCurrentRequest = loadedRequestKey === requestKey
   return {
     data: isCurrentRequest ? data : null,
     isLoading: !isCurrentRequest || isLoading,
     error: isCurrentRequest ? error : null,
+    placeBuilding,
     retry,
   }
 }

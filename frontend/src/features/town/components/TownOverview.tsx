@@ -1,6 +1,12 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { GoogleIntegrationApi } from '../../auth/api'
 import type { GoogleIntegrationState } from '../../auth/types'
+import {
+  MARKET_ITEMS,
+  MarketList,
+  PlacementControls,
+  type MarketItem,
+} from '../../market'
 import type { RankingApi } from '../../ranking/api'
 import { PopulationRanking } from '../../ranking/components'
 import type { TownApi } from '../api'
@@ -9,6 +15,8 @@ import {
   useTownOverview,
   type TownPageMode,
 } from '../hooks'
+import type { BuildingCatalogItem, Cell } from '../types'
+import { evaluatePlacementPreview } from '../utils'
 import { TownMap } from './TownMap'
 
 export type TownOverviewProps = {
@@ -21,6 +29,20 @@ export type TownOverviewProps = {
 }
 
 type DashboardPanel = 'ranking' | 'market' | null
+
+type PlacementSession = {
+  item: BuildingCatalogItem
+  anchor: Cell | null
+  requestId: string
+}
+
+function createRequestId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID()
+  }
+
+  return `place-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('ja-JP').format(value)
@@ -37,6 +59,37 @@ export function TownOverview({
   const state = useTownOverview(api, mode)
   const steps = useDailyStepsSummary(googleApi, googleIntegrationState)
   const [activePanel, setActivePanel] = useState<DashboardPanel>(null)
+  const [placement, setPlacement] = useState<PlacementSession | null>(null)
+  const [isSubmittingPlacement, setIsSubmittingPlacement] = useState(false)
+  const [placementError, setPlacementError] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<string | null>(null)
+
+  const purchasableItemCodes = useMemo(
+    () => {
+      if (mode.type !== 'self' || state.data?.town.editable !== true) {
+        return new Set<string>()
+      }
+
+      return new Set(
+        state.data.catalog
+          .filter((item) => item.enabled && item.costCoins !== null)
+          .map((item) => item.code),
+      )
+    },
+    [mode.type, state.data],
+  )
+
+  const placementPreview = useMemo(() => {
+    if (!state.data || !placement?.anchor) return null
+
+    return evaluatePlacementPreview({
+      town: state.data.town,
+      catalog: state.data.catalog,
+      item: placement.item,
+      anchor: placement.anchor,
+      operation: 'place',
+    })
+  }, [placement, state.data])
 
   if (state.isLoading) {
     return (
@@ -88,6 +141,78 @@ export function TownOverview({
 
   const togglePanel = (panel: Exclude<DashboardPanel, null>) => {
     setActivePanel((current) => (current === panel ? null : panel))
+  }
+
+  const selectMarketItem = (marketItem: MarketItem) => {
+    if (mode.type !== 'self' || !town.editable) return
+
+    const catalogItem = catalog.find(
+      (candidate) => candidate.code === marketItem.code,
+    )
+    if (
+      !catalogItem ||
+      !catalogItem.enabled ||
+      catalogItem.costCoins === null
+    ) {
+      return
+    }
+
+    setPlacement({
+      item: catalogItem,
+      anchor: null,
+      requestId: createRequestId(),
+    })
+    setPlacementError(null)
+    setFeedback(null)
+    setActivePanel(null)
+  }
+
+  const selectPlacementAnchor = (anchor: Cell) => {
+    setPlacement((current) => {
+      if (!current) return current
+      const isSameAnchor =
+        current.anchor?.x === anchor.x && current.anchor?.y === anchor.y
+
+      return {
+        ...current,
+        anchor,
+        requestId: isSameAnchor ? current.requestId : createRequestId(),
+      }
+    })
+    setPlacementError(null)
+  }
+
+  const cancelPlacement = () => {
+    setPlacement(null)
+    setPlacementError(null)
+  }
+
+  const confirmPlacement = async () => {
+    if (
+      !placement?.anchor ||
+      placementPreview?.status !== 'valid' ||
+      isSubmittingPlacement
+    ) {
+      return
+    }
+
+    setIsSubmittingPlacement(true)
+    setPlacementError(null)
+    const result = await state.placeBuilding({
+      buildingTypeCode: placement.item.code,
+      anchorX: placement.anchor.x,
+      anchorY: placement.anchor.y,
+      requestId: placement.requestId,
+    })
+    setIsSubmittingPlacement(false)
+
+    if (!result.ok) {
+      setPlacementError(result.error.message)
+      return
+    }
+
+    setFeedback(`${placement.item.name}を配置しました。`)
+    setPlacement(null)
   }
 
   return (
@@ -180,6 +305,16 @@ export function TownOverview({
           town={town}
           catalog={catalog}
           viewportClassName="h-[calc(100svh-132px)] min-h-[430px] max-h-none"
+          placement={
+            placement
+              ? {
+                  item: placement.item,
+                  anchor: placement.anchor,
+                  preview: placementPreview,
+                  onSelectAnchor: selectPlacementAnchor,
+                }
+              : null
+          }
         />
 
         <div className="pointer-events-none absolute bottom-7 left-7 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-white/70 bg-[rgba(247,246,240,.86)] px-3 py-2 text-[8px] text-[#66726e] shadow-sm backdrop-blur-sm max-[560px]:right-7 max-[560px]:justify-center">
@@ -201,6 +336,24 @@ export function TownOverview({
           </span>
         </div>
       </main>
+
+      {feedback && (
+        <div
+          className="fixed top-[100px] left-1/2 z-[60] flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#b9d8ca] bg-[#e4f3eb] px-4 py-2.5 text-[10px] font-black text-[#28624f] shadow-lg"
+          role="status"
+        >
+          <span aria-hidden="true">✓</span>
+          {feedback}
+          <button
+            className="grid h-6 w-6 cursor-pointer place-items-center rounded-full border-0 bg-white/70 text-xs text-[#52635e]"
+            type="button"
+            onClick={() => setFeedback(null)}
+            aria-label="通知を閉じる"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {activePanel && (
         <aside
@@ -228,22 +381,26 @@ export function TownOverview({
           ) : activePanel === 'ranking' ? (
             <PanelUnavailable title="ランキングを読み込めません" />
           ) : (
-            <section className="grid min-h-[420px] place-content-center justify-items-center px-8 pb-12 text-center">
-              <span className="grid h-16 w-16 place-items-center rounded-[20px] bg-[#fff2cb] text-2xl text-[#82651d]">
-                ◇
-              </span>
-              <span className="mt-6 text-[10px] font-black tracking-[.16em] text-[#a4822e]">
-                MARKET
-              </span>
-              <h2 className="mt-2 mb-0 text-2xl tracking-[-.04em] text-[#193b38]">
-                マーケットは準備中です
-              </h2>
-              <p className="mt-3 mb-0 max-w-sm text-xs leading-6 text-[#77817d]">
-                建物の購入と配置機能は、次の実装段階でこのパネルに追加されます。
-              </p>
-            </section>
+            <MarketList
+              items={MARKET_ITEMS}
+              purchasableItemCodes={purchasableItemCodes}
+              selectedItemCode={placement?.item.code}
+              onSelectItem={selectMarketItem}
+            />
           )}
         </aside>
+      )}
+
+      {placement && (
+        <PlacementControls
+          item={placement.item}
+          anchor={placement.anchor}
+          preview={placementPreview}
+          isSubmitting={isSubmittingPlacement}
+          errorMessage={placementError}
+          onCancel={cancelPlacement}
+          onConfirm={confirmPlacement}
+        />
       )}
     </section>
   )

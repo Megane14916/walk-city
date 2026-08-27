@@ -5,25 +5,39 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type MouseEvent,
   type PointerEvent,
   type WheelEvent,
 } from 'react'
-import type { BuildingCatalogItem, TownDetail } from '../types'
+import type {
+  BuildingCatalogItem,
+  Cell,
+  PlacementPreviewStatus,
+  TownDetail,
+} from '../types'
 import {
+  getCellKey,
   getInitialMapView,
   MAP_CELL_SIZE,
   MAX_MAP_ZOOM,
   MIN_MAP_ZOOM,
+  screenPointToCell,
   zoomMapAtPoint,
   type MapView,
   type ViewportSize,
 } from '../utils'
-import { MapBuilding } from './MapBuilding'
+import { MapBuilding, type RoadConnections } from './MapBuilding'
 
 export type TownMapProps = {
   town: TownDetail
   catalog: BuildingCatalogItem[]
   viewportClassName?: string
+  placement?: {
+    item: BuildingCatalogItem
+    anchor: Cell | null
+    preview: PlacementPreviewStatus | null
+    onSelectAnchor: (anchor: Cell) => void
+  } | null
 }
 
 type PointerPosition = { x: number; y: number }
@@ -62,11 +76,13 @@ export function TownMap({
   town,
   catalog,
   viewportClassName = 'h-[clamp(430px,64svh,680px)]',
+  placement = null,
 }: TownMapProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const pointersRef = useRef(new Map<number, PointerPosition>())
   const dragRef = useRef<DragGesture | null>(null)
   const pinchRef = useRef<PinchGesture | null>(null)
+  const didPanRef = useRef(false)
   const [viewportSize, setViewportSize] = useState(FALLBACK_VIEWPORT)
   const [isPanning, setIsPanning] = useState(false)
   const initialView = useMemo(
@@ -124,6 +140,30 @@ export function TownMap({
     [catalog],
   )
 
+  const roadCellIndex = useMemo(() => {
+    const roadCodes = new Set(
+      catalog.filter((item) => item.category === 'road').map((item) => item.code),
+    )
+
+    return new Set(
+      town.buildings
+        .filter((building) => roadCodes.has(building.buildingTypeCode))
+        .map((building) =>
+          getCellKey({ x: building.anchorX, y: building.anchorY }),
+        ),
+    )
+  }, [catalog, town.buildings])
+
+  const getRoadConnections = useCallback(
+    (x: number, y: number): RoadConnections => ({
+      up: roadCellIndex.has(getCellKey({ x, y: y - 1 })),
+      right: roadCellIndex.has(getCellKey({ x: x + 1, y })),
+      down: roadCellIndex.has(getCellKey({ x, y: y + 1 })),
+      left: roadCellIndex.has(getCellKey({ x: x - 1, y })),
+    }),
+    [roadCellIndex],
+  )
+
   const zoomAtCenter = useCallback(
     (zoomMultiplier: number) => {
       const current = viewRef.current
@@ -170,6 +210,7 @@ export function TownMap({
   }
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    didPanRef.current = false
     event.currentTarget.setPointerCapture(event.pointerId)
     const rect = event.currentTarget.getBoundingClientRect()
     pointersRef.current.set(event.pointerId, {
@@ -187,6 +228,7 @@ export function TownMap({
         startPanY: current.panY,
       }
     } else {
+      didPanRef.current = true
       beginPinch()
     }
     setIsPanning(true)
@@ -221,10 +263,14 @@ export function TownMap({
 
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
+    const deltaX = event.clientX - drag.startX
+    const deltaY = event.clientY - drag.startY
+    if (Math.abs(deltaX) <= 6 && Math.abs(deltaY) <= 6) return
+    didPanRef.current = true
     setView({
       ...viewRef.current,
-      panX: drag.startPanX + event.clientX - drag.startX,
-      panY: drag.startPanY + event.clientY - drag.startY,
+      panX: drag.startPanX + deltaX,
+      panY: drag.startPanY + deltaY,
     })
   }
 
@@ -280,12 +326,48 @@ export function TownMap({
     }
   }
 
+  const handleCellClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (didPanRef.current) {
+      didPanRef.current = false
+      return
+    }
+    if (!placement || !town.editable) return
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    const current = viewRef.current
+    const cell = screenPointToCell({
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      viewportLeft: rect.left,
+      viewportTop: rect.top,
+      panX: current.panX,
+      panY: current.panY,
+      zoom: current.zoom,
+      cellSize: MAP_CELL_SIZE,
+      mapWidth: town.town.mapWidth,
+      mapHeight: town.town.mapHeight,
+    })
+
+    if (cell) placement.onSelectAnchor(cell)
+  }
+
+  const previewTone =
+    placement?.preview?.status === 'valid'
+      ? 'border-[#2f8567] bg-[#64c496]/55 text-[#164c3c]'
+      : placement?.preview?.status === 'unknown'
+        ? 'border-[#bb8b2d] bg-[#ffd86d]/55 text-[#765a18]'
+        : 'border-[#b9574f] bg-[#ef897d]/55 text-[#762f2a]'
+
   return (
     <div className="relative overflow-hidden rounded-[22px] border border-[#cfd8d1] bg-[#d8ddd4] shadow-[0_18px_42px_rgba(24,61,55,.12)]">
       <div
         ref={viewportRef}
         className={`relative w-full touch-none overflow-hidden outline-none select-none ${viewportClassName} ${
-          isPanning ? 'cursor-grabbing' : 'cursor-grab'
+          isPanning
+            ? 'cursor-grabbing'
+            : placement
+              ? 'cursor-crosshair'
+              : 'cursor-grab'
         }`}
         role="application"
         aria-label={`${town.town.name}のマップ。ドラッグまたは矢印キーで移動し、ホイールまたはボタンで拡大縮小できます。`}
@@ -295,6 +377,7 @@ export function TownMap({
         onPointerMove={handlePointerMove}
         onPointerUp={finishPointer}
         onPointerCancel={finishPointer}
+        onClick={handleCellClick}
         onWheel={handleWheel}
       >
         <div
@@ -350,8 +433,29 @@ export function TownMap({
               key={building.id}
               building={building}
               item={catalogByCode.get(building.buildingTypeCode)}
+              roadConnections={
+                catalogByCode.get(building.buildingTypeCode)?.category === 'road'
+                  ? getRoadConnections(building.anchorX, building.anchorY)
+                  : undefined
+              }
             />
           ))}
+
+          {placement?.anchor && (
+            <div
+              className={`pointer-events-none absolute z-30 grid place-items-center rounded-[6px] border-2 border-dashed font-black shadow-[0_5px_14px_rgba(18,55,49,.22)] ${previewTone}`}
+              style={{
+                left: placement.anchor.x * MAP_CELL_SIZE + 2,
+                top: placement.anchor.y * MAP_CELL_SIZE + 2,
+                width: placement.item.width * MAP_CELL_SIZE - 4,
+                height: placement.item.height * MAP_CELL_SIZE - 4,
+              }}
+              role="img"
+              aria-label={`${placement.item.name}の配置プレビュー、座標${placement.anchor.x},${placement.anchor.y}、${placement.preview?.status === 'valid' ? '配置可能' : '配置不可'}`}
+            >
+              {placement.preview?.status === 'valid' ? '✓' : '!'}
+            </div>
+          )}
         </div>
 
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-16 bg-gradient-to-b from-[#193b38]/10 to-transparent" />
@@ -363,6 +467,7 @@ export function TownMap({
           className="absolute right-4 bottom-4 z-40 flex items-center gap-1 rounded-[14px] border border-white/70 bg-[rgba(247,246,240,.91)] p-1.5 shadow-[0_8px_20px_rgba(24,61,55,.16)] backdrop-blur-sm"
           aria-label="マップ表示操作"
           onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
           <button
             className="grid h-10 w-10 cursor-pointer place-items-center rounded-[10px] border-0 bg-transparent text-lg font-black text-[#315f56] hover:bg-white disabled:cursor-not-allowed disabled:opacity-35"
