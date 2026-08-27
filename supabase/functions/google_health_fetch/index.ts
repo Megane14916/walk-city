@@ -131,11 +131,11 @@ async function getGoogleAccessToken(): Promise<string> {
   // Supabase の Secrets から Google の認証情報を取得する。
   const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
   const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
-  const refreshToken = Deno.env.get("GOOGLE_HEALTH_REFRESH_TOKEN");
+  const refreshToken = Deno.env.get("GOOGLE_REFRESH_TOKEN");
 
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error(
-      "Google Health OAuthの情報が登録されていません。Supabase Secrets に GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_HEALTH_REFRESH_TOKEN を設定してください。",
+      "Google Health OAuthの情報が登録されていません。Supabase Secrets に GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN を設定してください。",
     );
   }
 
@@ -316,7 +316,7 @@ export default {
     --data '{"startDate":"2026-08-01","endDate":"2026-08-31","timezone":"Asia/Tokyo"}'
 
   なお、Supabase Secrets に次の環境変数を設定してください:
-  - GOOGLE_HEALTH_CLIENT_ID
-  - GOOGLE_HEALTH_CLIENT_SECRET
-  - GOOGLE_HEALTH_REFRESH_TOKEN
+  - GOOGLE_CLIENT_ID
+  - GOOGLE_CLIENT_SECRET
+  - GOOGLE_REFRESH_TOKEN
 */
