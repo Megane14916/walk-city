@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 対象プロダクト | Walk City |
-| ステータス | Draft（バックエンド API 契約確認後に実装開始） |
+| ステータス | Phase 0 基本契約確定（Phase 1 着手可能） |
 | 作成日 | 2026-08-27 |
 | 対象 | Edge Function による歩数同期・コイン付与結果の取得、Town 画面への反映 |
 | 関連 API | `syncSteps()` / Supabase Edge Function `sync-health-steps` |
@@ -37,6 +37,8 @@
 - Supabase Edge Function 呼び出しは `features/auth/services/google-integration.ts` の共通 `invoke()` に集約されている。
 - `useTownOverview()` は建物配置成功後の `coinBalance` と `population` をローカルの街状態へ反映している。
 - `TownPage.tsx` は `mockTownApi` と `mockRankingApi` を直接 import しているため、`VITE_API_MODE=supabase` でも街データはモックのままである。
+
+バックエンドについては、`sync-health-steps` Edge Function は未作成・未デプロイである。一方、`getMyTown()` は将来 Supabase に保存された実際の街データと最新コイン残高を返す実 API として実装する方針が確定している。
 
 不足している点は以下である。
 
@@ -166,18 +168,24 @@ export type StepSyncStatus = {
 
 Edge Function が 4xx / 5xx を返し `supabase.functions.invoke()` が `FunctionsHttpError` を返した場合は、可能であれば `error.context.json()` から上記 envelope を安全に読み取り、既知の `ApiErrorCode` だけを採用する。本文の解析に失敗した場合は HTTP ステータスと処理種別に応じた一般エラーへ変換する。外部 API の本文、SQL、スタック、トークンは画面や console に出さない。
 
-### 5.5 契約上の不一致と実装開始条件
+### 5.5 Phase 0 で確定した契約
 
-現在の文書には次の差異がある。
+2026-08-27 にフロントエンド・バックエンド間の基本契約として次を確定した。
 
-| 項目 | API 設計書 | バックエンド設計書／現行コード |
+| 項目 | 確定内容 |
 |---|---|---|
-| Edge Function 名 | `sync-health-steps` | `health_steps_fetch` の記載、現行コードは `get-daily-steps` |
-| 成功 envelope | `{ ok: true, data }` | `{ status: "ok", data }` の記載あり |
-| エラー envelope | `{ ok: false, error: { code, message } }` | `{ status: "error", code, message }` の記載あり |
-| タイムゾーン | レスポンス値を使用 | 現行フロントは `Australia/Sydney` 固定 |
+| Edge Function 名 | `sync-health-steps` |
+| 実装状況 | 未作成・未デプロイ。これから新規作成する |
+| リクエスト | 空 object `{}`。ユーザー、歩数、コイン、日付、タイムゾーンを送信しない |
+| 成功 envelope | `{ ok: true, data: StepSyncStatus }` |
+| エラー envelope | `{ ok: false, error: { code, message } }` |
+| 日付境界 | 初期リリースは `Asia/Tokyo` 固定 |
+| `appliedBonuses.amount` | 追加付与コインを表す 0 以上の整数 |
+| 初期残高の取得 | 実 `getMyTown()` が Supabase に保存された最新の `towns.coins` を返す |
 
-実装前にバックエンド担当と `sync-health-steps`、`ok` envelope、`StepSyncStatus` を採用することを確認する。別契約を採用する場合は、先に `API計画書.md` と本書を更新する。
+`health_steps_fetch`、`get-daily-steps`、`{ status: "ok" }` など既存文書・移行中コードに残る別名や旧 envelope は、新しい歩数精算 API の契約として使用しない。実装時に関連文書も上表へ統一する。
+
+HTTP status と `ApiErrorCode` の対応、ローカル Function URL、CORS、Secrets は Edge Function 実装時に確定する運用詳細である。これらは Phase 1 のフロントエンド型・mock 実装を妨げないが、実 Edge Function との結合確認を行う Phase 5 までに確定する。
 
 ## 6. アーキテクチャ
 
@@ -224,10 +232,12 @@ export interface StepSyncApi {
 初期実装では、既存の挙動を維持して次のデータを表示する。
 
 - 今日の歩数: Health 接続済みの場合のみ `getDailySteps()` の結果
-- 所持コイン: `getMyTown()` の `town.coins`
+- 所持コイン: Supabase に保存された実際の街データを取得する `getMyTown()` の `town.coins`
 - 同期操作後: `syncSteps()` の `steps` と `coinBalance` を両方の表示へ適用
 
-バックエンドの `getDashboard()` が利用可能になった後は、初期歩数、初期コイン、最終同期日時を一つの Dashboard レスポンスから取得し、`getDailySteps()` の Town 画面での自動呼び出しを廃止する。`syncSteps()` を画面表示時に自動実行して初期値を得る設計にはしない。
+`getMyTown()` の実装方式は Supabase Query、RPC、Edge Function のいずれでもよい。フロントエンドは通信方式を `TownApi` の内側へ隠し、JWT から本人の街を特定して最新の `towns.coins` を取得する。複数テーブルから `TownDetail` を一括取得する必要がある場合は、`get_my_town` のような RPC を推奨する。
+
+バックエンドの `getDashboard()` が将来利用可能になった場合は、初期歩数、初期コイン、最終同期日時を一つの Dashboard レスポンスから取得し、`getDailySteps()` の Town 画面での自動呼び出しを廃止してよい。初期リリースでは `getDashboard()` を必須にせず、実 `getMyTown()` と既存の歩数読み取りを使用する。`syncSteps()` を画面表示時に自動実行して初期値を得る設計にはしない。
 
 ## 7. 変更するファイル
 
@@ -523,16 +533,21 @@ mock モードでは `MockStepSyncApi` と `MockTownApi` が同じ `MockWalkCity
 
 ## 15. 実装フェーズ
 
-### Phase 0: バックエンド契約の確定
+### Phase 0: バックエンド基本契約の確定（完了）
 
-1. デプロイ済み Edge Function 名を確認する。
-2. リクエストが空 object であることを確認する。
-3. 成功・失敗 envelope を確認する。
-4. `StepSyncStatus` の全フィールド名、型、null 可否を確認する。
-5. HTTP status と `ApiErrorCode` の対応を確認する。
-6. JWT 検証、Health 未連携、権限不足の挙動を確認する。
-7. 日付境界とレスポンスの `timezone` を確認する。
-8. CORS とローカル Supabase での呼び出し方法を確認する。
+1. `sync-health-steps` を新規 Edge Function 名として確定した。
+2. リクエストを空 object `{}` とし、本人は JWT から特定することを確定した。
+3. 成功を `{ ok: true, data: StepSyncStatus }`、失敗を `{ ok: false, error }` として確定した。
+4. `StepSyncStatus` のフィールドを非 null とし、0 以上の整数と日時文字列で構成する契約を確定した。
+5. 日付境界とレスポンスの `timezone` を `Asia/Tokyo` として確定した。
+6. `appliedBonuses.amount` を追加付与コインを表す 0 以上の整数として確定した。
+7. 実 `getMyTown()` が Supabase に保存された街データと最新残高を返す方針を確定した。
+
+次の運用詳細は Edge Function の作成時に決定し、Phase 5 の結合確認までに本書へ追記する。
+
+- HTTP status と `ApiErrorCode` の対応
+- JWT 検証失敗、Health 未連携、権限不足の具体的な HTTP status
+- ローカル Function URL、CORS、Secrets、fixture の利用方法
 
 ### Phase 1: 型と API 境界
 
@@ -550,7 +565,7 @@ mock モードでは `MockStepSyncApi` と `MockTownApi` が同じ `MockWalkCity
 5. `createApiServices()` が API mode に応じて実装を生成する。
 6. `TownPage.tsx` の `mockTownApi` 直接 import を削除する。
 
-Supabase 用 `TownApi` が未実装の場合は、実データとモックデータを混在させないため `VITE_API_MODE=supabase` の Town 画面を未完成のまま公開しない。少なくとも `getMyTown()` が実残高を返す経路をバックエンド担当と接続する。
+Supabase 用 `TownApi` は、Supabase に保存された実際の街データを返すものとして実装する。実装完了までは、実データとモックデータを混在させないため `VITE_API_MODE=supabase` の Town 画面を未完成のまま公開しない。少なくとも `getMyTown()` が実残高を返す経路をバックエンド担当と接続する。
 
 ### Phase 3: Hook と状態整合性
 
@@ -600,7 +615,7 @@ Supabase 用 `TownApi` が未実装の場合は、実データとモックデー
 
 | リスク | 対策 |
 |---|---|
-| Edge Function 名や envelope が文書と異なる | Phase 0 を実装開始条件とし、API 設計書を先に更新する |
+| Edge Function 実装が確定済み契約から逸脱する | 契約テストで検出し、実装または API 設計書を同じ変更で更新する |
 | HTTP エラー本文を取得できず詳細コードが失われる | `FunctionsHttpError.context` を安全に解析し、失敗時は一般コードへフォールバックする |
 | React StrictMode や連打で二重実行される | 自動同期を行わず、Hook 内の ref と button disabled で防止する |
 | 再試行で二重付与される | サーバーの `rewarded_steps` と台帳の冪等性を結合テストする |
@@ -610,19 +625,23 @@ Supabase 用 `TownApi` が未実装の場合は、実データとモックデー
 | タイムゾーン固定で日付がずれる | 同期結果の `date` と `timezone` を表示の正とし、クライアント固定値を精算に使わない |
 | 公開街に非公開値が漏れる | public mode の非表示テストと API レスポンスの契約テストを維持する |
 
-## 18. バックエンド担当への確認事項
+## 18. Phase 0 確認記録
 
-実装着手前に、以下へ回答を記録する。
+基本契約は確認済みであり、Phase 1 のフロントエンド実装を開始できる。
 
-- [ ] デプロイ名は `sync-health-steps` で確定しているか。
-- [ ] 成功 envelope は `{ ok: true, data }` か。
-- [ ] 失敗 envelope は `{ ok: false, error: { code, message } }` か。
+- [x] Function 名は `sync-health-steps` で確定している。
+- [x] Function は未作成・未デプロイであり、確定契約に沿って新規作成する。
+- [x] リクエストは空 object `{}` である。
+- [x] 成功 envelope は `{ ok: true, data }` である。
+- [x] 失敗 envelope は `{ ok: false, error: { code, message } }` である。
+- [x] `StepSyncStatus` は本書記載のフィールドを返し、各フィールドは非 null である。
+- [x] `coinsAwarded` と `coinBalance` は 0 以上の整数である。
+- [x] `appliedBonuses.amount` は追加付与コインを表す 0 以上の整数である。
+- [x] 日付境界と返却 `timezone` は `Asia/Tokyo` である。
+- [x] `getMyTown()` は Supabase に保存された実際の街データと最新コイン残高を返す。
+
+以下は Edge Function／実 Town API の作成時に確認する。
+
 - [ ] エラー時の HTTP status と `ApiErrorCode` の対応は何か。
-- [ ] `StepSyncStatus` のフィールドと null 可否は API 設計書どおりか。
-- [ ] `coinsAwarded` と `coinBalance` は 0 以上の safe integer 範囲か。
-- [ ] `appliedBonuses.amount` は整数か。負数になり得るか。
-- [ ] 日付境界と返却 `timezone` は何か。
 - [ ] 同一データ・通信再送・同時実行に対する冪等性が実装済みか。
-- [ ] `getMyTown()` または `getDashboard()` から最新の実コイン残高を取得できるか。
 - [ ] ローカル開発用の Function URL、CORS、必要な環境変数が準備されているか。
-
