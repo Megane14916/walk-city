@@ -12,8 +12,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MOCK_BUILDING_CATALOG,
   MOCK_MY_TOWN,
+  MOCK_PUBLIC_USER_ID,
 } from '../../../mocks/data/towns'
-import { createMockGoogleIntegrationApi } from '../../../mocks/services'
+import {
+  createMockGoogleIntegrationApi,
+  createMockStepSyncApi,
+  createMockWalkCityStore,
+} from '../../../mocks/services'
 import { createMockTownApi } from '../../../mocks/services/town'
 import { TownMap } from './TownMap'
 import { TownOverview } from './TownOverview'
@@ -236,6 +241,116 @@ describe('TownOverview', () => {
     )
 
     expect(await screen.findByText('6,500歩')).not.toBeNull()
+  })
+
+  it('syncs steps and applies the server coin balance together', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const fixedNow = new Date('2026-08-27T03:00:00.000Z')
+    vi.setSystemTime(fixedNow)
+    const store = createMockWalkCityStore({
+      stepsByDate: { '2026-08-27': 6_500 },
+    })
+    const api = createMockTownApi({ latencyMs: 0, store })
+    const stepSyncApi = createMockStepSyncApi({
+      latencyMs: 0,
+      now: () => fixedNow,
+      store,
+      coinsPerStep: 0.1,
+    })
+    const googleApi = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+      initiallyHealthConnected: true,
+      stepsByDate: { '2026-08-27': 100 },
+      now: () => fixedNow,
+    })
+    const integrationResult = await googleApi.getGoogleIntegrationState()
+    if (!integrationResult.ok) throw new Error(integrationResult.error.message)
+
+    render(
+      <TownOverview
+        api={api}
+        googleApi={googleApi}
+        googleIntegrationState={integrationResult.data}
+        stepSyncApi={stepSyncApi}
+      />,
+    )
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    fireEvent.click(screen.getByRole('button', { name: '歩数を同期 ↻' }))
+
+    expect(await screen.findByText('6,500歩')).not.toBeNull()
+    expect(await screen.findByText('1,150')).not.toBeNull()
+    expect(
+      screen.getByText('6,500歩を同期し、650コイン獲得しました。'),
+    ).not.toBeNull()
+    expect(api.getTownSnapshot().town.coins).toBe(1_150)
+
+    fireEvent.click(screen.getByRole('button', { name: '歩数を同期 ↻' }))
+    expect(
+      await screen.findByText(
+        '歩数は最新です。新しく付与されたコインはありません。',
+      ),
+    ).not.toBeNull()
+    expect(api.getTownSnapshot().town.coins).toBe(1_150)
+  })
+
+  it('shows a reconnection action for a permission error', async () => {
+    const fixedNow = new Date('2026-08-27T03:00:00.000Z')
+    const store = createMockWalkCityStore()
+    const api = createMockTownApi({ latencyMs: 0, store })
+    const stepSyncApi = createMockStepSyncApi({
+      latencyMs: 0,
+      now: () => fixedNow,
+      store,
+    })
+    stepSyncApi.setFailure('HEALTH_PERMISSION_REQUIRED')
+    const googleApi = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+      initiallyHealthConnected: true,
+      now: () => fixedNow,
+    })
+    const integrationResult = await googleApi.getGoogleIntegrationState()
+    if (!integrationResult.ok) throw new Error(integrationResult.error.message)
+
+    render(
+      <TownOverview
+        api={api}
+        googleApi={googleApi}
+        googleIntegrationState={integrationResult.data}
+        stepSyncApi={stepSyncApi}
+        healthConnectionHref="/health/connect"
+      />,
+    )
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+    fireEvent.click(screen.getByRole('button', { name: '歩数を同期 ↻' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText('歩数を読み取る権限が必要です。')).not.toBeNull()
+    expect(
+      within(alert).getByRole('link', { name: '再連携' }).getAttribute('href'),
+    ).toBe('/health/connect')
+    expect(api.getTownSnapshot().town.coins).toBe(500)
+  })
+
+  it('does not expose or invoke step sync in a public town', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    const syncSteps = vi.fn()
+
+    render(
+      <TownOverview
+        api={api}
+        stepSyncApi={{ syncSteps }}
+        mode={{ type: 'public', userId: MOCK_PUBLIC_USER_ID }}
+      />,
+    )
+    await screen.findByRole('heading', { name: 'ブルータウン' })
+
+    expect(screen.queryByText('今日の歩数')).toBeNull()
+    expect(screen.queryByText('所持コイン数')).toBeNull()
+    expect(screen.queryByRole('button', { name: '歩数を同期 ↻' })).toBeNull()
+    expect(syncSteps).not.toHaveBeenCalled()
   })
 
   it('can retry after an API error', async () => {
