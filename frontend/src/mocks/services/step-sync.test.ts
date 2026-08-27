@@ -90,6 +90,44 @@ describe('createMockStepSyncApi', () => {
     })
   })
 
+  it('awards once after a failed request is retried', async () => {
+    const store = createMockWalkCityStore({ stepsByDate: { [DATE]: 1_000 } })
+    const townApi = createMockTownApi({ latencyMs: 0, store })
+    const api = createMockStepSyncApi({
+      latencyMs: 0,
+      now: () => FIXED_NOW,
+      store,
+      coinsPerStep: 0.1,
+    })
+    api.setFailure('HEALTH_PROVIDER_ERROR')
+
+    await expect(api.syncSteps()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'HEALTH_PROVIDER_ERROR' },
+    })
+    api.setFailure(null)
+    await expect(api.syncSteps()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        newlyRewardedSteps: 1_000,
+        coinsAwarded: 100,
+        coinBalance: 600,
+      },
+    })
+    await expect(api.syncSteps()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        newlyRewardedSteps: 0,
+        coinsAwarded: 0,
+        coinBalance: 600,
+      },
+    })
+    await expect(townApi.getMyTown()).resolves.toMatchObject({
+      ok: true,
+      data: { town: { coins: 600 } },
+    })
+  })
+
   it('restores the shared Town and reward ledger on reset', async () => {
     const store = createMockWalkCityStore({ stepsByDate: { [DATE]: 1_000 } })
     const townApi = createMockTownApi({ latencyMs: 0, store })

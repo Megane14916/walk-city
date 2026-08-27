@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 対象プロダクト | Walk City |
-| ステータス | Phase 4 実装完了（実ブラウザ目視確認を除く） |
+| ステータス | Phase 5 実施完了（実Edge Function結合・実ブラウザ確認を除く） |
 | 作成日 | 2026-08-27 |
 | 対象 | Edge Function による歩数同期・コイン付与結果の取得、Town 画面への反映 |
 | 関連 API | `syncSteps()` / Supabase Edge Function `sync-health-steps` |
@@ -29,26 +29,18 @@
 
 ## 3. 現状と課題
 
-2026-08-27 時点のフロントエンドには、以下の実装がある。
+2026-08-27 時点で、フロントエンドのPhase 1〜4と、実バックエンドを必要としないPhase 5の検証は完了している。
 
-- `TownOverview.tsx` は「今日の歩数」と「所持コイン数」を表示している。
-- 今日の歩数は `useDailyStepsSummary()` から `GoogleIntegrationApi.getDailySteps()` を呼んで取得している。
-- コインは `TownApi.getMyTown()` が返す `TownDetail.town.coins` を表示している。
-- Supabase Edge Function 呼び出しは `features/auth/services/google-integration.ts` の共通 `invoke()` に集約されている。
-- `useTownOverview()` は建物配置成功後の `coinBalance` と `population` をローカルの街状態へ反映している。
-- `TownPage.tsx` は `mockTownApi` と `mockRankingApi` を直接 import しているため、`VITE_API_MODE=supabase` でも街データはモックのままである。
+- `StepSyncApi`、`StepSyncStatus`、実行時型ガードを実装済みである。
+- Supabaseアダプターは`sync-health-steps`を空本文で呼び、レスポンスを`ApiResult`へ正規化する。
+- mockのTown、歩数、精算済み歩数、コイン残高は同じStoreを共有する。
+- `TownPage`はProviderから`townApi`と`stepSyncApi`を取得する。
+- `useStepSync`が二重送信、stale response、成功・失敗・再試行を管理する。
+- `TownOverview`は同期操作と結果を表示し、サーバーの`steps`と`coinBalance`を同時に反映する。
+- 公開街では歩数、コイン、同期操作を表示・実行しない。
+- Supabaseアダプターとmockアダプターは同じfixtureを使う契約テストを通過している。
 
-バックエンドについては、`sync-health-steps` Edge Function は未作成・未デプロイである。一方、`getMyTown()` は将来 Supabase に保存された実際の街データと最新コイン残高を返す実 API として実装する方針が確定している。
-
-不足している点は以下である。
-
-- `syncSteps()` と `StepSyncStatus` がフロントエンドコードにない。
-- `sync-health-steps` を呼ぶ処理がない。
-- Town 画面に同期ボタン、同期中、同期成功、同期失敗の UI がない。
-- 同期成功時に歩数とコインを一貫して更新する状態更新経路がない。
-- mock API で歩数同期と街のコイン残高が同じ状態を共有していない。
-- Edge Function の HTTP エラー本文を `ApiError` へ正規化する処理が不足している。
-- 現在の `origin/supabase` からは Edge Function 本体を確認できず、実装済み関数との結合確認ができない。
+未完了なのは、未作成の`sync-health-steps` Edge Functionおよび実`getMyTown()`との結合確認と、利用可能なブラウザが必要な目視確認である。
 
 ## 4. 目的と非目的
 
@@ -621,20 +613,33 @@ Phase 4 完了時の検証結果:
 
 320 pxからPC幅までのTailwindクラス、横スクロール、最小タップ領域はコードとコンポーネントテストで確認した。実ブラウザが利用可能になった時点で、Phase 5の結合確認と合わせてレイアウトを目視確認する。
 
-### Phase 5: テスト・文書・結合確認
+### Phase 5: テスト・文書・結合確認（実バックエンド項目を除き完了）
 
-1. サービス、Hook、UI、Provider のテストを追加する。
-2. mock と Supabase の契約テストを共通 fixture で実行する。
-3. ローカルまたは preview 環境で実 Edge Function を呼ぶ。
-4. 同一歩数で複数回同期し、二重付与されないことを確認する。
-5. 歩数を増やした後、差分だけが反映されることを確認する。
-6. ネットワーク失敗後の再試行で残高が二重増加しないことを確認する。
-7. 関数名、envelope、タイムゾーンを関連文書へ反映する。
-8. lint、test、build を実行する。
+1. サービス、Hook、UI、Providerのテストを追加した。
+2. Supabaseアダプターとmockアダプターを同じ`StepSyncStatus` fixtureで検証する契約テストを追加した。
+3. 実Edge Functionは未作成のため、ローカル／preview環境での呼び出しをユーザー指定によりスキップした。
+4. mockで同一歩数を複数回同期し、二重付与されないことを確認した。
+5. mockで歩数を増やし、未精算差分だけが反映されることを確認した。
+6. mockで通信失敗相当のエラー後に再試行し、残高が一度分だけ増えることを確認した。
+7. `sync-health-steps`、`ok` envelope、`Asia/Tokyo`を関連文書へ反映した。
+8. lint、全テスト、buildを実行した。
+
+Phase 5 最終検証結果:
+
+| コマンド・確認 | 結果 |
+|---|---|
+| 共通契約／再試行対象テスト | 2ファイル、7件成功 |
+| `npm test` | 16ファイル、128件すべて成功 |
+| `npm run lint` | 成功 |
+| `npm run build` | 成功 |
+| 実Edge Function結合 | Function未作成のためユーザー指定によりスキップ |
+| 実ブラウザ目視確認 | 実行環境に利用可能なブラウザがなく未実施 |
+
+実Edge Function作成後は、項目3〜6を実バックエンドに対して再実行する。
 
 ## 16. 完了条件
 
-- `syncSteps()` が実際に `sync-health-steps` Edge Function を呼ぶ。
+- `syncSteps()` が`sync-health-steps`を空本文で呼ぶことをSupabase Client doubleで確認している。
 - クライアントから歩数、コイン、対象ユーザー ID を送っていない。
 - 成功レスポンスが実行時検証されている。
 - 歩数とコイン残高が一つの `StepSyncStatus` から同時に反映される。
@@ -644,7 +649,7 @@ Phase 4 完了時の検証結果:
 - 公開街で歩数・コイン・同期情報が一切表示されない。
 - mock 同期後の再取得でもコイン残高が巻き戻らない。
 - supabase モードで Town 画面に mock の街・コインが混入しない。
-- Edge Function との結合テストで同一歩数の二重付与が起きない。
+- mockでは同一歩数の二重付与が起きない。実Edge Functionとの結合確認はFunction作成後に行う。
 - `npm test`、`npm run lint`、`npm run build` がすべて成功する。
 - API 契約と実装に合わせて関連ドキュメントが更新されている。
 
