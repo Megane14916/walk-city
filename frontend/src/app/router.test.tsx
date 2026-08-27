@@ -16,6 +16,7 @@ import {
   createMockGoogleIntegrationApi,
   mockGoogleIntegrationApi,
   mockRankingApi,
+  mockStepSyncApi,
   mockTownApi,
 } from '../mocks/services'
 import { paths } from './paths'
@@ -28,7 +29,13 @@ function renderRoute(
 ) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <ApiProvider services={{ googleIntegrationApi }}>
+      <ApiProvider
+        services={{
+          googleIntegrationApi,
+          stepSyncApi: mockStepSyncApi,
+          townApi: mockTownApi,
+        }}
+      >
         <AuthProvider>
           <AppRoutes />
         </AuthProvider>
@@ -40,6 +47,7 @@ function renderRoute(
 beforeEach(() => {
   mockGoogleIntegrationApi.reset()
   mockRankingApi.reset()
+  mockStepSyncApi.reset()
   mockTownApi.reset()
 })
 

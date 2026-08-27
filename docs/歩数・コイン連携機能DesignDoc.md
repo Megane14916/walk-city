@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 対象プロダクト | Walk City |
-| ステータス | Phase 1 実装完了（Phase 2 着手可能） |
+| ステータス | Phase 2 実装完了（Phase 3 着手可能） |
 | 作成日 | 2026-08-27 |
 | 対象 | Edge Function による歩数同期・コイン付与結果の取得、Town 画面への反映 |
 | 関連 API | `syncSteps()` / Supabase Edge Function `sync-health-steps` |
@@ -568,16 +568,27 @@ Phase 1 完了時の検証結果:
 | `npm run lint` | 成功 |
 | `npm run build` | 成功 |
 
-### Phase 2: Supabase / Mock 実装と Provider
+### Phase 2: Supabase / Mock 実装と Provider（完了）
 
-1. `createSupabaseStepSyncApi()` を追加する。
-2. `createMockStepSyncApi()` を追加する。
-3. mock の共有 Store を導入し、Town と StepSync の残高を同期する。
-4. `ApiServices` に `stepSyncApi` と `townApi` を追加する。
-5. `createApiServices()` が API mode に応じて実装を生成する。
-6. `TownPage.tsx` の `mockTownApi` 直接 import を削除する。
+1. Phase 1で追加した `createSupabaseStepSyncApi()` を、Supabaseモードの遅延生成サービスへ接続した。
+2. 差分歩数だけを精算し、同じ歩数を二重付与しない `createMockStepSyncApi()` を追加した。
+3. `MockWalkCityStore` を追加し、Town、日別歩数、精算済み歩数を共有した。
+4. mock同期後の `coinBalance` と `MockTownApi.getMyTown()` の `town.coins` を一致させた。
+5. `ApiServices` に `stepSyncApi` と `townApi` を追加した。
+6. `createApiServices()` がmockモードで同じStoreを使うStepSync／Town APIを生成するようにした。
+7. SupabaseモードではGoogle IntegrationとStepSyncが同じSupabase Clientを共有するようにした。
+8. `TownPage.tsx` の `mockTownApi` 直接 importを削除し、Providerから`townApi`を受け取るようにした。
 
-Supabase 用 `TownApi` は、Supabase に保存された実際の街データを返すものとして実装する。実装完了までは、実データとモックデータを混在させないため `VITE_API_MODE=supabase` の Town 画面を未完成のまま公開しない。少なくとも `getMyTown()` が実残高を返す経路をバックエンド担当と接続する。
+Supabase用`TownApi`のバックエンド契約とデータ取得処理はまだ存在しない。そのため、実装完了までは型付きの`INTERNAL_ERROR`を返す暫定APIを注入し、Supabaseモードへmockの街やコインを混在させない。`getMyTown()`のRPCまたはQuery契約が確定した後、この暫定APIを実装済み`TownApi`へ置き換える。
+
+Phase 2 完了時の検証結果:
+
+| コマンド | 結果 |
+|---|---|
+| Phase 2対象テスト | 2ファイル、9件成功 |
+| `npm test` | 14ファイル、117件すべて成功 |
+| `npm run lint` | 成功 |
+| `npm run build` | 成功 |
 
 ### Phase 3: Hook と状態整合性
 

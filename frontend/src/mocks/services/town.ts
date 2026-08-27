@@ -26,6 +26,11 @@ import {
   MOCK_PUBLIC_TOWN,
   MOCK_PUBLIC_USER_ID,
 } from '../data/towns'
+import {
+  createMockWalkCityStore,
+  mockWalkCityStore,
+  type MockWalkCityStore,
+} from './walk-city-store'
 
 export type MockTownOperation =
   | 'getBuildingCatalog'
@@ -55,6 +60,7 @@ export type MockTownApiOptions = {
   initialTown?: TownDetail
   catalog?: BuildingCatalogItem[]
   publicTowns?: Record<string, TownDetail>
+  store?: MockWalkCityStore
 }
 
 export type MockTownApi = TownApi & {
@@ -213,6 +219,8 @@ export function createMockTownApi(
   const latencyMs = options.latencyMs ?? 150
   const now = options.now ?? (() => new Date())
   const initialTown = copyTown(options.initialTown ?? MOCK_MY_TOWN)
+  const store =
+    options.store ?? createMockWalkCityStore({ initialTown })
   const initialCatalog = (options.catalog ?? MOCK_BUILDING_CATALOG).map(
     copyCatalogItem,
   )
@@ -230,7 +238,6 @@ export function createMockTownApi(
     { input: MoveBuildingInput; result: TownMutationResult }
   >()
 
-  let town = copyTown(initialTown)
   let catalog = initialCatalog.map(copyCatalogItem)
   let publicTowns = Object.fromEntries(
     Object.entries(initialPublicTowns).map(([userId, publicTown]) => [
@@ -265,7 +272,10 @@ export function createMockTownApi(
 
     async getMyTown() {
       await wait()
-      return configuredFailure('getMyTown') ?? success(copyTown(town))
+      return (
+        configuredFailure('getMyTown') ??
+        success(copyTown(store.getMutableTown()))
+      )
     },
 
     async getPublicTown(userId) {
@@ -285,6 +295,7 @@ export function createMockTownApi(
       const failed = configuredFailure<TownMutationResult>('placeBuilding')
       if (failed) return failed
       if (input.requestId.trim() === '') return failure('INVALID_INPUT')
+      const town = store.getMutableTown()
 
       const previous = placeResults.get(input.requestId)
       if (previous) {
@@ -347,6 +358,7 @@ export function createMockTownApi(
       const failed = configuredFailure<TownMutationResult>('moveBuilding')
       if (failed) return failed
       if (input.requestId.trim() === '') return failure('INVALID_INPUT')
+      const town = store.getMutableTown()
 
       const previous = moveResults.get(input.requestId)
       if (previous) {
@@ -401,14 +413,14 @@ export function createMockTownApi(
     },
 
     getTownSnapshot() {
-      return copyTown(town)
+      return copyTown(store.getMutableTown())
     },
 
     reset() {
       failures.clear()
       placeResults.clear()
       moveResults.clear()
-      town = copyTown(initialTown)
+      store.reset()
       catalog = initialCatalog.map(copyCatalogItem)
       publicTowns = Object.fromEntries(
         Object.entries(initialPublicTowns).map(([userId, publicTown]) => [
@@ -421,4 +433,4 @@ export function createMockTownApi(
   }
 }
 
-export const mockTownApi = createMockTownApi()
+export const mockTownApi = createMockTownApi({ store: mockWalkCityStore })
