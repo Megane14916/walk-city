@@ -118,6 +118,23 @@ describe('AppRoutes', () => {
     ).not.toBeNull()
   })
 
+  it('opens the market item list over the town map', async () => {
+    await mockGoogleIntegrationApi.signInWithGoogle()
+    renderRoute(paths.root)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    fireEvent.click(screen.getByRole('button', { name: /マーケット/ }))
+
+    expect(
+      screen.getByRole('heading', { name: 'マーケット' }),
+    ).not.toBeNull()
+    expect(screen.getAllByRole('listitem')).toHaveLength(10)
+    expect(screen.getByText('未開放領域アンロック')).not.toBeNull()
+    expect(
+      screen.getByRole('application', { name: /グリーンタウンのマップ/ }),
+    ).not.toBeNull()
+  })
+
   it('navigates from a ranking item to the placeholder user page', async () => {
     await mockGoogleIntegrationApi.signInWithGoogle()
     renderRoute(paths.ranking)

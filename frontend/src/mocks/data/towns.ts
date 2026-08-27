@@ -24,6 +24,27 @@ function createPlacedBuilding(
 
 export const MOCK_PUBLIC_USER_ID = 'mock-user-002'
 
+function createUnavailableCatalogItem(
+  code: string,
+  name: string,
+  category: string,
+  size: 1 | 2,
+): BuildingCatalogItem {
+  return {
+    code,
+    name,
+    category,
+    width: size,
+    height: size,
+    costCoins: null,
+    enabled: false,
+    description: '',
+    effects: [],
+    assetKey: code,
+    catalogVersion: 1,
+  }
+}
+
 export const MOCK_BUILDING_CATALOG: BuildingCatalogItem[] = [
   {
     code: 'road',
@@ -31,7 +52,7 @@ export const MOCK_BUILDING_CATALOG: BuildingCatalogItem[] = [
     category: 'road',
     width: 1,
     height: 1,
-    costCoins: 10,
+    costCoins: 0,
     enabled: true,
     description: '建物を隣接して配置するための道路です',
     effects: [],
@@ -40,13 +61,13 @@ export const MOCK_BUILDING_CATALOG: BuildingCatalogItem[] = [
   },
   {
     code: 'house-small',
-    name: '小さな家',
+    name: '住宅（小）',
     category: 'residential',
     width: 1,
     height: 1,
-    costCoins: 100,
+    costCoins: 50,
     enabled: true,
-    description: '1×1サイズの住宅です',
+    description: '人口が10人増加する1×1サイズの住宅です',
     effects: [
       {
         type: 'population_flat',
@@ -63,21 +84,21 @@ export const MOCK_BUILDING_CATALOG: BuildingCatalogItem[] = [
   },
   {
     code: 'apartment',
-    name: 'アパート',
+    name: '住宅（大）',
     category: 'residential',
     width: 2,
     height: 2,
-    costCoins: 300,
+    costCoins: 200,
     enabled: true,
-    description: '2×2サイズの集合住宅です',
+    description: '人口を50人増加する2×2サイズの住宅です',
     effects: [
       {
         type: 'population_flat',
-        value: 40,
+        value: 50,
         targetCategory: null,
         scope: null,
         stackingRule: null,
-        description: '人口を40増やします',
+        description: '人口を50人増加します',
         metadata: {},
       },
     ],
@@ -85,28 +106,28 @@ export const MOCK_BUILDING_CATALOG: BuildingCatalogItem[] = [
     catalogVersion: 1,
   },
   {
-    code: 'park',
-    name: '公園',
+    code: 'park-small',
+    name: '公園（小）',
     category: 'public',
-    width: 2,
-    height: 2,
-    costCoins: 200,
-    enabled: true,
-    description: '街の人口効果を高める2×2サイズの公園です',
-    effects: [
-      {
-        type: 'residential_population_bonus',
-        value: 5,
-        targetCategory: 'residential',
-        scope: 'town',
-        stackingRule: null,
-        description: '住宅の人口効果にボーナスを与えます',
-        metadata: {},
-      },
-    ],
-    assetKey: 'park',
+    width: 1,
+    height: 1,
+    costCoins: null,
+    enabled: false,
+    description: '',
+    effects: [],
+    assetKey: 'park-small',
     catalogVersion: 1,
   },
+  createUnavailableCatalogItem('hospital', '病院', 'public', 2),
+  createUnavailableCatalogItem(
+    'commercial-facility',
+    '商業施設',
+    'commercial',
+    1,
+  ),
+  createUnavailableCatalogItem('farm', '農場', 'nature', 2),
+  createUnavailableCatalogItem('city-hall', '役所', 'public', 2),
+  createUnavailableCatalogItem('factory', '工場', 'industry', 2),
   {
     code: 'future-building',
     name: '準備中の建物',
