@@ -27,12 +27,12 @@
 | BaaS | Supabase JavaScript Client |
 | 認証 | Supabase Auth + Google OAuth |
 | バックエンド通信 | Supabase Auth SDK、Edge Functions、RPC、View / Query |
-| ルーティング | パスと遷移仕様は本書で固定。ルーティングライブラリは TBD |
-| サーバー状態管理 | 取得・再取得ルールは本書で固定。ライブラリは TBD |
-| テスト | テスト観点は上位設計に従う。具体的なツールは TBD |
+| ルーティング | React Router (`react-router-dom`) |
+| サーバー状態管理 | Feature Hook と Auth Context。専用ライブラリは未導入 |
+| テスト | Vitest、Testing Library、jsdom |
 | Map 描画 | 初期実装は React + HTML/CSS。Canvas 化は性能上必要な場合のみ検討 |
 
-ルーティングライブラリとデータ取得ライブラリは、ハッカソン期間とチームの習熟度を踏まえて選定する。各 Page と Hook は特定ライブラリの API を機能コンポーネントへ漏らさず、後から選定・変更できる境界を保つ。
+各 Page と Hook は React Router やデータ取得実装の詳細を機能コンポーネントへ漏らさず、後から変更できる境界を保つ。
 
 ### 1.3 アーキテクチャ方針
 
@@ -286,16 +286,14 @@ type TownPageMode =
 
 ### 4.5 OAuth コールバック
 
-Google 認証設計で使用する `/auth/callback` は、ユーザー向け画面ではなく OAuth 結果を処理する技術パスである。採用する Supabase のフローによって、次のどちらかを実装時に選定する。
-
-- Supabase SDK がリダイレクト先でセッションを復元できる場合は、登録済みのアプリ URL で復元後 `/` へ遷移する。
-- 専用パスが必要な場合は `/auth/callback` をシステムルートとして追加し、セッション交換・復元後に `/` または安全な保存済み遷移先へ置換遷移する。
+Google 認証設計で使用する `/auth/callback` は、ユーザー向け画面ではなく OAuth 結果を処理する技術パスである。Supabase SDK と Auth Provider がセッションを復元し、`AuthCallbackPage` は認証済みなら `/health/connect`、未認証なら `/login` へ置換遷移する。
 
 このパスではトークンや認可コードをログへ出さない。Google Health の Callback は Edge Function が担当し、React の画面ルートでは処理しない。
 
 ### 4.6 遷移ルール
 
-- ログイン成功: `/` へ `replace`
+- ログイン成功: `/health/connect` へ `replace`
+- Health 連携完了またはスキップ: `/` へ `replace`
 - ログアウト成功: `/login` へ `replace`
 - 認証切れ: 編集・同期を停止し `/login` へ誘導
 - ランキング項目選択: `/users/:userId`
@@ -312,6 +310,8 @@ frontend/src/
 ├── app/
 │   ├── routes/
 │   │   ├── LoginPage.tsx
+│   │   ├── AuthCallbackPage.tsx
+│   │   ├── HealthConnectionPage.tsx
 │   │   ├── TownPage.tsx
 │   │   ├── RankingPage.tsx
 │   │   └── UserPage.tsx
@@ -328,15 +328,15 @@ frontend/src/
 │   │   ├── hooks/
 │   │   │   └── useAuth.ts
 │   │   ├── services/
-│   │   │   └── auth.ts
+│   │   │   └── google-integration.ts
 │   │   └── types.ts
 │   │
 │   ├── health/
 │   │   ├── components/
-│   │   │   ├── StepCounter.tsx
-│   │   │   └── StepRewardCard.tsx
+│   │   │   ├── HealthConnectionPanel.tsx
+│   │   │   └── HealthConnectionStatus.tsx
 │   │   ├── hooks/
-│   │   ├── services/
+│   │   │   └── useHealthConnection.ts
 │   │   └── types.ts
 │   │
 │   ├── town/
@@ -376,10 +376,9 @@ frontend/src/
 │   │   └── health.ts
 │   │
 │   └── services/
-│       ├── auth.ts
+│       ├── google-integration.ts
 │       ├── town.ts
-│       ├── ranking.ts
-│       └── health.ts
+│       └── ranking.ts
 │
 ├── types/
 │   ├── user.ts
@@ -388,7 +387,7 @@ frontend/src/
 └── assets/
 ```
 
-現在の `features/auth/api/` は認証・Health 連携の API 境界とモックを先行実装している。最終構成へ移行するときは、公開インターフェースを保ちながら、本番実装を `features/auth/services/`、モック実装を `mocks/services/`、機能ローカル型を `features/auth/types.ts` へ整理する。一度に移動する必要がある場合は import 更新を同一変更内で行い、中間状態で二重の型定義を作らない。
+`features/auth/api/` は認証・Health 連携の公開インターフェースだけを保持する。本番実装は `features/auth/services/`、モック実装は `mocks/services/`、機能ローカル型は `features/auth/types.ts` に配置する。Page と Feature Component は `ApiProvider` から公開インターフェースを受け取り、モック実装を直接参照しない。
 
 ## 6. 各ディレクトリの責務
 
@@ -607,7 +606,7 @@ type ApiResult<T> =
 
 ### 8.3 Hook の公開形
 
-データ取得ライブラリが TBD のため、機能コンポーネントへ公開する形を揃える。
+専用のデータ取得ライブラリは導入していないため、Feature Hook が機能コンポーネントへ公開する形を揃える。
 
 ```ts
 type QueryState<T> = {
@@ -619,7 +618,7 @@ type QueryState<T> = {
 }
 ```
 
-更新 Hook は `mutate`、`isSubmitting`、`error` を公開し、成功後の関連データ更新まで責任を持つ。ライブラリ採用後は、その戻り値を直接全コンポーネントへ広げず、feature Hook で必要な形へ包む。
+更新 Hook は `mutate`、`isSubmitting`、`error` を公開し、成功後の関連データ更新まで責任を持つ。将来ライブラリを採用する場合も、その戻り値を直接全コンポーネントへ広げず、Feature Hook で必要な形へ包む。
 
 ### 8.4 データの更新・再取得
 

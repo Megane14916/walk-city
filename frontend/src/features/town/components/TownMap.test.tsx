@@ -8,17 +8,20 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
-import { createMockGoogleIntegrationApi } from '../../auth/api'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MOCK_BUILDING_CATALOG,
   MOCK_MY_TOWN,
 } from '../../../mocks/data/towns'
+import { createMockGoogleIntegrationApi } from '../../../mocks/services'
 import { createMockTownApi } from '../../../mocks/services/town'
 import { TownMap } from './TownMap'
 import { TownOverview } from './TownOverview'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('TownMap', () => {
   it('renders placed roads and buildings with accessible names', () => {
@@ -205,6 +208,8 @@ describe('TownOverview', () => {
   })
 
   it('shows today steps after Health is connected', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-08-25T10:00:00.000Z'))
     const api = createMockTownApi({ latencyMs: 0 })
     const today = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Australia/Sydney',
@@ -219,7 +224,16 @@ describe('TownOverview', () => {
       stepsByDate: { [today]: 6500 },
       now: () => new Date('2026-08-25T10:00:00.000Z'),
     })
-    render(<TownOverview api={api} googleApi={googleApi} />)
+    const integrationResult = await googleApi.getGoogleIntegrationState()
+    if (!integrationResult.ok) throw new Error(integrationResult.error.message)
+
+    render(
+      <TownOverview
+        api={api}
+        googleApi={googleApi}
+        googleIntegrationState={integrationResult.data}
+      />,
+    )
 
     expect(await screen.findByText('6,500歩')).not.toBeNull()
   })
