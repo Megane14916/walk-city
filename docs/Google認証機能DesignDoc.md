@@ -423,13 +423,17 @@ type DailySteps = {
 
 ## 9. モック API
 
-実装ファイル:
+公開インターフェースと実装ファイル:
 
 ```text
 frontend/src/features/auth/api/
-├── google-integration-api.ts
-├── mock-google-integration-api.ts
-└── index.ts
+└── google-integration-api.ts
+
+frontend/src/features/auth/services/
+└── google-integration.ts       # Supabase 実装
+
+frontend/src/mocks/services/
+└── google-integration.ts       # モック実装
 ```
 
 モックは次を提供する。
@@ -442,17 +446,21 @@ frontend/src/features/auth/api/
 - テスト用歩数の変更
 - 状態のリセット
 
-使用例:
+アプリ実行時は `VITE_API_MODE=mock|supabase` を `ApiProvider` が解決する。Page と Feature Component はモックを直接 import しない。
+
+モック単体テストでの使用例:
 
 ```ts
-import { mockGoogleIntegrationApi } from './features/auth/api'
+import { createMockGoogleIntegrationApi } from './mocks/services'
 
-const signInResult = await mockGoogleIntegrationApi.signInWithGoogle()
+const api = createMockGoogleIntegrationApi({ latencyMs: 0 })
+
+const signInResult = await api.signInWithGoogle()
 
 const connectionResult =
-  await mockGoogleIntegrationApi.startGoogleHealthConnection()
+  await api.startGoogleHealthConnection()
 
-const stepsResult = await mockGoogleIntegrationApi.getDailySteps({
+const stepsResult = await api.getDailySteps({
   date: '2026-08-25',
   timezone: 'Australia/Sydney',
 })
@@ -461,15 +469,15 @@ const stepsResult = await mockGoogleIntegrationApi.getDailySteps({
 エラーケース:
 
 ```ts
-mockGoogleIntegrationApi.setFailure(
+api.setFailure(
   'startGoogleHealthConnection',
   'OAUTH_CANCELLED',
 )
 
 const result =
-  await mockGoogleIntegrationApi.startGoogleHealthConnection()
+  await api.startGoogleHealthConnection()
 
-mockGoogleIntegrationApi.setFailure(
+api.setFailure(
   'startGoogleHealthConnection',
   null,
 )
@@ -478,7 +486,7 @@ mockGoogleIntegrationApi.setFailure(
 歩数変更:
 
 ```ts
-mockGoogleIntegrationApi.setSteps('2026-08-25', 12345)
+api.setSteps('2026-08-25', 12345)
 ```
 
 モックは認証情報を生成・保存せず、GoogleやSupabaseへ通信しない。本番用実装へ切り替えるときも、UI は `GoogleIntegrationApi` インターフェースを使い続ける。

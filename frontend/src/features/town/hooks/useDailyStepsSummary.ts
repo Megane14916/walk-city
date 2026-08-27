@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import type {
-  DailySteps,
-  GoogleIntegrationApi,
-} from '../../auth/api'
+import type { GoogleIntegrationApi } from '../../auth/api'
+import type { GoogleIntegrationState } from '../../auth/types'
+import type { DailySteps } from '../../health/types'
 
 const TIMEZONE = 'Australia/Sydney'
 
@@ -10,6 +9,11 @@ type DailyStepsSummaryState = {
   dailySteps: DailySteps | null
   isLoading: boolean
   isConnected: boolean
+}
+
+type LoadedDailySteps = {
+  api: GoogleIntegrationApi
+  dailySteps: DailySteps | null
 }
 
 function todayInSydney(): string {
@@ -23,61 +27,43 @@ function todayInSydney(): string {
 
 export function useDailyStepsSummary(
   api?: GoogleIntegrationApi,
+  integrationState?: GoogleIntegrationState | null,
 ): DailyStepsSummaryState {
-  const [state, setState] = useState<DailyStepsSummaryState>({
-    dailySteps: null,
-    isLoading: api !== undefined,
-    isConnected: false,
-  })
+  const isConnected =
+    integrationState?.healthConnection?.status === 'connected'
+  const [loaded, setLoaded] = useState<LoadedDailySteps | null>(null)
 
   useEffect(() => {
+    if (!api || !isConnected) return
+
     let active = true
-
-    if (!api) return
-
     void api
-      .getState()
-      .then(async (stateResult) => {
-        if (!active) return
-        const isConnected =
-          stateResult.ok &&
-          stateResult.data.healthConnection?.status === 'connected'
-
-        if (!isConnected) {
-          setState({
-            dailySteps: null,
-            isLoading: false,
-            isConnected: false,
-          })
-          return
-        }
-
-        const stepsResult = await api.getDailySteps({
-          date: todayInSydney(),
-          timezone: TIMEZONE,
-        })
+      .getDailySteps({
+        date: todayInSydney(),
+        timezone: TIMEZONE,
+      })
+      .then((stepsResult) => {
         if (!active) return
 
-        setState({
+        setLoaded({
+          api,
           dailySteps: stepsResult.ok ? stepsResult.data : null,
-          isLoading: false,
-          isConnected: true,
         })
       })
       .catch(() => {
-        if (active) {
-          setState({
-            dailySteps: null,
-            isLoading: false,
-            isConnected: false,
-          })
-        }
+        if (active) setLoaded({ api, dailySteps: null })
       })
 
     return () => {
       active = false
     }
-  }, [api])
+  }, [api, isConnected])
 
-  return state
+  const dailySteps =
+    isConnected && loaded && loaded.api === api ? loaded.dailySteps : null
+  return {
+    dailySteps,
+    isLoading: api !== undefined && isConnected && loaded?.api !== api,
+    isConnected,
+  }
 }

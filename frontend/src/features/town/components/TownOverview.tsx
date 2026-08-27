@@ -1,16 +1,23 @@
 import { useState } from 'react'
 import type { GoogleIntegrationApi } from '../../auth/api'
+import type { GoogleIntegrationState } from '../../auth/types'
 import type { RankingApi } from '../../ranking/api'
 import { PopulationRanking } from '../../ranking/components'
 import type { TownApi } from '../api'
-import { useDailyStepsSummary, useTownOverview } from '../hooks'
+import {
+  useDailyStepsSummary,
+  useTownOverview,
+  type TownPageMode,
+} from '../hooks'
 import { TownMap } from './TownMap'
 
 export type TownOverviewProps = {
   api: TownApi
   googleApi?: GoogleIntegrationApi
+  googleIntegrationState?: GoogleIntegrationState | null
   rankingApi?: RankingApi
   getUserHref?: (userId: string) => string
+  mode?: TownPageMode
 }
 
 type DashboardPanel = 'ranking' | 'market' | null
@@ -22,11 +29,13 @@ function formatNumber(value: number): string {
 export function TownOverview({
   api,
   googleApi,
+  googleIntegrationState,
   rankingApi,
   getUserHref = (userId) => `/users/${encodeURIComponent(userId)}`,
+  mode = { type: 'self' },
 }: TownOverviewProps) {
-  const state = useTownOverview(api)
-  const steps = useDailyStepsSummary(googleApi)
+  const state = useTownOverview(api, mode)
+  const steps = useDailyStepsSummary(googleApi, googleIntegrationState)
   const [activePanel, setActivePanel] = useState<DashboardPanel>(null)
 
   if (state.isLoading) {
@@ -142,8 +151,9 @@ export function TownOverview({
             <span className="text-[11px] font-black">マーケット</span>
           </button>
 
-          <div className="ml-auto flex shrink-0 items-center gap-2 max-[760px]:ml-0">
-            <dl className="m-0 flex items-center gap-2">
+          {mode.type === 'self' && (
+            <div className="ml-auto flex shrink-0 items-center gap-2 max-[760px]:ml-0">
+              <dl className="m-0 flex items-center gap-2">
               <div className="min-w-[150px] rounded-[15px] border border-[#cfe0d8] bg-[#e8f3ee] px-4 py-2.5 shadow-sm">
                 <dt className="text-[8px] font-black tracking-[.1em] text-[#548274]">今日の歩数</dt>
                 <dd className="m-0 mt-0.5 text-lg font-black tracking-[-.03em] text-[#285b4e]">
@@ -158,8 +168,9 @@ export function TownOverview({
                     : formatNumber(town.town.coins)}
                 </dd>
               </div>
-            </dl>
-          </div>
+              </dl>
+            </div>
+          )}
         </nav>
       </header>
 

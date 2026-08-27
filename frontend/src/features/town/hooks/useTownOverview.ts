@@ -15,24 +15,40 @@ export type TownOverviewState = {
   retry: () => void
 }
 
+export type TownPageMode =
+  | { type: 'self' }
+  | { type: 'public'; userId: string }
+
+const SELF_MODE: TownPageMode = { type: 'self' }
+
 const UNEXPECTED_ERROR: ApiError = {
   code: 'INTERNAL_ERROR',
   message: '街のデータを読み込めませんでした。',
 }
 
-export function useTownOverview(api: TownApi): TownOverviewState {
+export function useTownOverview(
+  api: TownApi,
+  mode: TownPageMode = SELF_MODE,
+): TownOverviewState {
   const [attempt, setAttempt] = useState(0)
   const [data, setData] = useState<TownOverviewData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<ApiError | null>(null)
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null)
   const requestGeneration = useRef(0)
+  const publicUserId = mode.type === 'public' ? mode.userId : null
+  const requestKey = publicUserId === null ? 'self' : `public:${publicUserId}`
 
   useEffect(() => {
     let active = true
     const generation = requestGeneration.current + 1
     requestGeneration.current = generation
 
-    void Promise.all([api.getMyTown(), api.getBuildingCatalog()])
+    const townRequest = publicUserId
+      ? api.getPublicTown(publicUserId)
+      : api.getMyTown()
+
+    void Promise.all([townRequest, api.getBuildingCatalog()])
       .then(([townResult, catalogResult]) => {
         if (!active || generation !== requestGeneration.current) return
 
@@ -55,13 +71,14 @@ export function useTownOverview(api: TownApi): TownOverviewState {
       .finally(() => {
         if (active && generation === requestGeneration.current) {
           setIsLoading(false)
+          setLoadedRequestKey(requestKey)
         }
       })
 
     return () => {
       active = false
     }
-  }, [api, attempt])
+  }, [api, attempt, publicUserId, requestKey])
 
   const retry = useCallback(() => {
     setData(null)
@@ -70,5 +87,11 @@ export function useTownOverview(api: TownApi): TownOverviewState {
     setAttempt((current) => current + 1)
   }, [])
 
-  return { data, isLoading, error, retry }
+  const isCurrentRequest = loadedRequestKey === requestKey
+  return {
+    data: isCurrentRequest ? data : null,
+    isLoading: !isCurrentRequest || isLoading,
+    error: isCurrentRequest ? error : null,
+    retry,
+  }
 }
