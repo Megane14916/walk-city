@@ -4,7 +4,10 @@ import { createSupabaseTownApi } from './town'
 
 type QueryResult = { data: unknown; error: unknown }
 
-function createSupabaseMock(results: Record<string, QueryResult>) {
+function createSupabaseMock(
+  results: Record<string, QueryResult>,
+  rpcResults: Record<string, QueryResult> = {},
+) {
   const selections: Array<{ view: string; columns: string }> = []
   const filters: Array<{ view: string; column: string; value: unknown }> = []
 
@@ -22,10 +25,14 @@ function createSupabaseMock(results: Record<string, QueryResult>) {
       }
     }),
   }))
+  const rpc = vi.fn((name: string) =>
+    Promise.resolve(rpcResults[name] ?? { data: null, error: null }),
+  )
 
   return {
-    client: { from } as unknown as SupabaseClient,
+    client: { from, rpc } as unknown as SupabaseClient,
     from,
+    rpc,
     selections,
     filters,
   }
@@ -84,6 +91,20 @@ const PUBLIC_TOWN_ROW = {
   town_id: '50000000-0000-4000-8000-000000000001',
   town_name: '公開タウン',
   coins: undefined,
+}
+
+const REQUEST_ID = '60000000-0000-4000-8000-000000000001'
+const MUTATION_ROW = {
+  building: {
+    ...BUILDING_ROW,
+    id: '70000000-0000-4000-8000-000000000001',
+    anchor_x: 40,
+    anchor_y: 40,
+    updated_at: '2026-08-29T01:00:00.000Z',
+  },
+  coin_balance: '950',
+  population: '20',
+  updated_at: '2026-08-29T01:00:00.000Z',
 }
 
 describe('createSupabaseTownApi', () => {
@@ -263,15 +284,122 @@ describe('createSupabaseTownApi', () => {
     })
   })
 
-  it('keeps mutation APIs unavailable until their implementation phases', async () => {
-    const api = createSupabaseTownApi(createSupabaseMock({}).client)
+  it('calls place_building with only trusted RPC inputs and maps the result', async () => {
+    const mock = createSupabaseMock({}, {
+      place_building: { data: MUTATION_ROW, error: null },
+    })
+    const api = createSupabaseTownApi(mock.client)
 
     await expect(
       api.placeBuilding({
         buildingTypeCode: 'small_house',
         anchorX: 40,
         anchorY: 40,
-        requestId: crypto.randomUUID(),
+        requestId: REQUEST_ID,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      data: {
+        building: {
+          id: MUTATION_ROW.building.id,
+          buildingTypeCode: 'small_house',
+          customName: null,
+          anchorX: 40,
+          anchorY: 40,
+          createdAt: BUILDING_ROW.created_at,
+          updatedAt: MUTATION_ROW.building.updated_at,
+        },
+        coinBalance: 950,
+        population: 20,
+        updatedAt: MUTATION_ROW.updated_at,
+      },
+    })
+    expect(mock.rpc).toHaveBeenCalledWith('place_building', {
+      p_building_type_code: 'small_house',
+      p_anchor_x: 40,
+      p_anchor_y: 40,
+      p_request_id: REQUEST_ID,
+    })
+  })
+
+  it('moves a building without sending or deducting coins', async () => {
+    const moveResult = { ...MUTATION_ROW, coin_balance: '1000' }
+    const mock = createSupabaseMock({}, {
+      move_building: { data: moveResult, error: null },
+    })
+    const api = createSupabaseTownApi(mock.client)
+
+    await expect(
+      api.moveBuilding({
+        buildingId: MUTATION_ROW.building.id,
+        anchorX: 41,
+        anchorY: 40,
+        requestId: REQUEST_ID,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { coinBalance: 1000, population: 20 },
+    })
+    expect(mock.rpc).toHaveBeenCalledWith('move_building', {
+      p_building_id: MUTATION_ROW.building.id,
+      p_anchor_x: 41,
+      p_anchor_y: 40,
+      p_request_id: REQUEST_ID,
+    })
+  })
+
+  it('rejects invalid mutation input before calling RPC', async () => {
+    const mock = createSupabaseMock({})
+    const api = createSupabaseTownApi(mock.client)
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'small_house',
+        anchorX: 40,
+        anchorY: 40,
+        requestId: 'not-a-uuid',
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } })
+    expect(mock.rpc).not.toHaveBeenCalled()
+  })
+
+  it('maps ownership and malformed mutation responses safely', async () => {
+    const denied = createSupabaseMock({}, {
+      move_building: {
+        data: null,
+        error: { code: '42501', message: 'private database detail' },
+      },
+    })
+    const malformed = createSupabaseMock({}, {
+      place_building: { data: { ...MUTATION_ROW, coin_balance: '-1' }, error: null },
+    })
+
+    await expect(
+      createSupabaseTownApi(denied.client).moveBuilding({
+        buildingId: MUTATION_ROW.building.id,
+        anchorX: 40,
+        anchorY: 40,
+        requestId: REQUEST_ID,
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'NOT_OWNER' } })
+    await expect(
+      createSupabaseTownApi(malformed.client).placeBuilding({
+        buildingTypeCode: 'small_house',
+        anchorX: 40,
+        anchorY: 40,
+        requestId: REQUEST_ID,
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'INTERNAL_ERROR' } })
+  })
+
+  it('keeps later-phase mutation APIs unavailable', async () => {
+    const api = createSupabaseTownApi(createSupabaseMock({}).client)
+
+    await expect(
+      api.placeRoadLine({
+        buildingTypeCode: 'road',
+        cells: [{ x: 40, y: 40 }],
+        requestId: REQUEST_ID,
       }),
     ).resolves.toEqual({
       ok: false,

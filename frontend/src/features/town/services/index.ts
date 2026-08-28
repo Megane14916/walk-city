@@ -6,5 +6,6 @@ export {
 export {
   createSupabaseTownApi,
   type SupabaseTownApiOptions,
+  type SupabaseTownRpcNames,
   type SupabaseTownViewNames,
 } from './town'

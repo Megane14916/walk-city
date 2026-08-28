@@ -19,14 +19,29 @@ export type SupabaseTownViewNames = {
   publicTownDetails: string
 }
 
+export type SupabaseTownRpcNames = {
+  placeBuilding: string
+  moveBuilding: string
+  placeRoadLine: string
+  unlockLand: string
+}
+
 export type SupabaseTownApiOptions = {
   viewNames?: Partial<SupabaseTownViewNames>
+  rpcNames?: Partial<SupabaseTownRpcNames>
 }
 
 const DEFAULT_VIEW_NAMES: SupabaseTownViewNames = {
   buildingCatalog: 'building_catalog_view',
   myTownDetails: 'my_town_details_view',
   publicTownDetails: 'public_town_details_view',
+}
+
+const DEFAULT_RPC_NAMES: SupabaseTownRpcNames = {
+  placeBuilding: 'place_building',
+  moveBuilding: 'move_building',
+  placeRoadLine: 'place_road_line',
+  unlockLand: 'unlock_land',
 }
 
 const CATALOG_COLUMNS = [
@@ -226,6 +241,36 @@ function mapPlacedBuilding(value: unknown): TownDetail['buildings'][number] | nu
   }
 }
 
+function unwrapRpcData(value: unknown): unknown {
+  return Array.isArray(value) && value.length === 1 ? value[0] : value
+}
+
+function mapTownMutationResult(value: unknown): TownMutationResult | null {
+  const data = unwrapRpcData(value)
+  if (!isRecord(data)) return null
+
+  const building = mapPlacedBuilding(data.building)
+  const coinBalance = toSafeInteger(data.coin_balance)
+  const population = toSafeInteger(data.population)
+  if (
+    building === null ||
+    coinBalance === undefined ||
+    coinBalance < 0 ||
+    population === undefined ||
+    population < 0 ||
+    !isNonEmptyString(data.updated_at)
+  ) {
+    return null
+  }
+
+  return {
+    building,
+    coinBalance,
+    population,
+    updatedAt: data.updated_at,
+  }
+}
+
 function mapUnlockedArea(value: unknown): TownDetail['unlockedAreas'][number] | null {
   if (!isRecord(value)) return null
 
@@ -334,6 +379,7 @@ export function createSupabaseTownApi(
   options: SupabaseTownApiOptions = {},
 ): TownApi {
   const viewNames = { ...DEFAULT_VIEW_NAMES, ...options.viewNames }
+  const rpcNames = { ...DEFAULT_RPC_NAMES, ...options.rpcNames }
 
   return {
     async getBuildingCatalog() {
@@ -421,14 +467,74 @@ export function createSupabaseTownApi(
       }
     },
 
-    async placeBuilding(): Promise<ApiResult<TownMutationResult>> {
-      return unavailableMutation()
+    async placeBuilding(input): Promise<ApiResult<TownMutationResult>> {
+      if (
+        !isNonEmptyString(input.buildingTypeCode) ||
+        !Number.isSafeInteger(input.anchorX) ||
+        input.anchorX < 0 ||
+        !Number.isSafeInteger(input.anchorY) ||
+        input.anchorY < 0 ||
+        !UUID_PATTERN.test(input.requestId)
+      ) {
+        return failure('INVALID_INPUT', '配置内容を確認してください。')
+      }
+
+      try {
+        const { data, error } = await supabase.rpc(rpcNames.placeBuilding, {
+          p_building_type_code: input.buildingTypeCode,
+          p_anchor_x: input.anchorX,
+          p_anchor_y: input.anchorY,
+          p_request_id: input.requestId,
+        })
+        if (error) {
+          return supabaseFailure(error, {
+            fallbackMessage: '建物を配置できませんでした。',
+          })
+        }
+
+        const result = mapTownMutationResult(data)
+        return result
+          ? { ok: true, data: result }
+          : failure('INTERNAL_ERROR', '建物を配置できませんでした。')
+      } catch {
+        return failure('INTERNAL_ERROR', '建物を配置できませんでした。')
+      }
     },
     async placeRoadLine(): Promise<ApiResult<PlaceRoadLineResult>> {
       return unavailableMutation()
     },
-    async moveBuilding(): Promise<ApiResult<TownMutationResult>> {
-      return unavailableMutation()
+    async moveBuilding(input): Promise<ApiResult<TownMutationResult>> {
+      if (
+        !UUID_PATTERN.test(input.buildingId) ||
+        !Number.isSafeInteger(input.anchorX) ||
+        input.anchorX < 0 ||
+        !Number.isSafeInteger(input.anchorY) ||
+        input.anchorY < 0 ||
+        !UUID_PATTERN.test(input.requestId)
+      ) {
+        return failure('INVALID_INPUT', '移動内容を確認してください。')
+      }
+
+      try {
+        const { data, error } = await supabase.rpc(rpcNames.moveBuilding, {
+          p_building_id: input.buildingId,
+          p_anchor_x: input.anchorX,
+          p_anchor_y: input.anchorY,
+          p_request_id: input.requestId,
+        })
+        if (error) {
+          return supabaseFailure(error, {
+            fallbackMessage: '建物を移動できませんでした。',
+          })
+        }
+
+        const result = mapTownMutationResult(data)
+        return result
+          ? { ok: true, data: result }
+          : failure('INTERNAL_ERROR', '建物を移動できませんでした。')
+      } catch {
+        return failure('INTERNAL_ERROR', '建物を移動できませんでした。')
+      }
     },
     async renameBuilding(): Promise<ApiResult<RenameBuildingResult>> {
       return unavailableMutation()

@@ -297,6 +297,7 @@ describe('TownOverview', () => {
 
   it('keeps the move selection and allows retrying after an API error', async () => {
     const api = createMockTownApi({ latencyMs: 0 })
+    const moveBuilding = vi.spyOn(api, 'moveBuilding')
     api.setFailure('moveBuilding', 'INTERNAL_ERROR')
     render(<TownOverview api={api} />)
     await screen.findByRole('heading', { name: 'グリーンタウン' })
@@ -328,6 +329,10 @@ describe('TownOverview', () => {
     expect(api.getTownSnapshot().buildings.find(
       (building) => building.id === 'mock-house-001',
     )).toMatchObject({ anchorX: 41, anchorY: 50 })
+    expect(moveBuilding).toHaveBeenCalledTimes(2)
+    expect(moveBuilding.mock.calls[1][0].requestId).toBe(
+      moveBuilding.mock.calls[0][0].requestId,
+    )
   })
 
   it('purchases a large house for 200 coins and increases population by 50', async () => {

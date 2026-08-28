@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ApiError, ApiResult } from '../../../types/common'
+import type { ApiError, ApiErrorCode, ApiResult } from '../../../types/common'
 import type { TownApi } from '../api'
 import type {
   BuildingCatalogItem,
@@ -20,6 +20,12 @@ type TownOverviewData = {
   town: TownDetail
   catalog: BuildingCatalogItem[]
 }
+
+const REFRESH_AFTER_MUTATION_ERROR = new Set<ApiErrorCode>([
+  'CONFLICT',
+  'CELL_OCCUPIED',
+  'INSUFFICIENT_COINS',
+])
 
 export type TownOverviewState = {
   data: TownOverviewData | null
@@ -128,7 +134,10 @@ export function useTownOverview(
         return { ok: false, error: UNEXPECTED_ERROR }
       }
 
-      if (!result.ok) return result
+      if (!result.ok) {
+        if (REFRESH_AFTER_MUTATION_ERROR.has(result.error.code)) retry()
+        return result
+      }
 
       setData((current) => {
         if (!current) return current
@@ -159,7 +168,7 @@ export function useTownOverview(
 
       return result
     },
-    [api],
+    [api, retry],
   )
   const moveBuilding = useCallback(
     async (
@@ -173,7 +182,10 @@ export function useTownOverview(
         return { ok: false, error: UNEXPECTED_ERROR }
       }
 
-      if (!result.ok) return result
+      if (!result.ok) {
+        if (REFRESH_AFTER_MUTATION_ERROR.has(result.error.code)) retry()
+        return result
+      }
 
       setData((current) => {
         if (!current || current.town.editable !== true) return current
@@ -198,7 +210,7 @@ export function useTownOverview(
 
       return result
     },
-    [api],
+    [api, retry],
   )
   const applyStepSyncResult = useCallback((result: StepSyncStatus) => {
     setData((current) => {
