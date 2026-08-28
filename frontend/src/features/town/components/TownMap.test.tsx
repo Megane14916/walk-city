@@ -270,6 +270,25 @@ describe('TownOverview', () => {
     ).toMatchObject({ anchorX: 41, anchorY: 50 })
   })
 
+  it('hides only rename controls when the production API does not support them', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    Object.defineProperty(api, 'supportsBuildingRename', { value: false })
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    const map = screen.getByRole('application', {
+      name: /グリーンタウンのマップ/,
+    })
+    fireEvent.click(map, { clientX: 227, clientY: 267 })
+
+    expect(
+      screen.queryByRole('textbox', { name: '建物の表示名' }),
+    ).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'この建物を移動する' }),
+    ).not.toBeNull()
+  })
+
   it('does not submit a move when the current position is selected', async () => {
     const api = createMockTownApi({ latencyMs: 0 })
     render(<TownOverview api={api} />)

@@ -241,7 +241,10 @@ export function useTownOverview(
         return { ok: false, error: UNEXPECTED_ERROR }
       }
 
-      if (!result.ok) return result
+      if (!result.ok) {
+        if (REFRESH_AFTER_MUTATION_ERROR.has(result.error.code)) retry()
+        return result
+      }
 
       setData((current) => {
         if (!current || current.town.editable !== true) return current
@@ -268,7 +271,7 @@ export function useTownOverview(
 
       return result
     },
-    [api],
+    [api, retry],
   )
 
   const unlockLand = useCallback(
@@ -281,7 +284,10 @@ export function useTownOverview(
         return { ok: false, error: UNEXPECTED_ERROR }
       }
 
-      if (!result.ok) return result
+      if (!result.ok) {
+        if (REFRESH_AFTER_MUTATION_ERROR.has(result.error.code)) retry()
+        return result
+      }
 
       setData((current) => {
         if (!current || current.town.editable !== true) return current
@@ -309,7 +315,7 @@ export function useTownOverview(
 
       return result
     },
-    [api],
+    [api, retry],
   )
 
   const renameBuilding = useCallback(

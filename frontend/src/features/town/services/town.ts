@@ -271,6 +271,50 @@ function mapTownMutationResult(value: unknown): TownMutationResult | null {
   }
 }
 
+function mapPlaceRoadLineResult(value: unknown): PlaceRoadLineResult | null {
+  const data = unwrapRpcData(value)
+  if (!isRecord(data) || !Array.isArray(data.buildings)) return null
+
+  const buildings = data.buildings.map(mapPlacedBuilding)
+  const coinBalance = toSafeInteger(data.coin_balance)
+  const population = toSafeInteger(data.population)
+  if (
+    buildings.some((building) => building === null) ||
+    coinBalance === undefined ||
+    coinBalance < 0 ||
+    population === undefined ||
+    population < 0 ||
+    !isNonEmptyString(data.updated_at)
+  ) {
+    return null
+  }
+
+  return {
+    buildings: buildings as PlaceRoadLineResult['buildings'],
+    coinBalance,
+    population,
+    updatedAt: data.updated_at,
+  }
+}
+
+function mapUnlockLandResult(value: unknown): UnlockLandResult | null {
+  const data = unwrapRpcData(value)
+  if (!isRecord(data)) return null
+
+  const unlockedArea = mapUnlockedArea(data.unlocked_area)
+  const coinBalance = toSafeInteger(data.coin_balance)
+  if (
+    unlockedArea === null ||
+    coinBalance === undefined ||
+    coinBalance < 0 ||
+    !isNonEmptyString(data.updated_at)
+  ) {
+    return null
+  }
+
+  return { unlockedArea, coinBalance, updatedAt: data.updated_at }
+}
+
 function mapUnlockedArea(value: unknown): TownDetail['unlockedAreas'][number] | null {
   if (!isRecord(value)) return null
 
@@ -382,6 +426,7 @@ export function createSupabaseTownApi(
   const rpcNames = { ...DEFAULT_RPC_NAMES, ...options.rpcNames }
 
   return {
+    supportsBuildingRename: false,
     async getBuildingCatalog() {
       try {
         const { data, error } = await supabase
@@ -500,8 +545,44 @@ export function createSupabaseTownApi(
         return failure('INTERNAL_ERROR', '建物を配置できませんでした。')
       }
     },
-    async placeRoadLine(): Promise<ApiResult<PlaceRoadLineResult>> {
-      return unavailableMutation()
+    async placeRoadLine(input): Promise<ApiResult<PlaceRoadLineResult>> {
+      const cellKeys = new Set(input.cells.map((cell) => `${cell.x}:${cell.y}`))
+      if (
+        input.buildingTypeCode !== 'road' ||
+        input.cells.length < 1 ||
+        input.cells.length > 100 ||
+        cellKeys.size !== input.cells.length ||
+        input.cells.some(
+          (cell) =>
+            !Number.isSafeInteger(cell.x) ||
+            cell.x < 0 ||
+            !Number.isSafeInteger(cell.y) ||
+            cell.y < 0,
+        ) ||
+        !UUID_PATTERN.test(input.requestId)
+      ) {
+        return failure('INVALID_INPUT', '道路の配置内容を確認してください。')
+      }
+
+      try {
+        const { data, error } = await supabase.rpc(rpcNames.placeRoadLine, {
+          p_building_type_code: input.buildingTypeCode,
+          p_cells: input.cells,
+          p_request_id: input.requestId,
+        })
+        if (error) {
+          return supabaseFailure(error, {
+            fallbackMessage: '道路を配置できませんでした。',
+          })
+        }
+
+        const result = mapPlaceRoadLineResult(data)
+        return result
+          ? { ok: true, data: result }
+          : failure('INTERNAL_ERROR', '道路を配置できませんでした。')
+      } catch {
+        return failure('INTERNAL_ERROR', '道路を配置できませんでした。')
+      }
     },
     async moveBuilding(input): Promise<ApiResult<TownMutationResult>> {
       if (
@@ -539,8 +620,36 @@ export function createSupabaseTownApi(
     async renameBuilding(): Promise<ApiResult<RenameBuildingResult>> {
       return unavailableMutation()
     },
-    async unlockLand(): Promise<ApiResult<UnlockLandResult>> {
-      return unavailableMutation()
+    async unlockLand(input): Promise<ApiResult<UnlockLandResult>> {
+      if (
+        !Number.isSafeInteger(input.x) ||
+        input.x < 0 ||
+        !Number.isSafeInteger(input.y) ||
+        input.y < 0 ||
+        !UUID_PATTERN.test(input.requestId)
+      ) {
+        return failure('INVALID_INPUT', '土地開放の内容を確認してください。')
+      }
+
+      try {
+        const { data, error } = await supabase.rpc(rpcNames.unlockLand, {
+          p_x: input.x,
+          p_y: input.y,
+          p_request_id: input.requestId,
+        })
+        if (error) {
+          return supabaseFailure(error, {
+            fallbackMessage: '土地を開放できませんでした。',
+          })
+        }
+
+        const result = mapUnlockLandResult(data)
+        return result
+          ? { ok: true, data: result }
+          : failure('INTERNAL_ERROR', '土地を開放できませんでした。')
+      } catch {
+        return failure('INTERNAL_ERROR', '土地を開放できませんでした。')
+      }
     },
   }
 }

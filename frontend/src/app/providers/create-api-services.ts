@@ -136,6 +136,7 @@ function createLazySupabaseServiceBundle(
   }
 
   const townApi: TownApi = {
+    supportsBuildingRename: false,
     async getBuildingCatalog() {
       return (await loadService()).townApi.getBuildingCatalog()
     },

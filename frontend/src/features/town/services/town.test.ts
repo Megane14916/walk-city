@@ -392,21 +392,103 @@ describe('createSupabaseTownApi', () => {
     ).resolves.toMatchObject({ ok: false, error: { code: 'INTERNAL_ERROR' } })
   })
 
-  it('keeps later-phase mutation APIs unavailable', async () => {
-    const api = createSupabaseTownApi(createSupabaseMock({}).client)
+  it('calls the road-line RPC with one atomic request and maps its result', async () => {
+    const roadResult = {
+      buildings: [
+        { ...BUILDING_ROW, id: '80000000-0000-4000-8000-000000000001' },
+        {
+          ...BUILDING_ROW,
+          id: '80000000-0000-4000-8000-000000000002',
+          anchor_x: 44,
+        },
+      ],
+      coin_balance: '900',
+      population: '20',
+      updated_at: '2026-08-29T02:00:00.000Z',
+    }
+    const mock = createSupabaseMock({}, {
+      place_road_line: { data: roadResult, error: null },
+    })
+    const api = createSupabaseTownApi(mock.client)
+    const cells = [{ x: 43, y: 49 }, { x: 44, y: 49 }]
 
     await expect(
       api.placeRoadLine({
         buildingTypeCode: 'road',
-        cells: [{ x: 40, y: 40 }],
+        cells,
         requestId: REQUEST_ID,
       }),
-    ).resolves.toEqual({
-      ok: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: '街更新APIは現在準備中です。',
+    ).resolves.toMatchObject({
+      ok: true,
+      data: {
+        buildings: [{ anchorX: 43 }, { anchorX: 44 }],
+        coinBalance: 900,
+        population: 20,
       },
     })
+    expect(mock.rpc).toHaveBeenCalledWith('place_road_line', {
+      p_building_type_code: 'road',
+      p_cells: cells,
+      p_request_id: REQUEST_ID,
+    })
+  })
+
+  it('calls the coordinate-based land-unlock RPC and maps its result', async () => {
+    const mock = createSupabaseMock({}, {
+      unlock_land: {
+        data: {
+          unlocked_area: { x: 20, y: 40, width: 20, height: 20 },
+          coin_balance: '0',
+          updated_at: '2026-08-29T03:00:00.000Z',
+        },
+        error: null,
+      },
+    })
+    const api = createSupabaseTownApi(mock.client)
+
+    await expect(
+      api.unlockLand({ x: 20, y: 40, requestId: REQUEST_ID }),
+    ).resolves.toEqual({
+      ok: true,
+      data: {
+        unlockedArea: { x: 20, y: 40, width: 20, height: 20 },
+        coinBalance: 0,
+        updatedAt: '2026-08-29T03:00:00.000Z',
+      },
+    })
+    expect(mock.rpc).toHaveBeenCalledWith('unlock_land', {
+      p_x: 20,
+      p_y: 40,
+      p_request_id: REQUEST_ID,
+    })
+  })
+
+  it('rejects malformed road and land inputs before calling RPC', async () => {
+    const mock = createSupabaseMock({})
+    const api = createSupabaseTownApi(mock.client)
+
+    await expect(
+      api.placeRoadLine({
+        buildingTypeCode: 'road',
+        cells: [{ x: 40, y: 40 }, { x: 40, y: 40 }],
+        requestId: REQUEST_ID,
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } })
+    await expect(
+      api.unlockLand({ x: -20, y: 40, requestId: REQUEST_ID }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } })
+    expect(mock.rpc).not.toHaveBeenCalled()
+  })
+
+  it('advertises that building rename is unavailable in production', async () => {
+    const api = createSupabaseTownApi(createSupabaseMock({}).client)
+
+    expect(api.supportsBuildingRename).toBe(false)
+    await expect(
+      api.renameBuilding({
+        buildingId: BUILDING_ROW.id,
+        customName: '新しい名前',
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'INTERNAL_ERROR' } })
   })
 })

@@ -5,6 +5,7 @@ export type BuildingDetailPanelProps = {
   building: PlacedBuilding
   item: BuildingCatalogItem
   editable: boolean
+  canRename?: boolean
   isSaving: boolean
   errorMessage: string | null
   onClose: () => void
@@ -49,6 +50,7 @@ export function BuildingDetailPanel({
   building,
   item,
   editable,
+  canRename = true,
   isSaving,
   errorMessage,
   onClose,
@@ -182,7 +184,7 @@ export function BuildingDetailPanel({
           この建物を移動する
         </button>
       )}
-      {editable && (
+      {editable && canRename && (
         <form
           className="mt-3 rounded-2xl border border-[#cfe0d8] bg-[#e8f3ee] p-3"
           onSubmit={submitName}
