@@ -21,7 +21,6 @@
 - **Google Health API**: ユーザーの歩数データを取得するために使用します。ユーザーの同意が必要です。
 - **Supabase Database**: データベースおよびEdge Functionsを提供します。ユーザーのプロフィールや街のデータを管理します。
 - **Supabase Auth**: Googleログインを提供し、ユーザーの認証とセッション管理を行います。
-- **Vercel**: フロントエンドのホスティングに使用します。Reactアプリケーションをデプロイします。
 
 # 要件
 
@@ -35,6 +34,8 @@
 ```
 -.github/
   copilot-instructions.md # 本ファイル
+- .vscode/
+  - settings.json # VSCodeの設定ファイル
 - docs/ # 一部ファイルのみ抜粋
   - API計画書.md
   - architecture.md
@@ -49,4 +50,6 @@
   - functions/
     - google_health_fetch/
       - index.ts # Google Health APIから歩数データを取得するためのSupabase Edge Function
+    - test_function/
+      - index.ts # テスト用のSupabase Edge Function
 ```
