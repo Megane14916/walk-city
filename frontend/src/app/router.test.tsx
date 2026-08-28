@@ -382,7 +382,7 @@ describe('AppRoutes', () => {
     ).not.toBeNull()
   })
 
-  it('navigates from a ranking item to the placeholder user page', async () => {
+  it('navigates from a ranking item through the user page to the public town', async () => {
     await mockGoogleIntegrationApi.signInWithGoogle()
     renderRoute(paths.ranking)
 
@@ -393,10 +393,50 @@ describe('AppRoutes', () => {
 
     expect(
       await screen.findByRole('heading', {
-        name: 'ユーザーページは準備中です',
+        name: 'あかり',
       }),
     ).not.toBeNull()
-    expect(screen.getByText('mock-ranking-user-001')).not.toBeNull()
+    expect(
+      screen.getByRole('heading', { name: 'サンライズシティ' }),
+    ).not.toBeNull()
+    expect(screen.getByText('500')).not.toBeNull()
+    expect(screen.queryByText('mock-ranking-user-001')).toBeNull()
+
+    fireEvent.click(
+      screen.getByRole('link', { name: /このユーザーの街を訪問/ }),
+    )
+
+    expect(
+      await screen.findByRole('application', {
+        name: /サンライズシティのマップ/,
+      }),
+    ).not.toBeNull()
+    expect(screen.queryByText('今日の歩数')).toBeNull()
+    expect(screen.queryByText('所持コイン数')).toBeNull()
+  })
+
+  it('shows a safe page-level error for a missing public user', async () => {
+    await mockGoogleIntegrationApi.signInWithGoogle()
+    renderRoute(paths.user('missing-user'))
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'ユーザーを見つけられませんでした',
+      }),
+    ).not.toBeNull()
+    expect(
+      screen.getByRole('link', { name: 'ランキングへ戻る' }).getAttribute('href'),
+    ).toBe(paths.ranking)
+  })
+
+  it('redirects an unauthenticated user-page request to login', async () => {
+    renderRoute(paths.user(MOCK_PUBLIC_USER_ID))
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /今日の一歩から、街づくりを始めよう。/,
+      }),
+    ).not.toBeNull()
   })
 
   it('shows a not-found page for an undefined route', () => {

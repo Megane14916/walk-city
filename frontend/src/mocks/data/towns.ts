@@ -3,6 +3,7 @@ import type {
   PlacedBuilding,
   TownDetail,
 } from '../../features/town/types'
+import { MOCK_RANKING_ENTRIES } from './rankings'
 
 const MOCK_TIMESTAMP = '2026-08-26T00:00:00.000Z'
 
@@ -289,7 +290,22 @@ export const MOCK_PUBLIC_INVALID_POPULATION_TOWN = createPublicProfileTown(
   Number.NaN,
 )
 
+export const MOCK_RANKING_PUBLIC_TOWNS: Record<string, TownDetail> =
+  Object.fromEntries(
+    MOCK_RANKING_ENTRIES.map((entry) => [
+      entry.userId,
+      createPublicProfileTown(
+        entry.userId,
+        entry.townId,
+        entry.displayName,
+        entry.townName,
+        entry.population,
+      ),
+    ]),
+  )
+
 export const MOCK_PUBLIC_TOWNS: Record<string, TownDetail> = {
+  ...MOCK_RANKING_PUBLIC_TOWNS,
   [MOCK_PUBLIC_USER_ID]: MOCK_PUBLIC_TOWN,
   [MOCK_PUBLIC_LONG_NAME_USER_ID]: MOCK_PUBLIC_LONG_NAME_TOWN,
   [MOCK_PUBLIC_ZERO_POPULATION_USER_ID]: MOCK_PUBLIC_ZERO_POPULATION_TOWN,
