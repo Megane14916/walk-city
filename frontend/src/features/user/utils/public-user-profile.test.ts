@@ -48,7 +48,7 @@ describe('toPublicUserProfile', () => {
       buildings: [
         {
           id: 'building-001',
-          buildingTypeCode: 'house-small',
+          buildingTypeCode: 'small_house',
           customName: null,
           anchorX: 40,
           anchorY: 40,

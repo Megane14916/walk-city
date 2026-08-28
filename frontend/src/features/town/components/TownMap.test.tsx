@@ -94,7 +94,7 @@ describe('TownMap', () => {
     render(<TownMap town={MOCK_MY_TOWN} catalog={[]} />)
 
     expect(
-      screen.getByRole('img', { name: /^不明な建物（house-small）、/ }),
+      screen.getByRole('img', { name: /^不明な建物（small_house）、/ }),
     ).not.toBeNull()
   })
 })
@@ -179,7 +179,7 @@ describe('TownOverview', () => {
     expect(within(menu).getByText('70人')).not.toBeNull()
     expect(api.getTownSnapshot().town.population).toBe(70)
     expect(api.getTownSnapshot().buildings.at(-1)).toMatchObject({
-      buildingTypeCode: 'house-small',
+      buildingTypeCode: 'small_house',
       anchorX: 41,
       anchorY: 50,
     })
@@ -390,7 +390,7 @@ describe('TownOverview', () => {
     expect(screen.getByText('1,850')).not.toBeNull()
     expect(api.getTownSnapshot().town.population).toBe(60)
     expect(api.getTownSnapshot().buildings.at(-1)).toMatchObject({
-      buildingTypeCode: 'park',
+      buildingTypeCode: 'small_park',
       anchorX: 41,
       anchorY: 50,
     })

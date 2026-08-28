@@ -96,20 +96,20 @@ Supabase Realtime による常時購読は今回の必須要件に含めない�
 
 Providerへの統合は完了しているが、`createUnavailableSupabaseRankingApi()` が固定の準備中エラーを返す。本番用 `createSupabaseRankingApi()` が必要である。
 
-### 4.3 マーケット表示値がハードコードされている
+### 4.3 マーケット表示は固定10商品とする
 
-購入可否は `BuildingCatalogItem[]` を参照しているが、マーケットに表示する名前、価格、サイズ、効果は `features/market/data/market-items.ts` の固定値である。
+マーケットに表示する名前、価格、サイズ、効果は`features/market/data/market-items.ts`の固定10商品を正とする。購入・配置できるかどうかは、Supabaseから取得した`BuildingCatalogItem[]`の`code`、`enabled`、`costCoins`を参照する。土地開放は建物カタログ外のローカル商品として表示する。
 
-さらに、上位 API 文書の code と現行モックの code に差がある。
+旧フロントエンドcodeは次の正式codeへ統一した。
 
-| 上位文書の例 | 現行フロントエンドの例 |
+| 正式code | 旧フロントエンドcode |
 |---|---|
 | `small_house` | `house-small` |
 | `small_park` | `park` |
 | `commercial` | `commercial-facility` |
 | `town_hall` | `city-hall` |
 
-本番接続前にバックエンドの正式 code を確定し、API カタログを表示値の正とする必要がある。
+住宅（大）は`apartment`を正式codeとして本番採用する。
 
 ### 4.4 正式 API 契約と現行 UI に差がある
 
@@ -254,16 +254,16 @@ type ApiServices = {
 
 完了条件: Supabaseモードで `/`、`/town/:userId`、`/users/:userId` が実データを表示する。
 
-### Phase 3: カタログ表示のデータ駆動化
+### Phase 3: 固定10商品UIと本番カタログの接続
 
-1. マーケットの名前、価格、サイズ、説明、効果を API カタログから生成する。
-2. ローカルにはアイコン、色など表示専用メタデータだけを残す。
-3. 未知の code、category、effect、assetKey の fallback を追加する。
-4. `enabled: false` と `costCoins: null` をそのまま操作制御へ反映する。
-5. 上位文書、モック、本番 DB の building type code を統一する。
-6. 土地開放商品は通常の建物カタログと分離し、正式なサーバー設定がない場合は本番で表示しない。
+1. Phase 3直前のマーケットUIデザインを維持する。
+2. マーケットは住宅（小）、住宅（大）、公園、病院、商業施設、農場、道路、役所、工場、土地開放の10商品を表示する。
+3. 建物商品の購入可否はAPIカタログの`enabled`と`costCoins`で判定する。
+4. 土地開放は通常の建物カタログと分離したローカル商品として表示する。
+5. 住宅（大）の正式codeを`apartment`とし、モックと本番カタログ契約へ追加する。
+6. 工場は効果なしとする。
 
-完了条件: バックエンドで価格・効果・有効状態を変更すると、フロントエンドの再ビルドなしで表示に反映される。
+完了条件: 10商品の旧UIが表示され、建物商品の操作可否は本番カタログに従い、土地開放は従来どおり操作できる。
 
 ### Phase 4: `placeBuilding()` と `moveBuilding()` の本番接続
 

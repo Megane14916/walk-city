@@ -350,28 +350,29 @@ requestIdの保存方式はバックエンド内部実装に委ねるが、RPC�
 
 ## 8. 暫定カタログ設定
 
-正式codeは`バックエンド.md` §6をそのまま採用する。現行フロントエンドの`house-small`、`park`、`commercial-facility`、`city-hall`、`apartment`は本番codeとして採用しない。
+正式codeは`バックエンド.md` §6をそのまま採用する。旧codeの`house-small`、`park`、`commercial-facility`、`city-hall`は本番codeとして採用しない。`apartment`は住宅（大）の正式codeとして採用する。
 
 価格が§6でTBDのため、現在のUI価格を正式codeへ対応させて仮設定する。
 
 | code | name | size | costCoins | enabled | 効果 | 区分 |
 |---|---|---:|---:|---:|---|---|
 | `small_house` | 住宅（小） | 1×1 | 50 | true | population_flat +10 | 効果は`BE確定`、価格は`仮決定` |
-| `small_park` | 公園（小） | 1×1 | 150 | true | なし | 価格は`仮決定` |
+| `apartment` | 住宅（大） | 2×2 | 200 | true | population_flat +50 | ユーザー決定、価格は`仮決定` |
+| `small_park` | 公園 | 1×1 | 150 | true | なし | 価格は`仮決定` |
 | `hospital` | 病院 | 2×2 | 600 | true | なし | 価格は`仮決定` |
 | `commercial` | 商業施設 | 1×1 | 300 | true | step_coin_bonus_flat +50 | 価格・効果量は`仮決定` |
 | `farm` | 農場 | 2×2 | 100 | true | population_flat +5 | 効果は`BE確定`、価格は`仮決定` |
 | `road` | 道路 | 1×1 | 0 | true | enables_adjacent_construction | 価格と隣接規則は`仮決定` |
 | `town_hall` | 役所 | 2×2 | 3000 | true | 効果は保存するが人口計算では無効 | 無効化は`BE確定`、価格は`仮決定` |
-| `factory` | 工場 | 2×2 | 700 | true | step_coin_bonus_flat +50 | 価格・効果量は`仮決定` |
+| `factory` | 工場 | 2×2 | 700 | true | なし | ユーザー決定、価格は`仮決定` |
 
 追加仮決定:
 
 - 道路隣接は上下左右の4方向。斜めは含めない。
 - `town_hall`は`residential_population_bonus = 20`を設定データとして保持するが、範囲・重複が正式決定するまで計算しない。
-- 商業施設・工場の+50は、新規精算歩数が1歩以上ある日の同期で建物1つにつき1日1回だけ付与する。日付・建物IDを冪等性キーへ含める。
+- 商業施設の+50は、新規精算歩数が1歩以上ある日の同期で建物1つにつき1日1回だけ付与する。日付・建物IDを冪等性キーへ含める。
 - 初期ユーザーには1000コインを付与する。§12のデモ案を採用した`仮決定`。
-- 現行フロントエンドだけにある`apartment`は本番カタログから除外する。
+- `apartment`を本番カタログへ含める。
 
 ## 9. 人口・ランキングの整合性
 

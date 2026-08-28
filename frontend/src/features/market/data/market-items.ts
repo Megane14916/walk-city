@@ -7,7 +7,7 @@ import {
 
 export const MARKET_ITEMS: MarketItem[] = [
   {
-    code: 'house-small',
+    code: 'small_house',
     name: '住宅（小）',
     effect: '人口が10人増加',
     costCoins: 50,
@@ -25,7 +25,7 @@ export const MARKET_ITEMS: MarketItem[] = [
     category: 'residential',
   },
   {
-    code: 'park',
+    code: 'small_park',
     name: '公園',
     effect: null,
     costCoins: 150,
@@ -43,7 +43,7 @@ export const MARKET_ITEMS: MarketItem[] = [
     category: 'public',
   },
   {
-    code: 'commercial-facility',
+    code: 'commercial',
     name: '商業施設',
     effect: null,
     costCoins: 300,
@@ -70,7 +70,7 @@ export const MARKET_ITEMS: MarketItem[] = [
     category: 'road',
   },
   {
-    code: 'city-hall',
+    code: 'town_hall',
     name: '役所',
     effect: null,
     costCoins: 3000,
