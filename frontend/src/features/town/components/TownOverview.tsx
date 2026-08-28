@@ -36,6 +36,7 @@ export type TownOverviewProps = {
   stepSyncApi?: StepSyncApi
   rankingApi?: RankingApi
   getUserHref?: (userId: string) => string
+  myTownHref?: string
   healthConnectionHref?: string
   loginHref?: string
   mode?: TownPageMode
@@ -94,6 +95,7 @@ export function TownOverview({
   stepSyncApi,
   rankingApi,
   getUserHref = (userId) => `/users/${encodeURIComponent(userId)}`,
+  myTownHref = '/',
   healthConnectionHref = '/health/connect',
   loginHref = '/login',
   mode = { type: 'self' },
@@ -567,6 +569,16 @@ export function TownOverview({
             </div>
           </div>
 
+          {mode.type === 'public' && (
+            <a
+              className="inline-flex min-h-[58px] min-w-[142px] shrink-0 items-center justify-center gap-2 rounded-[15px] border border-[#b9d8ca] bg-[#dceee6] px-4 text-[11px] font-black text-[#245f51] no-underline shadow-sm transition-[background,transform] hover:-translate-y-px hover:bg-[#cfe8dc]"
+              href={myTownHref}
+            >
+              <span aria-hidden="true">←</span>
+              自分の街に戻る
+            </a>
+          )}
+
           <button
             className={`flex min-h-[58px] min-w-[126px] shrink-0 cursor-pointer items-center gap-2.5 rounded-[15px] border px-3.5 text-left transition-[background,border-color,transform] hover:-translate-y-px ${
               activePanel === 'ranking'
@@ -584,22 +596,24 @@ export function TownOverview({
             <span className="text-[11px] font-black">ランキング</span>
           </button>
 
-          <button
-            className={`flex min-h-[58px] min-w-[126px] shrink-0 cursor-pointer items-center gap-2.5 rounded-[15px] border px-3.5 text-left transition-[background,border-color,transform] hover:-translate-y-px ${
-              activePanel === 'market'
-                ? 'border-[#dfb866] bg-[#fff2cb] text-[#775b19]'
-                : 'border-[#d7ddd6] bg-white/70 text-[#315f56] hover:bg-white'
-            }`}
-            type="button"
-            onClick={() => togglePanel('market')}
-            aria-expanded={activePanel === 'market'}
-            aria-controls="dashboard-side-panel"
-          >
-            <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-[#fff2cb] text-sm" aria-hidden="true">
-              ◇
-            </span>
-            <span className="text-[11px] font-black">マーケット</span>
-          </button>
+          {mode.type === 'self' && (
+            <button
+              className={`flex min-h-[58px] min-w-[126px] shrink-0 cursor-pointer items-center gap-2.5 rounded-[15px] border px-3.5 text-left transition-[background,border-color,transform] hover:-translate-y-px ${
+                activePanel === 'market'
+                  ? 'border-[#dfb866] bg-[#fff2cb] text-[#775b19]'
+                  : 'border-[#d7ddd6] bg-white/70 text-[#315f56] hover:bg-white'
+              }`}
+              type="button"
+              onClick={() => togglePanel('market')}
+              aria-expanded={activePanel === 'market'}
+              aria-controls="dashboard-side-panel"
+            >
+              <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-[#fff2cb] text-sm" aria-hidden="true">
+                ◇
+              </span>
+              <span className="text-[11px] font-black">マーケット</span>
+            </button>
+          )}
 
           <div className="ml-auto flex shrink-0 items-center gap-2 max-[760px]:ml-0">
             <dl className="m-0 flex items-center gap-2">
@@ -779,7 +793,7 @@ export function TownOverview({
         </div>
       )}
 
-      {activePanel && (
+      {activePanel && (mode.type === 'self' || activePanel === 'ranking') && (
         <aside
           className="fixed top-[96px] right-3 bottom-3 z-40 w-[min(520px,calc(100vw-24px))] overflow-y-auto rounded-[22px] border border-[#d3dbd5] bg-[rgba(247,246,240,.97)] shadow-[-18px_20px_55px_rgba(18,55,49,.2)] backdrop-blur-md max-[700px]:top-auto max-[700px]:left-3 max-[700px]:h-[min(68svh,620px)] max-[700px]:w-auto"
           id="dashboard-side-panel"

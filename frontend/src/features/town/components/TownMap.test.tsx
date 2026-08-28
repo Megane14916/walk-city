@@ -532,6 +532,12 @@ describe('TownOverview', () => {
     expect(screen.queryByText('今日の歩数')).toBeNull()
     expect(screen.queryByText('所持コイン数')).toBeNull()
     expect(screen.queryByRole('button', { name: '歩数を同期 ↻' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /マーケット/ })).toBeNull()
+    expect(
+      screen
+        .getByRole('link', { name: '自分の街に戻る' })
+        .getAttribute('href'),
+    ).toBe('/')
     expect(syncSteps).not.toHaveBeenCalled()
   })
 

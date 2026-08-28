@@ -348,6 +348,13 @@ describe('AppRoutes', () => {
     expect(screen.getByText('60人')).not.toBeNull()
     expect(screen.queryByText('今日の歩数')).toBeNull()
     expect(screen.queryByText('所持コイン数')).toBeNull()
+    expect(screen.queryByRole('button', { name: /マーケット/ })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'マーケット' })).toBeNull()
+    expect(
+      screen
+        .getByRole('link', { name: '自分の街に戻る' })
+        .getAttribute('href'),
+    ).toBe(paths.root)
   })
 
   it('replaces an own public-town URL with the authenticated root town', async () => {

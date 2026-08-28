@@ -30,6 +30,7 @@ export function TownPage() {
       stepSyncApi={isPublicTown ? undefined : stepSyncApi}
       rankingApi={rankingApi}
       getUserHref={paths.user}
+      myTownHref={paths.root}
       healthConnectionHref={paths.healthConnect}
       loginHref={paths.login}
       mode={mode}
