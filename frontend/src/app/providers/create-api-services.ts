@@ -1,6 +1,5 @@
 import type { GoogleIntegrationApi } from '../../features/auth/api'
 import type { StepSyncApi } from '../../features/health/api'
-import type { RankingApi } from '../../features/ranking/api'
 import type { TownApi } from '../../features/town/api'
 import {
   getSupabaseClientConfig,
@@ -54,6 +53,7 @@ export function resolveApiMode(
 type SupabaseServiceBundle = {
   googleIntegrationApi: GoogleIntegrationApi
   stepSyncApi: StepSyncApi
+  rankingApi: import('../../features/ranking/api').RankingApi
   townApi: TownApi
 }
 
@@ -68,18 +68,21 @@ function createLazySupabaseServiceBundle(
       import('../../lib/supabase'),
       import('../../features/auth/services'),
       import('../../features/health/services'),
+      import('../../features/ranking/services'),
       import('../../features/town/services'),
     ]).then(
       ([
         { createBrowserSupabaseClient },
         { createSupabaseGoogleIntegrationApi },
         { createSupabaseStepSyncApi },
+        { createSupabaseRankingApi },
         { createSupabaseTownApi },
       ]) => {
         const supabase = createBrowserSupabaseClient(environment)
         return {
           googleIntegrationApi: createSupabaseGoogleIntegrationApi(supabase),
           stepSyncApi: createSupabaseStepSyncApi(supabase),
+          rankingApi: createSupabaseRankingApi(supabase),
           townApi: createSupabaseTownApi(supabase),
         }
       },
@@ -126,6 +129,12 @@ function createLazySupabaseServiceBundle(
     },
   }
 
+  const rankingApi: import('../../features/ranking/api').RankingApi = {
+    async getPopulationRanking(input) {
+      return (await loadService()).rankingApi.getPopulationRanking(input)
+    },
+  }
+
   const townApi: TownApi = {
     async getBuildingCatalog() {
       return (await loadService()).townApi.getBuildingCatalog()
@@ -153,21 +162,7 @@ function createLazySupabaseServiceBundle(
     },
   }
 
-  return { googleIntegrationApi, stepSyncApi, townApi }
-}
-
-function createUnavailableSupabaseRankingApi(): RankingApi {
-  return {
-    async getPopulationRanking() {
-      return {
-        ok: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'ランキングAPIは現在準備中です。',
-        },
-      }
-    },
-  }
+  return { googleIntegrationApi, stepSyncApi, rankingApi, townApi }
 }
 
 export function createApiServices(
@@ -190,6 +185,5 @@ export function createApiServices(
   const supabaseServices = createLazySupabaseServiceBundle(environment)
   return {
     ...supabaseServices,
-    rankingApi: createUnavailableSupabaseRankingApi(),
   }
 }

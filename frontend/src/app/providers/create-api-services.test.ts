@@ -75,14 +75,6 @@ describe('createApiServices', () => {
     expect(typeof services.townApi.getBuildingCatalog).toBe('function')
     expect(typeof services.townApi.getMyTown).toBe('function')
     expect(typeof services.townApi.getPublicTown).toBe('function')
-    await expect(
-      services.rankingApi.getPopulationRanking({}),
-    ).resolves.toEqual({
-      ok: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'ランキングAPIは現在準備中です。',
-      },
-    })
+    expect(typeof services.rankingApi.getPopulationRanking).toBe('function')
   })
 })
