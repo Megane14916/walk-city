@@ -65,20 +65,16 @@ describe('createApiServices', () => {
     ).toThrow('VITE_API_MODE=supabase以外を使用できません。')
   })
 
-  it('does not mix a mock Town into Supabase mode', async () => {
+  it('creates lazy Supabase Town services without mixing mock data', async () => {
     const services = createApiServices({
       VITE_API_MODE: 'supabase',
       VITE_SUPABASE_URL: 'https://example.supabase.co',
       VITE_SUPABASE_PUBLISHABLE_KEY: 'publishable-test-key',
     })
 
-    await expect(services.townApi.getMyTown()).resolves.toEqual({
-      ok: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: '街データAPIは現在準備中です。',
-      },
-    })
+    expect(typeof services.townApi.getBuildingCatalog).toBe('function')
+    expect(typeof services.townApi.getMyTown).toBe('function')
+    expect(typeof services.townApi.getPublicTown).toBe('function')
     await expect(
       services.rankingApi.getPopulationRanking({}),
     ).resolves.toEqual({

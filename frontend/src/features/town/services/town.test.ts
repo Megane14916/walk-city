@@ -1,0 +1,284 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { describe, expect, it, vi } from 'vitest'
+import { createSupabaseTownApi } from './town'
+
+type QueryResult = { data: unknown; error: unknown }
+
+function createSupabaseMock(results: Record<string, QueryResult>) {
+  const selections: Array<{ view: string; columns: string }> = []
+  const filters: Array<{ view: string; column: string; value: unknown }> = []
+
+  const from = vi.fn((view: string) => ({
+    select: vi.fn((columns: string) => {
+      selections.push({ view, columns })
+      const result = results[view] ?? { data: null, error: null }
+      return {
+        order: vi.fn().mockResolvedValue(result),
+        maybeSingle: vi.fn().mockResolvedValue(result),
+        eq: vi.fn((column: string, value: unknown) => {
+          filters.push({ view, column, value })
+          return { maybeSingle: vi.fn().mockResolvedValue(result) }
+        }),
+      }
+    }),
+  }))
+
+  return {
+    client: { from } as unknown as SupabaseClient,
+    from,
+    selections,
+    filters,
+  }
+}
+
+const CATALOG_ROW = {
+  code: 'small_house',
+  name: '住宅（小）',
+  category: 'residential',
+  width: 1,
+  height: 1,
+  cost_coins: '50',
+  enabled: true,
+  description: '人口が増える住宅です',
+  catalog_version: 1,
+  effects: [
+    {
+      effect_type: 'population_flat',
+      value: '10',
+      target_category: null,
+      scope: null,
+      stacking_rule: null,
+      metadata: {},
+    },
+  ],
+}
+
+const BUILDING_ROW = {
+  id: '10000000-0000-4000-8000-000000000001',
+  building_type_code: 'small_house',
+  anchor_x: 43,
+  anchor_y: 49,
+  created_at: '2026-08-29T00:00:00.000Z',
+  updated_at: '2026-08-29T00:00:00.000Z',
+}
+
+const MY_TOWN_ROW = {
+  town_id: '20000000-0000-4000-8000-000000000001',
+  owner_id: '30000000-0000-4000-8000-000000000001',
+  display_name: 'テストユーザー',
+  town_name: 'テストタウン',
+  coins: '1000',
+  population: '10',
+  map_width: 100,
+  map_height: 100,
+  buildings: [BUILDING_ROW],
+  unlocked_areas: [{ x: 40, y: 40, width: 20, height: 20 }],
+  catalog_version: 1,
+}
+
+const PUBLIC_USER_ID = '40000000-0000-4000-8000-000000000001'
+const PUBLIC_TOWN_ROW = {
+  ...MY_TOWN_ROW,
+  owner_id: PUBLIC_USER_ID,
+  display_name: '公開ユーザー',
+  town_id: '50000000-0000-4000-8000-000000000001',
+  town_name: '公開タウン',
+  coins: undefined,
+}
+
+describe('createSupabaseTownApi', () => {
+  it('maps the building catalog view into the frontend contract', async () => {
+    const mock = createSupabaseMock({
+      building_catalog_view: { data: [CATALOG_ROW], error: null },
+    })
+    const api = createSupabaseTownApi(mock.client)
+
+    await expect(api.getBuildingCatalog()).resolves.toEqual({
+      ok: true,
+      data: [
+        {
+          code: 'small_house',
+          name: '住宅（小）',
+          category: 'residential',
+          width: 1,
+          height: 1,
+          costCoins: 50,
+          enabled: true,
+          description: '人口が増える住宅です',
+          effects: [
+            {
+              type: 'population_flat',
+              value: 10,
+              targetCategory: null,
+              scope: null,
+              stackingRule: null,
+              description: '人口を10増やします',
+              metadata: {},
+            },
+          ],
+          assetKey: 'small_house',
+          catalogVersion: 1,
+        },
+      ],
+    })
+    expect(mock.from).toHaveBeenCalledWith('building_catalog_view')
+  })
+
+  it('maps the authenticated town and includes its coin balance', async () => {
+    const mock = createSupabaseMock({
+      my_town_details_view: { data: MY_TOWN_ROW, error: null },
+    })
+    const api = createSupabaseTownApi(mock.client)
+
+    const result = await api.getMyTown()
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        town: {
+          id: MY_TOWN_ROW.town_id,
+          owner: {
+            id: MY_TOWN_ROW.owner_id,
+            displayName: 'テストユーザー',
+          },
+          coins: 1000,
+          population: 10,
+        },
+        buildings: [
+          {
+            buildingTypeCode: 'small_house',
+            customName: null,
+            anchorX: 43,
+            anchorY: 49,
+          },
+        ],
+        obstacles: [],
+        editable: true,
+      },
+    })
+  })
+
+  it('selects only public fields and omits coins from a public town', async () => {
+    const publicRow: Record<string, unknown> = { ...PUBLIC_TOWN_ROW }
+    delete publicRow.coins
+    const mock = createSupabaseMock({
+      public_town_details_view: { data: publicRow, error: null },
+    })
+    const api = createSupabaseTownApi(mock.client)
+
+    const result = await api.getPublicTown(PUBLIC_USER_ID)
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        town: { owner: { id: PUBLIC_USER_ID }, population: 10 },
+        editable: false,
+      },
+    })
+    if (result.ok) expect(result.data.town).not.toHaveProperty('coins')
+    expect(mock.filters).toEqual([
+      {
+        view: 'public_town_details_view',
+        column: 'owner_id',
+        value: PUBLIC_USER_ID,
+      },
+    ])
+    expect(mock.selections[0].columns).not.toContain('coins')
+  })
+
+  it('rejects a non-UUID public user id before querying Supabase', async () => {
+    const mock = createSupabaseMock({})
+    const api = createSupabaseTownApi(mock.client)
+
+    await expect(api.getPublicTown('not-a-uuid')).resolves.toEqual({
+      ok: false,
+      error: {
+        code: 'INVALID_INPUT',
+        message: 'ユーザーを特定できませんでした。',
+      },
+    })
+    expect(mock.from).not.toHaveBeenCalled()
+  })
+
+  it('returns NOT_FOUND when the authenticated town does not exist', async () => {
+    const mock = createSupabaseMock({
+      my_town_details_view: { data: null, error: null },
+    })
+    const api = createSupabaseTownApi(mock.client)
+
+    await expect(api.getMyTown()).resolves.toEqual({
+      ok: false,
+      error: { code: 'NOT_FOUND', message: '街が見つかりませんでした。' },
+    })
+  })
+
+  it('normalizes PostgREST errors without exposing database details', async () => {
+    const mock = createSupabaseMock({
+      my_town_details_view: {
+        data: null,
+        error: { code: '42501', message: 'permission denied for towns' },
+      },
+    })
+    const api = createSupabaseTownApi(mock.client)
+
+    await expect(api.getMyTown()).resolves.toEqual({
+      ok: false,
+      error: {
+        code: 'NOT_OWNER',
+        message: 'この操作を行う権限がありません。',
+      },
+    })
+  })
+
+  it('rejects unsafe bigint values and private public-town fields', async () => {
+    const catalogMock = createSupabaseMock({
+      building_catalog_view: {
+        data: [
+          {
+            ...CATALOG_ROW,
+            cost_coins: '9007199254740992',
+          },
+        ],
+        error: null,
+      },
+    })
+    const publicMock = createSupabaseMock({
+      public_town_details_view: {
+        data: { ...PUBLIC_TOWN_ROW, coins: 10 },
+        error: null,
+      },
+    })
+
+    await expect(
+      createSupabaseTownApi(catalogMock.client).getBuildingCatalog(),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INTERNAL_ERROR' },
+    })
+    await expect(
+      createSupabaseTownApi(publicMock.client).getPublicTown(PUBLIC_USER_ID),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INTERNAL_ERROR' },
+    })
+  })
+
+  it('keeps mutation APIs unavailable until their implementation phases', async () => {
+    const api = createSupabaseTownApi(createSupabaseMock({}).client)
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'small_house',
+        anchorX: 40,
+        anchorY: 40,
+        requestId: crypto.randomUUID(),
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: '街更新APIは現在準備中です。',
+      },
+    })
+  })
+})

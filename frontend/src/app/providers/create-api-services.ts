@@ -6,7 +6,6 @@ import {
   getSupabaseClientConfig,
   type SupabaseClientEnvironment,
 } from '../../lib/supabase-config'
-import type { ApiResult } from '../../types/common'
 import {
   createMockGoogleIntegrationApi,
   createMockRankingApi,
@@ -55,6 +54,7 @@ export function resolveApiMode(
 type SupabaseServiceBundle = {
   googleIntegrationApi: GoogleIntegrationApi
   stepSyncApi: StepSyncApi
+  townApi: TownApi
 }
 
 function createLazySupabaseServiceBundle(
@@ -68,16 +68,19 @@ function createLazySupabaseServiceBundle(
       import('../../lib/supabase'),
       import('../../features/auth/services'),
       import('../../features/health/services'),
+      import('../../features/town/services'),
     ]).then(
       ([
         { createBrowserSupabaseClient },
         { createSupabaseGoogleIntegrationApi },
         { createSupabaseStepSyncApi },
+        { createSupabaseTownApi },
       ]) => {
         const supabase = createBrowserSupabaseClient(environment)
         return {
           googleIntegrationApi: createSupabaseGoogleIntegrationApi(supabase),
           stepSyncApi: createSupabaseStepSyncApi(supabase),
+          townApi: createSupabaseTownApi(supabase),
         }
       },
     )
@@ -123,44 +126,34 @@ function createLazySupabaseServiceBundle(
     },
   }
 
-  return { googleIntegrationApi, stepSyncApi }
-}
-
-function createUnavailableSupabaseTownApi(): TownApi {
-  const unavailable = <T>(): ApiResult<T> => ({
-    ok: false,
-    error: {
-      code: 'INTERNAL_ERROR',
-      message: '街データAPIは現在準備中です。',
-    },
-  })
-
-  return {
+  const townApi: TownApi = {
     async getBuildingCatalog() {
-      return unavailable()
+      return (await loadService()).townApi.getBuildingCatalog()
     },
     async getMyTown() {
-      return unavailable()
+      return (await loadService()).townApi.getMyTown()
     },
-    async getPublicTown() {
-      return unavailable()
+    async getPublicTown(userId) {
+      return (await loadService()).townApi.getPublicTown(userId)
     },
-    async placeBuilding() {
-      return unavailable()
+    async placeBuilding(input) {
+      return (await loadService()).townApi.placeBuilding(input)
     },
-    async placeRoadLine() {
-      return unavailable()
+    async placeRoadLine(input) {
+      return (await loadService()).townApi.placeRoadLine(input)
     },
-    async moveBuilding() {
-      return unavailable()
+    async moveBuilding(input) {
+      return (await loadService()).townApi.moveBuilding(input)
     },
-    async renameBuilding() {
-      return unavailable()
+    async renameBuilding(input) {
+      return (await loadService()).townApi.renameBuilding(input)
     },
-    async unlockLand() {
-      return unavailable()
+    async unlockLand(input) {
+      return (await loadService()).townApi.unlockLand(input)
     },
   }
+
+  return { googleIntegrationApi, stepSyncApi, townApi }
 }
 
 function createUnavailableSupabaseRankingApi(): RankingApi {
@@ -198,6 +191,5 @@ export function createApiServices(
   return {
     ...supabaseServices,
     rankingApi: createUnavailableSupabaseRankingApi(),
-    townApi: createUnavailableSupabaseTownApi(),
   }
 }
