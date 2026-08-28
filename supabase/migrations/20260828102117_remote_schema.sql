@@ -4,7 +4,7 @@ alter default privileges for role "postgres" in schema "public" revoke all on se
 
 alter default privileges for role "postgres" in schema "public" revoke all on sequences from "service_role";
 
-create table "public"."building_effects" (
+create table if not exists "public"."building_effects" (
   "id"                 uuid    not null default gen_random_uuid(),
   "building_type_code" text    not null,
   "effect_type"        text    not null,
@@ -19,7 +19,7 @@ create table "public"."building_effects" (
 alter table "public"."building_effects"
   enable row level security;
 
-create table "public"."building_types" (
+create table if not exists "public"."building_types" (
   "code"            text     not null,
   "name"            text     not null,
   "category"        text     not null default 'other'::text,
@@ -35,7 +35,7 @@ create table "public"."building_types" (
 alter table "public"."building_types"
   enable row level security;
 
-create table "public"."coin_ledger" (
+create table if not exists "public"."coin_ledger" (
   "id"              uuid                     not null default gen_random_uuid(),
   "town_id"         uuid                     not null default gen_random_uuid(),
   "amount"          bigint                   not null,
@@ -50,7 +50,7 @@ create table "public"."coin_ledger" (
 alter table "public"."coin_ledger"
   enable row level security;
 
-create table "public"."daily_step_records" (
+create table if not exists "public"."daily_step_records" (
   "id"             uuid                     not null default gen_random_uuid(),
   "user_id"        uuid                     not null,
   "step_date"      date                     not null,
@@ -64,7 +64,7 @@ create table "public"."daily_step_records" (
 alter table "public"."daily_step_records"
   enable row level security;
 
-create table "public"."placed_buildings" (
+create table if not exists "public"."placed_buildings" (
   "id"                  uuid                     not null default gen_random_uuid(),
   "town_id"             uuid                     not null,
   "building_type_code"  text                     not null,
@@ -79,7 +79,7 @@ create table "public"."placed_buildings" (
 alter table "public"."placed_buildings"
   enable row level security;
 
-create table "public"."profiles" (
+create table if not exists "public"."profiles" (
   "id"           uuid                     not null,
   "display_name" text                     not null,
   "created_at"   timestamp with time zone not null default now(),
@@ -90,7 +90,7 @@ create table "public"."profiles" (
 alter table "public"."profiles"
   enable row level security;
 
-create table "public"."towns" (
+create table if not exists "public"."towns" (
   "town_id"    uuid                     not null default gen_random_uuid(),
   "owner_id"   uuid                     not null,
   "name"       text                     not null,
@@ -107,7 +107,7 @@ create table "public"."towns" (
 alter table "public"."towns"
   enable row level security;
 
-create table "public"."unlocked_areas" (
+create table if not exists "public"."unlocked_areas" (
   "town_id"       uuid     not null,
   "width"         smallint not null,
   "height"        smallint not null,
