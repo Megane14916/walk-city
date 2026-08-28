@@ -40,6 +40,8 @@ export type TownMapProps = {
   viewportClassName?: string
   placement?: {
     item: BuildingCatalogItem
+    operation: 'place' | 'move'
+    displayName?: string
     anchor: Cell | null
     preview: PlacementPreviewStatus | null
     onSelectAnchor: (anchor: Cell) => void
@@ -579,7 +581,7 @@ export function TownMap({
                 height: placement.item.height * MAP_CELL_SIZE - 4,
               }}
               role="img"
-              aria-label={`${placement.item.name}の配置プレビュー、座標${placement.anchor.x},${placement.anchor.y}、${placement.preview?.status === 'valid' ? '配置可能' : '配置不可'}`}
+              aria-label={`${placement.displayName ?? placement.item.name}の${placement.operation === 'move' ? '移動' : '配置'}プレビュー、座標${placement.anchor.x},${placement.anchor.y}、${placement.preview?.status === 'valid' ? '配置可能' : '配置不可'}`}
             >
               {placement.preview?.status === 'valid' ? '✓' : '!'}
             </div>

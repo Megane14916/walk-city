@@ -9,6 +9,7 @@ export type BuildingDetailPanelProps = {
   errorMessage: string | null
   onClose: () => void
   onRename: (customName: string | null) => void
+  onMove?: () => void
 }
 
 const categoryLabels: Record<string, string> = {
@@ -52,6 +53,7 @@ export function BuildingDetailPanel({
   errorMessage,
   onClose,
   onRename,
+  onMove,
 }: BuildingDetailPanelProps) {
   const displayName = building.customName ?? item.name
   const [nameInput, setNameInput] = useState(displayName)
@@ -170,7 +172,16 @@ export function BuildingDetailPanel({
           </p>
         )}
       </section>
-
+      {editable && onMove && (
+        <button
+          className="mt-3 min-h-11 w-full cursor-pointer rounded-xl border border-[#b9d0c5] bg-[#dceee6] px-4 text-[11px] font-black text-[#245f51] hover:bg-[#cfe8dc]"
+          type="button"
+          onClick={onMove}
+          disabled={isSaving}
+        >
+          この建物を移動する
+        </button>
+      )}
       {editable && (
         <form
           className="mt-3 rounded-2xl border border-[#cfe0d8] bg-[#e8f3ee] p-3"
