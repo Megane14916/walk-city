@@ -3,6 +3,7 @@ import type {
   PlacedBuilding,
   TownDetail,
 } from '../../features/town/types'
+import { MOCK_RANKING_ENTRIES } from './rankings'
 
 const MOCK_TIMESTAMP = '2026-08-26T00:00:00.000Z'
 
@@ -202,6 +203,117 @@ export const MOCK_PUBLIC_TOWN: TownDetail = {
   obstacles: [],
   catalogVersion: 1,
   editable: false,
+}
+
+export const MOCK_PUBLIC_LONG_NAME_USER_ID = 'mock-user-long-name'
+export const MOCK_PUBLIC_ZERO_POPULATION_USER_ID = 'mock-user-zero-population'
+export const MOCK_PUBLIC_LARGE_POPULATION_USER_ID =
+  'mock-user-large-population'
+export const MOCK_PUBLIC_OWNER_MISMATCH_USER_ID =
+  'mock-contract-owner-mismatch'
+export const MOCK_PUBLIC_EDITABLE_USER_ID = 'mock-contract-editable'
+export const MOCK_PUBLIC_INVALID_POPULATION_USER_ID =
+  'mock-contract-invalid-population'
+
+function createPublicProfileTown(
+  userId: string,
+  townId: string,
+  displayName: string,
+  townName: string,
+  population: number,
+): TownDetail {
+  return {
+    town: {
+      id: townId,
+      owner: { id: userId, displayName },
+      name: townName,
+      population,
+      mapWidth: 100,
+      mapHeight: 100,
+    },
+    buildings: [],
+    unlockedAreas: [{ x: 40, y: 40, width: 20, height: 20 }],
+    obstacles: [],
+    catalogVersion: 1,
+    editable: false,
+  }
+}
+
+export const MOCK_PUBLIC_LONG_NAME_TOWN = createPublicProfileTown(
+  MOCK_PUBLIC_LONG_NAME_USER_ID,
+  'mock-town-long-name',
+  '毎日の散歩で日本全国の街並みを巡ることを夢見るロングネームウォーカー',
+  '緑と水辺と小さな商店街がどこまでも続くウォーカーフレンドリーシティ',
+  123_456,
+)
+
+export const MOCK_PUBLIC_ZERO_POPULATION_TOWN = createPublicProfileTown(
+  MOCK_PUBLIC_ZERO_POPULATION_USER_ID,
+  'mock-town-zero-population',
+  'はじめてのウォーカー',
+  'これから始まる街',
+  0,
+)
+
+export const MOCK_PUBLIC_LARGE_POPULATION_TOWN = createPublicProfileTown(
+  MOCK_PUBLIC_LARGE_POPULATION_USER_ID,
+  'mock-town-large-population',
+  'メガシティウォーカー',
+  'ウォークメガロポリス',
+  Number.MAX_SAFE_INTEGER,
+)
+
+export const MOCK_PUBLIC_OWNER_MISMATCH_TOWN = createPublicProfileTown(
+  'unexpected-owner-id',
+  'mock-town-owner-mismatch',
+  '所有者不一致ユーザー',
+  '所有者不一致の街',
+  100,
+)
+
+export const MOCK_PUBLIC_EDITABLE_TOWN: TownDetail = {
+  ...createPublicProfileTown(
+    MOCK_PUBLIC_EDITABLE_USER_ID,
+    'mock-town-editable-contract',
+    '編集可能レスポンスユーザー',
+    '編集可能になっている公開街',
+    100,
+  ),
+  editable: true,
+}
+
+export const MOCK_PUBLIC_INVALID_POPULATION_TOWN = createPublicProfileTown(
+  MOCK_PUBLIC_INVALID_POPULATION_USER_ID,
+  'mock-town-invalid-population',
+  '人口不正ユーザー',
+  '人口値が不正な街',
+  Number.NaN,
+)
+
+export const MOCK_RANKING_PUBLIC_TOWNS: Record<string, TownDetail> =
+  Object.fromEntries(
+    MOCK_RANKING_ENTRIES.map((entry) => [
+      entry.userId,
+      createPublicProfileTown(
+        entry.userId,
+        entry.townId,
+        entry.displayName,
+        entry.townName,
+        entry.population,
+      ),
+    ]),
+  )
+
+export const MOCK_PUBLIC_TOWNS: Record<string, TownDetail> = {
+  ...MOCK_RANKING_PUBLIC_TOWNS,
+  [MOCK_PUBLIC_USER_ID]: MOCK_PUBLIC_TOWN,
+  [MOCK_PUBLIC_LONG_NAME_USER_ID]: MOCK_PUBLIC_LONG_NAME_TOWN,
+  [MOCK_PUBLIC_ZERO_POPULATION_USER_ID]: MOCK_PUBLIC_ZERO_POPULATION_TOWN,
+  [MOCK_PUBLIC_LARGE_POPULATION_USER_ID]: MOCK_PUBLIC_LARGE_POPULATION_TOWN,
+  [MOCK_PUBLIC_OWNER_MISMATCH_USER_ID]: MOCK_PUBLIC_OWNER_MISMATCH_TOWN,
+  [MOCK_PUBLIC_EDITABLE_USER_ID]: MOCK_PUBLIC_EDITABLE_TOWN,
+  [MOCK_PUBLIC_INVALID_POPULATION_USER_ID]:
+    MOCK_PUBLIC_INVALID_POPULATION_TOWN,
 }
 
 export const MOCK_EMPTY_TOWN: TownDetail = {

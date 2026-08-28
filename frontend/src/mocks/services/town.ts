@@ -23,8 +23,7 @@ import type {
 import {
   MOCK_BUILDING_CATALOG,
   MOCK_MY_TOWN,
-  MOCK_PUBLIC_TOWN,
-  MOCK_PUBLIC_USER_ID,
+  MOCK_PUBLIC_TOWNS,
 } from '../data/towns'
 import {
   createMockWalkCityStore,
@@ -68,6 +67,7 @@ export type MockTownApi = TownApi & {
     operation: MockTownOperation,
     code: TownMockErrorCode | null,
   ): void
+  setException(operation: MockTownOperation, enabled: boolean): void
   getTownSnapshot(): TownDetail
   reset(): void
 }
@@ -225,10 +225,11 @@ export function createMockTownApi(
     copyCatalogItem,
   )
   const initialPublicTowns = {
-    [MOCK_PUBLIC_USER_ID]: MOCK_PUBLIC_TOWN,
+    ...MOCK_PUBLIC_TOWNS,
     ...options.publicTowns,
   }
   const failures = new Map<MockTownOperation, TownMockErrorCode>()
+  const exceptions = new Set<MockTownOperation>()
   const placeResults = new Map<
     string,
     { input: PlaceBuildingInput; result: TownMutationResult }
@@ -261,9 +262,16 @@ export function createMockTownApi(
     return code ? failure<T>(code) : null
   }
 
+  const throwConfiguredException = (operation: MockTownOperation): void => {
+    if (exceptions.has(operation)) {
+      throw new Error(`Mock ${operation} exception`)
+    }
+  }
+
   return {
     async getBuildingCatalog() {
       await wait()
+      throwConfiguredException('getBuildingCatalog')
       return (
         configuredFailure('getBuildingCatalog') ??
         success(catalog.map(copyCatalogItem))
@@ -272,6 +280,7 @@ export function createMockTownApi(
 
     async getMyTown() {
       await wait()
+      throwConfiguredException('getMyTown')
       return (
         configuredFailure('getMyTown') ??
         success(copyTown(store.getMutableTown()))
@@ -280,6 +289,7 @@ export function createMockTownApi(
 
     async getPublicTown(userId) {
       await wait()
+      throwConfiguredException('getPublicTown')
       const failed = configuredFailure<TownDetail>('getPublicTown')
       if (failed) return failed
       if (userId.trim() === '') return failure('INVALID_INPUT')
@@ -292,6 +302,7 @@ export function createMockTownApi(
 
     async placeBuilding(input) {
       await wait()
+      throwConfiguredException('placeBuilding')
       const failed = configuredFailure<TownMutationResult>('placeBuilding')
       if (failed) return failed
       if (input.requestId.trim() === '') return failure('INVALID_INPUT')
@@ -355,6 +366,7 @@ export function createMockTownApi(
 
     async moveBuilding(input) {
       await wait()
+      throwConfiguredException('moveBuilding')
       const failed = configuredFailure<TownMutationResult>('moveBuilding')
       if (failed) return failed
       if (input.requestId.trim() === '') return failure('INVALID_INPUT')
@@ -412,12 +424,18 @@ export function createMockTownApi(
       else failures.delete(operation)
     },
 
+    setException(operation, enabled) {
+      if (enabled) exceptions.add(operation)
+      else exceptions.delete(operation)
+    },
+
     getTownSnapshot() {
       return copyTown(store.getMutableTown())
     },
 
     reset() {
       failures.clear()
+      exceptions.clear()
       placeResults.clear()
       moveResults.clear()
       store.reset()
