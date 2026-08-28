@@ -20,15 +20,36 @@ export type ApiMode = 'mock' | 'supabase'
 
 export type ApiEnvironment = SupabaseClientEnvironment & {
   VITE_API_MODE?: string
+  PROD?: boolean
 }
 
-export function resolveApiMode(value: string | undefined): ApiMode {
-  const mode = value?.trim() || 'mock'
-  if (mode === 'mock' || mode === 'supabase') return mode
+export function resolveApiMode(
+  value: string | undefined,
+  isProduction = false,
+): ApiMode {
+  const configuredMode = value?.trim()
+  if (!configuredMode) {
+    if (isProduction) {
+      throw new Error(
+        '本番環境ではVITE_API_MODE=supabaseの設定が必要です。',
+      )
+    }
+    return 'mock'
+  }
 
-  throw new Error(
-    `VITE_API_MODEはmockまたはsupabaseを指定してください。現在値: ${mode}`,
-  )
+  if (configuredMode !== 'mock' && configuredMode !== 'supabase') {
+    throw new Error(
+      `VITE_API_MODEはmockまたはsupabaseを指定してください。現在値: ${configuredMode}`,
+    )
+  }
+
+  if (isProduction && configuredMode !== 'supabase') {
+    throw new Error(
+      '本番環境ではVITE_API_MODE=supabase以外を使用できません。',
+    )
+  }
+
+  return configuredMode
 }
 
 type SupabaseServiceBundle = {
@@ -159,7 +180,10 @@ function createUnavailableSupabaseRankingApi(): RankingApi {
 export function createApiServices(
   environment: ApiEnvironment = import.meta.env,
 ): ApiServices {
-  const mode = resolveApiMode(environment.VITE_API_MODE)
+  const mode = resolveApiMode(
+    environment.VITE_API_MODE,
+    environment.PROD === true,
+  )
   if (mode === 'mock') {
     const store = createMockWalkCityStore()
     return {

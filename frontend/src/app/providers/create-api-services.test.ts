@@ -6,6 +6,16 @@ describe('resolveApiMode', () => {
     expect(resolveApiMode(undefined)).toBe('mock')
   })
 
+  it('requires an explicit Supabase mode in production', () => {
+    expect(() => resolveApiMode(undefined, true)).toThrow(
+      '本番環境ではVITE_API_MODE=supabaseの設定が必要です。',
+    )
+    expect(() => resolveApiMode('mock', true)).toThrow(
+      '本番環境ではVITE_API_MODE=supabase以外を使用できません。',
+    )
+    expect(resolveApiMode('supabase', true)).toBe('supabase')
+  })
+
   it('rejects unsupported API modes', () => {
     expect(() => resolveApiMode('preview')).toThrow(
       'VITE_API_MODEはmockまたはsupabaseを指定してください。',
@@ -44,6 +54,15 @@ describe('createApiServices', () => {
     expect(() =>
       createApiServices({ VITE_API_MODE: 'supabase' }),
     ).toThrow('VITE_SUPABASE_URL')
+  })
+
+  it('fails closed before creating production mock services', () => {
+    expect(() => createApiServices({ PROD: true })).toThrow(
+      'VITE_API_MODE=supabase',
+    )
+    expect(() =>
+      createApiServices({ PROD: true, VITE_API_MODE: 'mock' }),
+    ).toThrow('VITE_API_MODE=supabase以外を使用できません。')
   })
 
   it('does not mix a mock Town into Supabase mode', async () => {
