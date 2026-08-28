@@ -6,6 +6,7 @@ export type MapBuildingProps = {
   building: PlacedBuilding
   item?: BuildingCatalogItem
   roadConnections?: RoadConnections
+  isSelected?: boolean
 }
 
 export type RoadConnections = {
@@ -18,26 +19,47 @@ export type RoadConnections = {
 const CATEGORY_STYLES: Record<string, string> = {
   residential:
     'border-[#b66b52] bg-[linear-gradient(145deg,#fff4e9,#f3c9aa)] text-[#733d2e]',
+  nature:
+    'border-[#66975f] bg-[linear-gradient(145deg,#f0f7df,#add69a)] text-[#346036]',
   public:
     'border-[#4b9673] bg-[linear-gradient(145deg,#e8f6df,#96cf9c)] text-[#245c42]',
+  commercial:
+    'border-[#c89b3e] bg-[linear-gradient(145deg,#fff8d8,#f0cb70)] text-[#765817]',
+  industry:
+    'border-[#747d79] bg-[linear-gradient(145deg,#f0f1ed,#aeb7b2)] text-[#45504b]',
   special:
     'border-[#7b7898] bg-[linear-gradient(145deg,#efedf8,#c7c1e2)] text-[#55516f]',
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
   residential: '⌂',
+  nature: '♧',
   public: '♧',
+  commercial: '◇',
+  industry: '▥',
   special: '◆',
+}
+
+const BUILDING_ICONS: Record<string, string> = {
+  park: '♧',
+  hospital: '＋',
+  'commercial-facility': '◇',
+  farm: '⌗',
+  'city-hall': '▦',
+  factory: '▥',
 }
 
 export const MapBuilding = memo(function MapBuilding({
   building,
   item,
   roadConnections,
+  isSelected = false,
 }: MapBuildingProps) {
   const width = item?.width ?? 1
   const height = item?.height ?? 1
-  const name = item?.name ?? `不明な建物（${building.buildingTypeCode}）`
+  const defaultName =
+    item?.name ?? `不明な建物（${building.buildingTypeCode}）`
+  const name = building.customName ?? defaultName
   const isRoad = item?.category === 'road'
 
   if (isRoad) {
@@ -57,7 +79,7 @@ export const MapBuilding = memo(function MapBuilding({
 
     return (
       <div
-        className="absolute z-20"
+        className={`absolute ${isSelected ? 'z-30 rounded ring-4 ring-[#ffcf57] ring-offset-2 ring-offset-white/80' : 'z-20'}`}
         style={{
           left: building.anchorX * MAP_CELL_SIZE,
           top: building.anchorY * MAP_CELL_SIZE,
@@ -137,7 +159,7 @@ export const MapBuilding = memo(function MapBuilding({
 
   return (
     <div
-      className={`absolute z-20 grid place-items-center overflow-hidden rounded-[6px] border-2 shadow-[0_4px_8px_rgba(19,54,49,.18),inset_0_1px_0_rgba(255,255,255,.68)] ${categoryStyle}`}
+      className={`absolute grid place-items-center overflow-hidden rounded-[6px] border-2 shadow-[0_4px_8px_rgba(19,54,49,.18),inset_0_1px_0_rgba(255,255,255,.68)] ${isSelected ? 'z-30 ring-4 ring-[#ffcf57] ring-offset-2 ring-offset-white/80' : 'z-20'} ${categoryStyle}`}
       style={{
         left: building.anchorX * MAP_CELL_SIZE + 2,
         top: building.anchorY * MAP_CELL_SIZE + 2,
@@ -152,7 +174,7 @@ export const MapBuilding = memo(function MapBuilding({
         className="text-[clamp(14px,2vw,23px)] leading-none font-black drop-shadow-[0_1px_0_rgba(255,255,255,.8)]"
         aria-hidden="true"
       >
-        {CATEGORY_ICONS[category] ?? '?'}
+        {BUILDING_ICONS[item?.code ?? ''] ?? CATEGORY_ICONS[category] ?? '?'}
       </span>
       {width > 1 && (
         <span className="absolute right-1 bottom-0.5 left-1 truncate rounded bg-white/70 px-1 text-center text-[7px] leading-3 font-black">

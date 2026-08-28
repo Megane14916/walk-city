@@ -16,6 +16,7 @@ function createPlacedBuilding(
   return {
     id,
     buildingTypeCode,
+    customName: null,
     anchorX,
     anchorY,
     createdAt: MOCK_TIMESTAMP,
@@ -25,11 +26,12 @@ function createPlacedBuilding(
 
 export const MOCK_PUBLIC_USER_ID = 'mock-user-002'
 
-function createUnavailableCatalogItem(
+function createModelCatalogItem(
   code: string,
   name: string,
   category: string,
   size: 1 | 2,
+  costCoins: number,
 ): BuildingCatalogItem {
   return {
     code,
@@ -37,9 +39,9 @@ function createUnavailableCatalogItem(
     category,
     width: size,
     height: size,
-    costCoins: null,
-    enabled: false,
-    description: '',
+    costCoins,
+    enabled: true,
+    description: '効果未実装の配置用模型です',
     effects: [],
     assetKey: code,
     catalogVersion: 1,
@@ -106,29 +108,18 @@ export const MOCK_BUILDING_CATALOG: BuildingCatalogItem[] = [
     assetKey: 'apartment',
     catalogVersion: 1,
   },
-  {
-    code: 'park-small',
-    name: '公園（小）',
-    category: 'public',
-    width: 1,
-    height: 1,
-    costCoins: null,
-    enabled: false,
-    description: '',
-    effects: [],
-    assetKey: 'park-small',
-    catalogVersion: 1,
-  },
-  createUnavailableCatalogItem('hospital', '病院', 'public', 2),
-  createUnavailableCatalogItem(
+  createModelCatalogItem('park', '公園', 'nature', 1, 150),
+  createModelCatalogItem('hospital', '病院', 'public', 2, 600),
+  createModelCatalogItem(
     'commercial-facility',
     '商業施設',
     'commercial',
     1,
+    300,
   ),
-  createUnavailableCatalogItem('farm', '農場', 'nature', 2),
-  createUnavailableCatalogItem('city-hall', '役所', 'public', 2),
-  createUnavailableCatalogItem('factory', '工場', 'industry', 2),
+  createModelCatalogItem('farm', '農場', 'nature', 2, 100),
+  createModelCatalogItem('city-hall', '役所', 'public', 2, 3_000),
+  createModelCatalogItem('factory', '工場', 'industry', 2, 700),
   {
     code: 'future-building',
     name: '準備中の建物',
@@ -152,8 +143,8 @@ export const MOCK_MY_TOWN: TownDetail = {
       displayName: 'Walk City テストユーザー',
     },
     name: 'グリーンタウン',
-    coins: 500,
-    population: 50,
+    coins: 2_000,
+    population: 60,
     mapWidth: 100,
     mapHeight: 100,
   },
@@ -183,7 +174,7 @@ export const MOCK_PUBLIC_TOWN: TownDetail = {
       displayName: 'シティウォーカー',
     },
     name: 'ブルータウン',
-    population: 50,
+    population: 60,
     mapWidth: 100,
     mapHeight: 100,
   },

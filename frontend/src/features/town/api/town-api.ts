@@ -3,8 +3,14 @@ import type {
   BuildingCatalogItem,
   MoveBuildingInput,
   PlaceBuildingInput,
+  PlaceRoadLineInput,
+  PlaceRoadLineResult,
+  RenameBuildingInput,
+  RenameBuildingResult,
   TownDetail,
   TownMutationResult,
+  UnlockLandInput,
+  UnlockLandResult,
 } from '../types'
 
 export interface TownApi {
@@ -14,7 +20,14 @@ export interface TownApi {
   placeBuilding(
     input: PlaceBuildingInput,
   ): Promise<ApiResult<TownMutationResult>>
+  placeRoadLine(
+    input: PlaceRoadLineInput,
+  ): Promise<ApiResult<PlaceRoadLineResult>>
   moveBuilding(
     input: MoveBuildingInput,
   ): Promise<ApiResult<TownMutationResult>>
+  renameBuilding(
+    input: RenameBuildingInput,
+  ): Promise<ApiResult<RenameBuildingResult>>
+  unlockLand(input: UnlockLandInput): Promise<ApiResult<UnlockLandResult>>
 }

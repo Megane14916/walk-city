@@ -20,7 +20,7 @@ describe('createMockStepSyncApi', () => {
     })
 
     const before = await townApi.getMyTown()
-    expect(before).toMatchObject({ ok: true, data: { town: { coins: 500 } } })
+    expect(before).toMatchObject({ ok: true, data: { town: { coins: 2_000 } } })
 
     await expect(stepSyncApi.syncSteps()).resolves.toMatchObject({
       ok: true,
@@ -29,12 +29,12 @@ describe('createMockStepSyncApi', () => {
         steps: 1_500,
         newlyRewardedSteps: 1_500,
         coinsAwarded: 150,
-        coinBalance: 650,
+        coinBalance: 2_150,
       },
     })
 
     const after = await townApi.getMyTown()
-    expect(after).toMatchObject({ ok: true, data: { town: { coins: 650 } } })
+    expect(after).toMatchObject({ ok: true, data: { town: { coins: 2_150 } } })
   })
 
   it('does not reward the same steps twice and rewards only a later increase', async () => {
@@ -55,7 +55,7 @@ describe('createMockStepSyncApi', () => {
       data: {
         newlyRewardedSteps: 0,
         coinsAwarded: 0,
-        coinBalance: 600,
+        coinBalance: 2_100,
       },
     })
 
@@ -65,7 +65,7 @@ describe('createMockStepSyncApi', () => {
       data: {
         newlyRewardedSteps: 250,
         coinsAwarded: 25,
-        coinBalance: 625,
+        coinBalance: 2_125,
       },
     })
   })
@@ -86,7 +86,7 @@ describe('createMockStepSyncApi', () => {
     })
     await expect(townApi.getMyTown()).resolves.toMatchObject({
       ok: true,
-      data: { town: { coins: 500 } },
+      data: { town: { coins: 2_000 } },
     })
   })
 
@@ -111,7 +111,7 @@ describe('createMockStepSyncApi', () => {
       data: {
         newlyRewardedSteps: 1_000,
         coinsAwarded: 100,
-        coinBalance: 600,
+        coinBalance: 2_100,
       },
     })
     await expect(api.syncSteps()).resolves.toMatchObject({
@@ -119,12 +119,12 @@ describe('createMockStepSyncApi', () => {
       data: {
         newlyRewardedSteps: 0,
         coinsAwarded: 0,
-        coinBalance: 600,
+        coinBalance: 2_100,
       },
     })
     await expect(townApi.getMyTown()).resolves.toMatchObject({
       ok: true,
-      data: { town: { coins: 600 } },
+      data: { town: { coins: 2_100 } },
     })
   })
 
@@ -142,11 +142,11 @@ describe('createMockStepSyncApi', () => {
 
     await expect(townApi.getMyTown()).resolves.toMatchObject({
       ok: true,
-      data: { town: { coins: 500 } },
+      data: { town: { coins: 2_000 } },
     })
     await expect(api.syncSteps()).resolves.toMatchObject({
       ok: true,
-      data: { newlyRewardedSteps: 1_000, coinBalance: 600 },
+      data: { newlyRewardedSteps: 1_000, coinBalance: 2_100 },
     })
   })
 })

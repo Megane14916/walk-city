@@ -13,6 +13,8 @@ export type ApiErrorCode =
   | 'LAND_LOCKED'
   | 'CELL_OCCUPIED'
   | 'ROAD_REQUIRED'
+  | 'AREA_ALREADY_UNLOCKED'
+  | 'AREA_NOT_ADJACENT'
   | 'NOT_OWNER'
   | 'NOT_FOUND'
   | 'CONFLICT'

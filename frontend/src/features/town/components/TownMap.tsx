@@ -12,12 +12,18 @@ import {
 import type {
   BuildingCatalogItem,
   Cell,
+  LandUnlockPreviewStatus,
   PlacementPreviewStatus,
+  RoadLinePreview,
   TownDetail,
+  UnlockedArea,
 } from '../types'
 import {
+  getLandUnlockAreaForCell,
   getCellKey,
   getInitialMapView,
+  getPlacedBuildingCells,
+  getRoadLineCells,
   MAP_CELL_SIZE,
   MAX_MAP_ZOOM,
   MIN_MAP_ZOOM,
@@ -38,6 +44,19 @@ export type TownMapProps = {
     preview: PlacementPreviewStatus | null
     onSelectAnchor: (anchor: Cell) => void
   } | null
+  landUnlock?: {
+    area: UnlockedArea | null
+    preview: LandUnlockPreviewStatus | null
+    onSelectArea: (area: UnlockedArea) => void
+  } | null
+  roadPlacement?: {
+    item: BuildingCatalogItem
+    cells: Cell[]
+    preview: RoadLinePreview | null
+    onSelectCells: (cells: Cell[]) => void
+  } | null
+  selectedBuildingId?: string | null
+  onSelectBuilding?: (buildingId: string | null) => void
 }
 
 type PointerPosition = { x: number; y: number }
@@ -55,6 +74,11 @@ type PinchGesture = {
   startZoom: number
   worldX: number
   worldY: number
+}
+
+type RoadDrawGesture = {
+  pointerId: number
+  start: Cell
 }
 
 const FALLBACK_VIEWPORT: ViewportSize = { width: 760, height: 560 }
@@ -77,11 +101,16 @@ export function TownMap({
   catalog,
   viewportClassName = 'h-[clamp(430px,64svh,680px)]',
   placement = null,
+  landUnlock = null,
+  roadPlacement = null,
+  selectedBuildingId = null,
+  onSelectBuilding,
 }: TownMapProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const pointersRef = useRef(new Map<number, PointerPosition>())
   const dragRef = useRef<DragGesture | null>(null)
   const pinchRef = useRef<PinchGesture | null>(null)
+  const roadDrawRef = useRef<RoadDrawGesture | null>(null)
   const didPanRef = useRef(false)
   const [viewportSize, setViewportSize] = useState(FALLBACK_VIEWPORT)
   const [isPanning, setIsPanning] = useState(false)
@@ -164,6 +193,14 @@ export function TownMap({
     [roadCellIndex],
   )
 
+  const roadPreviewNewCellIndex = useMemo(
+    () =>
+      new Set(
+        (roadPlacement?.preview?.newCells ?? []).map((cell) => getCellKey(cell)),
+      ),
+    [roadPlacement?.preview?.newCells],
+  )
+
   const zoomAtCenter = useCallback(
     (zoomMultiplier: number) => {
       const current = viewRef.current
@@ -209,9 +246,43 @@ export function TownMap({
     dragRef.current = null
   }
 
+  const getCellAtClientPoint = (
+    target: HTMLDivElement,
+    clientX: number,
+    clientY: number,
+  ): Cell | null => {
+    const rect = target.getBoundingClientRect()
+    const current = viewRef.current
+    return screenPointToCell({
+      pointerX: clientX,
+      pointerY: clientY,
+      viewportLeft: rect.left,
+      viewportTop: rect.top,
+      panX: current.panX,
+      panY: current.panY,
+      zoom: current.zoom,
+      cellSize: MAP_CELL_SIZE,
+      mapWidth: town.town.mapWidth,
+      mapHeight: town.town.mapHeight,
+    })
+  }
+
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     didPanRef.current = false
-    event.currentTarget.setPointerCapture(event.pointerId)
+    if (roadPlacement && town.editable) {
+      const cell = getCellAtClientPoint(
+        event.currentTarget,
+        event.clientX,
+        event.clientY,
+      )
+      if (!cell) return
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+      roadDrawRef.current = { pointerId: event.pointerId, start: cell }
+      roadPlacement.onSelectCells([cell])
+      return
+    }
+
+    event.currentTarget.setPointerCapture?.(event.pointerId)
     const rect = event.currentTarget.getBoundingClientRect()
     pointersRef.current.set(event.pointerId, {
       x: event.clientX - rect.left,
@@ -235,6 +306,19 @@ export function TownMap({
   }
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const roadDraw = roadDrawRef.current
+    if (roadDraw?.pointerId === event.pointerId && roadPlacement) {
+      const cell = getCellAtClientPoint(
+        event.currentTarget,
+        event.clientX,
+        event.clientY,
+      )
+      if (cell) {
+        roadPlacement.onSelectCells(getRoadLineCells(roadDraw.start, cell))
+      }
+      return
+    }
+
     if (!pointersRef.current.has(event.pointerId)) return
     const rect = event.currentTarget.getBoundingClientRect()
     pointersRef.current.set(event.pointerId, {
@@ -275,6 +359,23 @@ export function TownMap({
   }
 
   const finishPointer = (event: PointerEvent<HTMLDivElement>) => {
+    const roadDraw = roadDrawRef.current
+    if (roadDraw?.pointerId === event.pointerId) {
+      const cell = getCellAtClientPoint(
+        event.currentTarget,
+        event.clientX,
+        event.clientY,
+      )
+      if (cell && roadPlacement) {
+        roadPlacement.onSelectCells(getRoadLineCells(roadDraw.start, cell))
+      }
+      roadDrawRef.current = null
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+        event.currentTarget.releasePointerCapture?.(event.pointerId)
+      }
+      return
+    }
+
     pointersRef.current.delete(event.pointerId)
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
@@ -331,7 +432,7 @@ export function TownMap({
       didPanRef.current = false
       return
     }
-    if (!placement || !town.editable) return
+    if (roadPlacement) return
 
     const rect = event.currentTarget.getBoundingClientRect()
     const current = viewRef.current
@@ -348,7 +449,25 @@ export function TownMap({
       mapHeight: town.town.mapHeight,
     })
 
-    if (cell) placement.onSelectAnchor(cell)
+    if (!cell) return
+    if (placement) {
+      if (!town.editable) return
+      placement.onSelectAnchor(cell)
+      return
+    }
+    if (landUnlock) {
+      if (!town.editable) return
+      landUnlock.onSelectArea(getLandUnlockAreaForCell(cell))
+      return
+    }
+
+    const building = [...town.buildings].reverse().find((candidate) =>
+      getPlacedBuildingCells(candidate, catalog).some(
+        (occupiedCell) =>
+          occupiedCell.x === cell.x && occupiedCell.y === cell.y,
+      ),
+    )
+    onSelectBuilding?.(building?.id ?? null)
   }
 
   const previewTone =
@@ -357,6 +476,14 @@ export function TownMap({
       : placement?.preview?.status === 'unknown'
         ? 'border-[#bb8b2d] bg-[#ffd86d]/55 text-[#765a18]'
         : 'border-[#b9574f] bg-[#ef897d]/55 text-[#762f2a]'
+  const landUnlockTone =
+    landUnlock?.preview?.status === 'valid'
+      ? 'border-[#3b8468] bg-[#78c59f]/40 text-[#164c3c]'
+      : 'border-[#a94f49] bg-[#df776f]/40 text-[#762f2a]'
+  const roadPlacementTone =
+    roadPlacement?.preview?.status.status === 'valid'
+      ? 'border-[#397b65] bg-[#75867f]/80 text-white'
+      : 'border-[#a94f49] bg-[#cf7169]/75 text-white'
 
   return (
     <div className="relative overflow-hidden rounded-[22px] border border-[#cfd8d1] bg-[#d8ddd4] shadow-[0_18px_42px_rgba(24,61,55,.12)]">
@@ -365,7 +492,7 @@ export function TownMap({
         className={`relative w-full touch-none overflow-hidden outline-none select-none ${viewportClassName} ${
           isPanning
             ? 'cursor-grabbing'
-            : placement
+            : placement || landUnlock || roadPlacement
               ? 'cursor-crosshair'
               : 'cursor-grab'
         }`}
@@ -438,6 +565,7 @@ export function TownMap({
                   ? getRoadConnections(building.anchorX, building.anchorY)
                   : undefined
               }
+              isSelected={building.id === selectedBuildingId}
             />
           ))}
 
@@ -454,6 +582,53 @@ export function TownMap({
               aria-label={`${placement.item.name}の配置プレビュー、座標${placement.anchor.x},${placement.anchor.y}、${placement.preview?.status === 'valid' ? '配置可能' : '配置不可'}`}
             >
               {placement.preview?.status === 'valid' ? '✓' : '!'}
+            </div>
+          )}
+
+          {roadPlacement && roadPlacement.cells.length > 0 && (
+            <div
+              className="pointer-events-none absolute inset-0 z-30"
+              role="img"
+              aria-label={`道路の線プレビュー、${roadPlacement.cells.length}マス、${roadPlacement.preview?.status.status === 'valid' ? '配置可能' : '配置不可'}`}
+            >
+              {roadPlacement.cells.map((cell) => {
+                const isNew = roadPreviewNewCellIndex.has(getCellKey(cell))
+                return (
+                  <div
+                    key={getCellKey(cell)}
+                    className={`absolute grid place-items-center rounded-[4px] border-2 border-dashed text-[9px] font-black shadow-[0_3px_8px_rgba(18,55,49,.2)] ${
+                      isNew
+                        ? roadPlacementTone
+                        : 'border-[#50605a] bg-[#aeb8b3]/65 text-[#31423c]'
+                    }`}
+                    style={{
+                      left: cell.x * MAP_CELL_SIZE + 2,
+                      top: cell.y * MAP_CELL_SIZE + 2,
+                      width: MAP_CELL_SIZE - 4,
+                      height: MAP_CELL_SIZE - 4,
+                    }}
+                    aria-hidden="true"
+                  >
+                    {isNew ? '•' : '↔'}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {landUnlock?.area && (
+            <div
+              className={`pointer-events-none absolute z-30 grid place-items-center border-4 border-dashed text-4xl font-black shadow-[inset_0_0_0_3px_rgba(255,255,255,.4),0_8px_22px_rgba(18,55,49,.22)] ${landUnlockTone}`}
+              style={{
+                left: landUnlock.area.x * MAP_CELL_SIZE + 2,
+                top: landUnlock.area.y * MAP_CELL_SIZE + 2,
+                width: landUnlock.area.width * MAP_CELL_SIZE - 4,
+                height: landUnlock.area.height * MAP_CELL_SIZE - 4,
+              }}
+              role="img"
+              aria-label={`未開放領域アンロックのプレビュー、座標${landUnlock.area.x},${landUnlock.area.y}、${landUnlock.preview?.status === 'valid' ? '開放可能' : '開放不可'}`}
+            >
+              {landUnlock.preview?.status === 'valid' ? '✓' : '!'}
             </div>
           )}
         </div>

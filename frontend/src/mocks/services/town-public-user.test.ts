@@ -13,7 +13,7 @@ import { createMockTownApi } from './town'
 
 describe('public user town mock scenarios', () => {
   it.each([
-    [MOCK_PUBLIC_USER_ID, 50],
+    [MOCK_PUBLIC_USER_ID, 60],
     [MOCK_PUBLIC_LONG_NAME_USER_ID, 123_456],
     [MOCK_PUBLIC_ZERO_POPULATION_USER_ID, 0],
     [MOCK_PUBLIC_LARGE_POPULATION_USER_ID, Number.MAX_SAFE_INTEGER],

@@ -8,8 +8,43 @@ import {
   MOCK_MY_TOWN,
   MOCK_PUBLIC_TOWN,
 } from './towns'
+import { MARKET_ITEMS } from '../../features/market/data/market-items'
 
 describe('town map fixtures', () => {
+  it('keeps every effect-free model aligned with the market catalog', () => {
+    const modelCodes = [
+      'park',
+      'hospital',
+      'commercial-facility',
+      'farm',
+      'city-hall',
+      'factory',
+    ]
+
+    for (const code of modelCodes) {
+      const marketItem = MARKET_ITEMS.find((item) => item.code === code)
+      const catalogItem = MOCK_BUILDING_CATALOG.find(
+        (item) => item.code === code,
+      )
+
+      expect(catalogItem).toMatchObject({
+        code,
+        costCoins: marketItem?.costCoins,
+        width: marketItem?.width,
+        height: marketItem?.height,
+        enabled: true,
+        effects: [],
+      })
+    }
+  })
+
+  it.each([
+    ['my town', MOCK_MY_TOWN],
+    ['public town', MOCK_PUBLIC_TOWN],
+  ])('starts %s with a population of 60', (_label, town) => {
+    expect(town.town.population).toBe(60)
+  })
+
   it.each([
     ['my town', MOCK_MY_TOWN],
     ['public town', MOCK_PUBLIC_TOWN],

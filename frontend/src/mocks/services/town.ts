@@ -3,11 +3,18 @@ import type {
   BuildingCatalogItem,
   MoveBuildingInput,
   PlaceBuildingInput,
+  PlaceRoadLineInput,
+  PlaceRoadLineResult,
   PlacedBuilding,
+  RenameBuildingResult,
   TownDetail,
   TownMutationResult,
+  UnlockLandInput,
+  UnlockLandResult,
 } from '../../features/town/types'
 import {
+  evaluateLandUnlockPreview,
+  evaluateRoadLinePreview,
   areCellsUnlocked,
   areCellsWithinMap,
   createOccupiedCellIndex,
@@ -15,6 +22,9 @@ import {
   getOccupiedCells,
   hasAdjacentRoad,
   hasCollision,
+  LAND_UNLOCK_BLOCK_SIZE,
+  LAND_UNLOCK_COST_COINS,
+  isStraightRoadLine,
 } from '../../features/town/utils'
 import type {
   ApiErrorCode,
@@ -36,7 +46,10 @@ export type MockTownOperation =
   | 'getMyTown'
   | 'getPublicTown'
   | 'placeBuilding'
+  | 'placeRoadLine'
   | 'moveBuilding'
+  | 'renameBuilding'
+  | 'unlockLand'
 
 export type TownMockErrorCode =
   | 'UNAUTHENTICATED'
@@ -48,6 +61,8 @@ export type TownMockErrorCode =
   | 'LAND_LOCKED'
   | 'CELL_OCCUPIED'
   | 'ROAD_REQUIRED'
+  | 'AREA_ALREADY_UNLOCKED'
+  | 'AREA_NOT_ADJACENT'
   | 'NOT_OWNER'
   | 'NOT_FOUND'
   | 'CONFLICT'
@@ -82,10 +97,31 @@ const errorMessages: Record<TownMockErrorCode, string> = {
   LAND_LOCKED: '開放済みの土地を選んでください。',
   CELL_OCCUPIED: '他の建物または障害物と重なっています。',
   ROAD_REQUIRED: '建物は道路に隣接する必要があります。',
+  AREA_ALREADY_UNLOCKED: 'この区画はすでに開放されています。',
+  AREA_NOT_ADJACENT: '開放済み区画の上下左右を選んでください。',
   NOT_OWNER: 'この街は編集できません。',
   NOT_FOUND: '対象が見つかりません。',
   CONFLICT: '街の状態が更新されました。再読み込みしてください。',
   INTERNAL_ERROR: '予期しないエラーが発生しました。',
+}
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0
+    return codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)
+  })
+}
+
+function normalizeBuildingName(value: string): string | null {
+  const normalized = value.trim()
+  if (
+    normalized.length === 0 ||
+    Array.from(normalized).length > 30 ||
+    hasControlCharacter(normalized)
+  ) {
+    return null
+  }
+  return normalized
 }
 
 function success<T>(data: T): ApiResult<T> {
@@ -213,6 +249,27 @@ function sameMoveInput(
   )
 }
 
+function sameRoadLineInput(
+  left: PlaceRoadLineInput,
+  right: PlaceRoadLineInput,
+): boolean {
+  return (
+    left.buildingTypeCode === right.buildingTypeCode &&
+    left.cells.length === right.cells.length &&
+    left.cells.every(
+      (cell, index) =>
+        cell.x === right.cells[index].x && cell.y === right.cells[index].y,
+    )
+  )
+}
+
+function sameUnlockInput(
+  left: UnlockLandInput,
+  right: UnlockLandInput,
+): boolean {
+  return left.x === right.x && left.y === right.y
+}
+
 export function createMockTownApi(
   options: MockTownApiOptions = {},
 ): MockTownApi {
@@ -237,6 +294,14 @@ export function createMockTownApi(
   const moveResults = new Map<
     string,
     { input: MoveBuildingInput; result: TownMutationResult }
+  >()
+  const roadLineResults = new Map<
+    string,
+    { input: PlaceRoadLineInput; result: PlaceRoadLineResult }
+  >()
+  const unlockResults = new Map<
+    string,
+    { input: UnlockLandInput; result: UnlockLandResult }
   >()
 
   let catalog = initialCatalog.map(copyCatalogItem)
@@ -339,6 +404,7 @@ export function createMockTownApi(
       const building: PlacedBuilding = {
         id: `mock-building-${String(nextBuildingNumber).padStart(3, '0')}`,
         buildingTypeCode: item.code,
+        customName: null,
         anchorX: input.anchorX,
         anchorY: input.anchorY,
         createdAt: timestamp,
@@ -359,6 +425,91 @@ export function createMockTownApi(
       placeResults.set(input.requestId, {
         input: { ...input },
         result: { ...result, building: { ...result.building } },
+      })
+
+      return success(result)
+    },
+
+    async placeRoadLine(input) {
+      await wait()
+      const failed = configuredFailure<PlaceRoadLineResult>('placeRoadLine')
+      if (failed) return failed
+      if (
+        input.requestId.trim() === '' ||
+        !isStraightRoadLine(input.cells)
+      ) {
+        return failure('INVALID_INPUT')
+      }
+      const town = store.getMutableTown()
+
+      const previous = roadLineResults.get(input.requestId)
+      if (previous) {
+        return sameRoadLineInput(previous.input, input)
+          ? success({
+              ...previous.result,
+              buildings: previous.result.buildings.map((building) => ({
+                ...building,
+              })),
+            })
+          : failure('CONFLICT')
+      }
+
+      const item = catalog.find(
+        (candidate) => candidate.code === input.buildingTypeCode,
+      )
+      if (!item) return failure('NOT_FOUND')
+      if (item.category !== 'road' || item.width !== 1 || item.height !== 1) {
+        return failure('INVALID_INPUT')
+      }
+
+      const preview = evaluateRoadLinePreview({
+        town,
+        catalog,
+        item,
+        cells: input.cells,
+      })
+      if (preview.status.status === 'unknown') return failure('NOT_OWNER')
+      if (preview.status.status === 'invalid') {
+        return failure(
+          preview.status.reason === 'NO_NEW_ROAD_CELLS'
+            ? 'CELL_OCCUPIED'
+            : preview.status.reason,
+        )
+      }
+
+      const timestamp = now().toISOString()
+      const buildings = preview.newCells.map((cell) => {
+        const building: PlacedBuilding = {
+          id: `mock-building-${String(nextBuildingNumber).padStart(3, '0')}`,
+          buildingTypeCode: item.code,
+          customName: null,
+          anchorX: cell.x,
+          anchorY: cell.y,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }
+        nextBuildingNumber += 1
+        return building
+      })
+
+      town.buildings.push(...buildings)
+      town.town.coins = (town.town.coins ?? 0) - preview.totalCostCoins
+
+      const result: PlaceRoadLineResult = {
+        buildings: buildings.map((building) => ({ ...building })),
+        coinBalance: town.town.coins,
+        population: town.town.population,
+        updatedAt: timestamp,
+      }
+      roadLineResults.set(input.requestId, {
+        input: {
+          ...input,
+          cells: input.cells.map((cell) => ({ ...cell })),
+        },
+        result: {
+          ...result,
+          buildings: result.buildings.map((building) => ({ ...building })),
+        },
       })
 
       return success(result)
@@ -419,6 +570,100 @@ export function createMockTownApi(
       return success(result)
     },
 
+    async renameBuilding(input) {
+      await wait()
+      const failed = configuredFailure<RenameBuildingResult>('renameBuilding')
+      if (failed) return failed
+      if (input.buildingId.trim() === '') return failure('INVALID_INPUT')
+
+      const town = store.getMutableTown()
+      if (town.editable !== true) return failure('NOT_OWNER')
+      const building = town.buildings.find(
+        (candidate) => candidate.id === input.buildingId,
+      )
+      if (!building) return failure('NOT_FOUND')
+
+      const item = catalogItemFor(catalog, building)
+      if (!item) return failure('NOT_FOUND')
+      let customName: string | null = null
+      if (input.customName !== null) {
+        const normalized = normalizeBuildingName(input.customName)
+        if (normalized === null) {
+          return {
+            ok: false,
+            error: {
+              code: 'INVALID_INPUT',
+              message: '表示名は1〜30文字で入力してください。',
+            },
+          }
+        }
+        customName = normalized === item.name ? null : normalized
+      }
+
+      const timestamp = now().toISOString()
+      building.customName = customName
+      building.updatedAt = timestamp
+
+      return success({
+        building: { ...building },
+        updatedAt: timestamp,
+      })
+    },
+
+    async unlockLand(input) {
+      await wait()
+      const failed = configuredFailure<UnlockLandResult>('unlockLand')
+      if (failed) return failed
+      if (
+        input.requestId.trim() === '' ||
+        !Number.isInteger(input.x) ||
+        !Number.isInteger(input.y) ||
+        input.x % LAND_UNLOCK_BLOCK_SIZE !== 0 ||
+        input.y % LAND_UNLOCK_BLOCK_SIZE !== 0
+      ) {
+        return failure('INVALID_INPUT')
+      }
+      const town = store.getMutableTown()
+
+      const previous = unlockResults.get(input.requestId)
+      if (previous) {
+        return sameUnlockInput(previous.input, input)
+          ? success({
+              ...previous.result,
+              unlockedArea: { ...previous.result.unlockedArea },
+            })
+          : failure('CONFLICT')
+      }
+
+      const coinBalance = town.town.coins
+      if (coinBalance === undefined) return failure('NOT_OWNER')
+
+      const unlockedArea = {
+        x: input.x,
+        y: input.y,
+        width: LAND_UNLOCK_BLOCK_SIZE,
+        height: LAND_UNLOCK_BLOCK_SIZE,
+      }
+      const preview = evaluateLandUnlockPreview({ town, area: unlockedArea })
+      if (preview.status === 'invalid') return failure(preview.reason)
+
+      const timestamp = now().toISOString()
+      town.town.coins = coinBalance - LAND_UNLOCK_COST_COINS
+      town.unlockedAreas.push(unlockedArea)
+
+      const result: UnlockLandResult = {
+        unlockedArea: { ...unlockedArea },
+        coinBalance: town.town.coins,
+        updatedAt: timestamp,
+      }
+      unlockResults.set(input.requestId, {
+        input: { ...input },
+        result: { ...result, unlockedArea: { ...result.unlockedArea } },
+      })
+
+      return success(result)
+    },
+
     setFailure(operation, code) {
       if (code) failures.set(operation, code)
       else failures.delete(operation)
@@ -437,7 +682,9 @@ export function createMockTownApi(
       failures.clear()
       exceptions.clear()
       placeResults.clear()
+      roadLineResults.clear()
       moveResults.clear()
+      unlockResults.clear()
       store.reset()
       catalog = initialCatalog.map(copyCatalogItem)
       publicTowns = Object.fromEntries(

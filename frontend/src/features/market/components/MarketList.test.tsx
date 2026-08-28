@@ -26,12 +26,12 @@ describe('MarketList', () => {
     expect(within(rows[9]).getByText('未開放領域アンロック')).not.toBeNull()
   })
 
-  it('keeps undecided effects empty while showing zero costs', () => {
+  it('keeps model effects empty while showing configured costs', () => {
     render(<MarketList items={MARKET_ITEMS} />)
 
     const rows = screen.getAllByRole('listitem')
     expect(within(rows[2]).queryByText(/人口/)).toBeNull()
-    expect(within(rows[2]).getByText('0')).not.toBeNull()
+    expect(within(rows[2]).getByText('150')).not.toBeNull()
     expect(within(rows[6]).getByText('0')).not.toBeNull()
     expect(within(rows[9]).getByText('20×20')).not.toBeNull()
   })
@@ -51,9 +51,35 @@ describe('MarketList', () => {
     fireEvent.click(screen.getByRole('button', { name: '住宅（大）を選択' }))
     expect(onSelectItem).toHaveBeenCalledWith(MARKET_ITEMS[1])
     expect(
-      screen.getByRole('button', { name: '公園（小）は準備中' }).getAttribute(
+      screen.getByRole('button', { name: '公園は準備中' }).getAttribute(
         'aria-disabled',
       ),
     ).toBe('true')
+  })
+
+  it('allows every effect-free model to be selected when catalog-backed', () => {
+    const modelCodes = [
+      'park',
+      'hospital',
+      'commercial-facility',
+      'farm',
+      'city-hall',
+      'factory',
+    ]
+    render(
+      <MarketList
+        items={MARKET_ITEMS}
+        purchasableItemCodes={new Set(modelCodes)}
+        onSelectItem={() => undefined}
+      />,
+    )
+
+    for (const item of MARKET_ITEMS.filter((candidate) =>
+      modelCodes.includes(candidate.code),
+    )) {
+      expect(
+        screen.getByRole('button', { name: `${item.name}を選択` }),
+      ).not.toBeNull()
+    }
   })
 })

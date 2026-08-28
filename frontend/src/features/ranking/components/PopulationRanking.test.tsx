@@ -45,7 +45,7 @@ describe('RankingItem', () => {
     expect(link.getAttribute('href')).toBe(`/users/${currentUser.userId}`)
     expect(link.getAttribute('aria-current')).toBe('true')
     expect(link.getAttribute('aria-label')).toBe(
-      `${currentUser.rank}位、${currentUser.displayName}、${currentUser.townName}、人口50人、あなた`,
+      `${currentUser.rank}位、${currentUser.displayName}、${currentUser.townName}、人口60人、あなた`,
     )
     expect(screen.getByText('あなた')).not.toBeNull()
   })
