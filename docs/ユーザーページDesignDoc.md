@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 対象プロダクト | Walk City |
-| ステータス | In Progress（実装順1完了） |
+| ステータス | In Progress（実装順2完了） |
 | 作成日 | 2026-08-28 |
 | 対象 | 他ユーザーの公開プロフィール要約、街への導線、読み込み・エラー状態 |
 | 対象ルート | `/users/:userId` |
@@ -494,7 +494,7 @@ API の `message` を無条件に表示せず、安定した `code` に応じた
 ## 17. 実装順序
 
 1. **完了:** `PublicUserProfile` と `TownDetail` からの安全な変換関数を定義し、単体テストを作る。
-2. `usePublicUserProfile` を実装し、成功、エラー、再試行、競合防止を Hook テストする。
+2. **完了:** `usePublicUserProfile` を実装し、成功、エラー、再試行、競合防止を Hook テストする。
 3. 既存モックへ不足シナリオと契約違反ケースを追加する。
 4. スケルトン、要約、エラー状態の表示コンポーネントを実装する。
 5. `UserPage` の準備中 UI を `PublicUserProfileView` に置き換え、`ApiProvider` の `townApi` を接続する。
