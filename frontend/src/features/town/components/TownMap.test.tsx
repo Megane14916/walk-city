@@ -231,6 +231,105 @@ describe('TownOverview', () => {
     ).not.toBeNull()
   })
 
+  it('moves a selected building without changing coins or population', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    const map = screen.getByRole('application', {
+      name: /グリーンタウンのマップ/,
+    })
+    fireEvent.click(map, { clientX: 227, clientY: 267 })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'この建物を移動する' }),
+    )
+
+    expect(
+      screen.getByRole('heading', { name: '住宅（小）を移動' }),
+    ).not.toBeNull()
+    expect(screen.getByText('マップ上の移動先を選んでください。')).not.toBeNull()
+
+    fireEvent.click(map, { clientX: 180, clientY: 290 })
+    expect(
+      screen.getByRole('img', {
+        name: /住宅（小）の移動プレビュー、座標41,50、配置可能/,
+      }),
+    ).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '移動を確定' }))
+
+    expect(
+      await screen.findByText('住宅（小）を移動しました。'),
+    ).not.toBeNull()
+    expect(api.getTownSnapshot().town.coins).toBe(2_000)
+    expect(api.getTownSnapshot().town.population).toBe(60)
+    expect(
+      api
+        .getTownSnapshot()
+        .buildings.find((building) => building.id === 'mock-house-001'),
+    ).toMatchObject({ anchorX: 41, anchorY: 50 })
+  })
+
+  it('does not submit a move when the current position is selected', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    const map = screen.getByRole('application', {
+      name: /グリーンタウンのマップ/,
+    })
+    fireEvent.click(map, { clientX: 227, clientY: 267 })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'この建物を移動する' }),
+    )
+    fireEvent.click(map, { clientX: 227, clientY: 267 })
+
+    expect(
+      screen.getByText('現在と同じ位置です。別の移動先を選んでください。'),
+    ).not.toBeNull()
+    expect(
+      screen.getByRole('button', { name: '移動を確定' }).hasAttribute('disabled'),
+    ).toBe(true)
+    expect(api.getTownSnapshot().buildings.find(
+      (building) => building.id === 'mock-house-001',
+    )).toMatchObject({ anchorX: 43, anchorY: 49 })
+  })
+
+  it('keeps the move selection and allows retrying after an API error', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    api.setFailure('moveBuilding', 'INTERNAL_ERROR')
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    const map = screen.getByRole('application', {
+      name: /グリーンタウンのマップ/,
+    })
+    fireEvent.click(map, { clientX: 227, clientY: 267 })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'この建物を移動する' }),
+    )
+    fireEvent.click(map, { clientX: 180, clientY: 290 })
+    fireEvent.click(screen.getByRole('button', { name: '移動を確定' }))
+
+    expect(await screen.findByRole('alert')).not.toBeNull()
+    expect(
+      screen.getByRole('heading', { name: '住宅（小）を移動' }),
+    ).not.toBeNull()
+    expect(api.getTownSnapshot().buildings.find(
+      (building) => building.id === 'mock-house-001',
+    )).toMatchObject({ anchorX: 43, anchorY: 49 })
+
+    api.setFailure('moveBuilding', null)
+    fireEvent.click(screen.getByRole('button', { name: '移動を確定' }))
+
+    expect(
+      await screen.findByText('住宅（小）を移動しました。'),
+    ).not.toBeNull()
+    expect(api.getTownSnapshot().buildings.find(
+      (building) => building.id === 'mock-house-001',
+    )).toMatchObject({ anchorX: 41, anchorY: 50 })
+  })
+
   it('purchases a large house for 200 coins and increases population by 50', async () => {
     const api = createMockTownApi({ latencyMs: 0 })
     render(<TownOverview api={api} />)
@@ -562,6 +661,9 @@ describe('TownOverview', () => {
     expect(screen.getByText('+10人')).not.toBeNull()
     expect(
       screen.queryByRole('textbox', { name: '建物の表示名' }),
+    ).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'この建物を移動する' }),
     ).toBeNull()
   })
 
