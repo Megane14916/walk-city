@@ -65,7 +65,7 @@ describe('createApiServices', () => {
     ).toThrow('VITE_API_MODE=supabase以外を使用できません。')
   })
 
-  it('creates lazy Supabase Town services without mixing mock data', async () => {
+  it('creates every lazy Supabase service without mixing mock data', async () => {
     const services = createApiServices({
       VITE_API_MODE: 'supabase',
       VITE_SUPABASE_URL: 'https://example.supabase.co',
@@ -75,6 +75,18 @@ describe('createApiServices', () => {
     expect(typeof services.townApi.getBuildingCatalog).toBe('function')
     expect(typeof services.townApi.getMyTown).toBe('function')
     expect(typeof services.townApi.getPublicTown).toBe('function')
+    expect(typeof services.townApi.placeBuilding).toBe('function')
+    expect(typeof services.townApi.placeRoadLine).toBe('function')
+    expect(typeof services.townApi.moveBuilding).toBe('function')
+    expect(typeof services.townApi.unlockLand).toBe('function')
+    expect(services.townApi.supportsBuildingRename).toBe(false)
     expect(typeof services.rankingApi.getPopulationRanking).toBe('function')
+    expect(typeof services.stepSyncApi.syncSteps).toBe('function')
+    expect(
+      typeof services.googleIntegrationApi.getGoogleIntegrationState,
+    ).toBe('function')
+    expect(
+      typeof services.googleIntegrationApi.startGoogleHealthConnection,
+    ).toBe('function')
   })
 })

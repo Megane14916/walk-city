@@ -185,6 +185,31 @@ describe('TownOverview', () => {
     })
   })
 
+  it('prevents duplicate placement submissions while a request is pending', async () => {
+    const api = createMockTownApi({ latencyMs: 50 })
+    const placeBuilding = vi.spyOn(api, 'placeBuilding')
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    fireEvent.click(screen.getByRole('button', { name: /マーケット/ }))
+    fireEvent.click(screen.getByRole('button', { name: '住宅（小）を選択' }))
+    fireEvent.click(
+      screen.getByRole('application', { name: /グリーンタウンのマップ/ }),
+      { clientX: 180, clientY: 290 },
+    )
+
+    const submit = screen.getByRole('button', {
+      name: '50コインで購入・配置',
+    })
+    fireEvent.click(submit)
+    fireEvent.click(submit)
+
+    expect((submit as HTMLButtonElement).disabled).toBe(true)
+    expect(placeBuilding).toHaveBeenCalledTimes(1)
+    await screen.findByText('住宅（小）を配置しました。')
+    expect(api.getTownSnapshot().town.coins).toBe(1_950)
+  })
+
   it('selects a building, shows its details, and changes its display name', async () => {
     const api = createMockTownApi({ latencyMs: 0 })
     render(<TownOverview api={api} />)
