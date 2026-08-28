@@ -1,9 +1,11 @@
 import { PopulationRanking } from '../../features/ranking/components'
-import { mockRankingApi } from '../../mocks/services'
 import { paths } from '../paths'
+import { useApi } from '../providers'
 
 export function RankingPage() {
+  const { rankingApi } = useApi()
+
   return (
-    <PopulationRanking api={mockRankingApi} getUserHref={paths.user} />
+    <PopulationRanking api={rankingApi} getUserHref={paths.user} />
   )
 }

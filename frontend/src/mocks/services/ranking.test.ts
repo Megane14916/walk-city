@@ -6,6 +6,8 @@ import {
   createMockRankingApi,
   DEFAULT_RANKING_PAGE_SIZE,
 } from './ranking'
+import { createMockTownApi } from './town'
+import { createMockWalkCityStore } from './walk-city-store'
 
 function expectFailureCode(
   result: Awaited<ReturnType<RankingApi['getPopulationRanking']>>,
@@ -82,6 +84,40 @@ describeRankingApiContract('Mock', () =>
 )
 
 describe('MockRankingApi scenarios', () => {
+  it('reflects the latest town population and recalculates the current user rank', async () => {
+    const store = createMockWalkCityStore()
+    const townApi = createMockTownApi({ latencyMs: 0, store })
+    const rankingApi = createMockRankingApi({ latencyMs: 0, store })
+
+    const before = await rankingApi.getPopulationRanking({})
+    expect(before.ok).toBe(true)
+    if (!before.ok) return
+    expect(before.data.entries.find((entry) => entry.isCurrentUser)).toMatchObject({
+      population: 60,
+      rank: 17,
+    })
+
+    await expect(
+      townApi.placeBuilding({
+        buildingTypeCode: 'apartment',
+        anchorX: 40,
+        anchorY: 49,
+        requestId: 'ranking-population-sync',
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { population: 110 },
+    })
+
+    const after = await rankingApi.getPopulationRanking({})
+    expect(after.ok).toBe(true)
+    if (!after.ok) return
+    expect(after.data.entries.find((entry) => entry.isCurrentUser)).toMatchObject({
+      population: 110,
+      rank: 13,
+    })
+  })
+
   it('supports an empty ranking', async () => {
     const api = createMockRankingApi({ latencyMs: 0, entries: [] })
     const result = await api.getPopulationRanking({})

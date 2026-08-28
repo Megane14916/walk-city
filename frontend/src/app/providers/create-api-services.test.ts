@@ -19,6 +19,7 @@ describe('createApiServices', () => {
     const result =
       await services.googleIntegrationApi.getGoogleIntegrationState()
     const townResult = await services.townApi.getMyTown()
+    const rankingResult = await services.rankingApi.getPopulationRanking({})
 
     expect(result).toEqual({
       ok: true,
@@ -27,6 +28,14 @@ describe('createApiServices', () => {
     expect(townResult).toMatchObject({
       ok: true,
       data: { town: { coins: 2_000 } },
+    })
+    expect(rankingResult).toMatchObject({
+      ok: true,
+      data: {
+        entries: expect.arrayContaining([
+          expect.objectContaining({ isCurrentUser: true, population: 60 }),
+        ]),
+      },
     })
     expect(typeof services.stepSyncApi.syncSteps).toBe('function')
   })
@@ -49,6 +58,15 @@ describe('createApiServices', () => {
       error: {
         code: 'INTERNAL_ERROR',
         message: '街データAPIは現在準備中です。',
+      },
+    })
+    await expect(
+      services.rankingApi.getPopulationRanking({}),
+    ).resolves.toEqual({
+      ok: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'ランキングAPIは現在準備中です。',
       },
     })
   })

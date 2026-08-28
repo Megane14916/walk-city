@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAuth } from '../../features/auth/hooks'
 import {
   createMockGoogleIntegrationApi,
+  createMockRankingApi,
   createMockStepSyncApi,
   createMockTownApi,
   createMockWalkCityStore,
@@ -57,6 +58,7 @@ function renderProvider(
         services={{
           googleIntegrationApi: api,
           stepSyncApi: createMockStepSyncApi({ latencyMs: 0, store }),
+          rankingApi: createMockRankingApi({ latencyMs: 0, store }),
           townApi: createMockTownApi({ latencyMs: 0, store }),
         }}
       >

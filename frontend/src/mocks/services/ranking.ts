@@ -6,6 +6,7 @@ import type {
 } from '../../features/ranking/types'
 import type { ApiErrorCode, ApiResult } from '../../types/common'
 import { MOCK_RANKING_ENTRIES } from '../data/rankings'
+import type { MockWalkCityStore } from './walk-city-store'
 
 export const DEFAULT_RANKING_PAGE_SIZE = 20
 
@@ -19,6 +20,7 @@ export type MockRankingErrorCode =
 export type MockRankingApiOptions = {
   latencyMs?: number
   entries?: RankingEntry[]
+  store?: MockWalkCityStore
 }
 
 export type MockRankingApi = RankingApi & {
@@ -61,6 +63,44 @@ function copyEntry(entry: RankingEntry): RankingEntry {
   return { ...entry }
 }
 
+function createRankingSnapshot(
+  entries: RankingEntry[],
+  store: MockWalkCityStore | undefined,
+): RankingEntry[] {
+  const snapshot = entries.map(copyEntry)
+  if (!store) return snapshot
+
+  const currentTown = store.getMutableTown().town
+  const currentUserIndex = snapshot.findIndex((entry) => entry.isCurrentUser)
+  if (currentUserIndex === -1) return snapshot
+
+  snapshot[currentUserIndex] = {
+    ...snapshot[currentUserIndex],
+    userId: currentTown.owner.id,
+    displayName: currentTown.owner.displayName,
+    townId: currentTown.id,
+    townName: currentTown.name,
+    population: currentTown.population,
+  }
+
+  snapshot.sort(
+    (left, right) =>
+      right.population - left.population ||
+      left.displayName.localeCompare(right.displayName, 'ja') ||
+      left.userId.localeCompare(right.userId),
+  )
+
+  let previousPopulation: number | null = null
+  let rank = 0
+  return snapshot.map((entry, index) => {
+    if (entry.population !== previousPopulation) {
+      rank = index + 1
+      previousPopulation = entry.population
+    }
+    return { ...entry, rank }
+  })
+}
+
 function createCursor(offset: number): string {
   return `${CURSOR_PREFIX}${offset}`
 }
@@ -84,6 +124,7 @@ export function createMockRankingApi(
 ): MockRankingApi {
   const latencyMs = options.latencyMs ?? 150
   const entries = (options.entries ?? MOCK_RANKING_ENTRIES).map(copyEntry)
+  const store = options.store
   const failures = new Map<MockRankingRequestKind, ConfiguredFailure>()
 
   const wait = async () => {
@@ -106,6 +147,8 @@ export function createMockRankingApi(
     async getPopulationRanking(input: RankingRequest) {
       await wait()
 
+      const rankingSnapshot = createRankingSnapshot(entries, store)
+
       const limit = input.limit ?? DEFAULT_RANKING_PAGE_SIZE
       if (!Number.isInteger(limit) || limit <= 0) {
         return failure('INVALID_INPUT')
@@ -115,7 +158,7 @@ export function createMockRankingApi(
       let requestKind: MockRankingRequestKind = 'initial'
       if (input.cursor !== undefined) {
         if (input.cursor.length === 0) return failure('INVALID_INPUT')
-        const parsedOffset = readCursor(input.cursor, entries.length)
+        const parsedOffset = readCursor(input.cursor, rankingSnapshot.length)
         if (parsedOffset === null) return failure('INVALID_INPUT')
         offset = parsedOffset
         requestKind = 'loadMore'
@@ -124,10 +167,12 @@ export function createMockRankingApi(
       const failed = configuredFailure<RankingPage>(requestKind)
       if (failed) return failed
 
-      const pageEntries = entries.slice(offset, offset + limit).map(copyEntry)
+      const pageEntries = rankingSnapshot
+        .slice(offset, offset + limit)
+        .map(copyEntry)
       const nextOffset = offset + pageEntries.length
       const nextCursor =
-        nextOffset < entries.length ? createCursor(nextOffset) : null
+        nextOffset < rankingSnapshot.length ? createCursor(nextOffset) : null
 
       return success({ entries: pageEntries, nextCursor })
     },

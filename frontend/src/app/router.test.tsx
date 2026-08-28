@@ -38,6 +38,7 @@ function renderRoute(
         services={{
           googleIntegrationApi,
           stepSyncApi: mockStepSyncApi,
+          rankingApi: mockRankingApi,
           townApi: mockTownApi,
         }}
       >

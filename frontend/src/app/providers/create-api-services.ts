@@ -1,5 +1,6 @@
 import type { GoogleIntegrationApi } from '../../features/auth/api'
 import type { StepSyncApi } from '../../features/health/api'
+import type { RankingApi } from '../../features/ranking/api'
 import type { TownApi } from '../../features/town/api'
 import {
   getSupabaseClientConfig,
@@ -8,6 +9,7 @@ import {
 import type { ApiResult } from '../../types/common'
 import {
   createMockGoogleIntegrationApi,
+  createMockRankingApi,
   createMockStepSyncApi,
   createMockTownApi,
   createMockWalkCityStore,
@@ -140,6 +142,20 @@ function createUnavailableSupabaseTownApi(): TownApi {
   }
 }
 
+function createUnavailableSupabaseRankingApi(): RankingApi {
+  return {
+    async getPopulationRanking() {
+      return {
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'ランキングAPIは現在準備中です。',
+        },
+      }
+    },
+  }
+}
+
 export function createApiServices(
   environment: ApiEnvironment = import.meta.env,
 ): ApiServices {
@@ -149,6 +165,7 @@ export function createApiServices(
     return {
       googleIntegrationApi: createMockGoogleIntegrationApi(),
       stepSyncApi: createMockStepSyncApi({ store }),
+      rankingApi: createMockRankingApi({ store }),
       townApi: createMockTownApi({ store }),
     }
   }
@@ -156,6 +173,7 @@ export function createApiServices(
   const supabaseServices = createLazySupabaseServiceBundle(environment)
   return {
     ...supabaseServices,
+    rankingApi: createUnavailableSupabaseRankingApi(),
     townApi: createUnavailableSupabaseTownApi(),
   }
 }
