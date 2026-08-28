@@ -4,8 +4,14 @@ import type { TownApi } from '../api'
 import type {
   BuildingCatalogItem,
   PlaceBuildingInput,
+  PlaceRoadLineInput,
+  PlaceRoadLineResult,
+  RenameBuildingInput,
+  RenameBuildingResult,
   TownDetail,
   TownMutationResult,
+  UnlockLandInput,
+  UnlockLandResult,
 } from '../types'
 import type { StepSyncStatus } from '../../health/types'
 
@@ -21,6 +27,15 @@ export type TownOverviewState = {
   placeBuilding: (
     input: PlaceBuildingInput,
   ) => Promise<ApiResult<TownMutationResult>>
+  placeRoadLine: (
+    input: PlaceRoadLineInput,
+  ) => Promise<ApiResult<PlaceRoadLineResult>>
+  unlockLand: (
+    input: UnlockLandInput,
+  ) => Promise<ApiResult<UnlockLandResult>>
+  renameBuilding: (
+    input: RenameBuildingInput,
+  ) => Promise<ApiResult<RenameBuildingResult>>
   applyStepSyncResult: (result: StepSyncStatus) => void
   retry: () => void
 }
@@ -160,12 +175,132 @@ export function useTownOverview(
     })
   }, [])
 
+  const placeRoadLine = useCallback(
+    async (
+      input: PlaceRoadLineInput,
+    ): Promise<ApiResult<PlaceRoadLineResult>> => {
+      let result: ApiResult<PlaceRoadLineResult>
+
+      try {
+        result = await api.placeRoadLine(input)
+      } catch {
+        return { ok: false, error: UNEXPECTED_ERROR }
+      }
+
+      if (!result.ok) return result
+
+      setData((current) => {
+        if (!current || current.town.editable !== true) return current
+        const existingIds = new Set(
+          current.town.buildings.map((building) => building.id),
+        )
+        const newBuildings = result.data.buildings.filter(
+          (building) => !existingIds.has(building.id),
+        )
+
+        return {
+          ...current,
+          town: {
+            ...current.town,
+            town: {
+              ...current.town.town,
+              coins: result.data.coinBalance,
+              population: result.data.population,
+            },
+            buildings: [...current.town.buildings, ...newBuildings],
+          },
+        }
+      })
+
+      return result
+    },
+    [api],
+  )
+
+  const unlockLand = useCallback(
+    async (input: UnlockLandInput): Promise<ApiResult<UnlockLandResult>> => {
+      let result: ApiResult<UnlockLandResult>
+
+      try {
+        result = await api.unlockLand(input)
+      } catch {
+        return { ok: false, error: UNEXPECTED_ERROR }
+      }
+
+      if (!result.ok) return result
+
+      setData((current) => {
+        if (!current || current.town.editable !== true) return current
+
+        const areaExists = current.town.unlockedAreas.some(
+          (area) =>
+            area.x === result.data.unlockedArea.x &&
+            area.y === result.data.unlockedArea.y,
+        )
+
+        return {
+          ...current,
+          town: {
+            ...current.town,
+            town: {
+              ...current.town.town,
+              coins: result.data.coinBalance,
+            },
+            unlockedAreas: areaExists
+              ? current.town.unlockedAreas
+              : [...current.town.unlockedAreas, result.data.unlockedArea],
+          },
+        }
+      })
+
+      return result
+    },
+    [api],
+  )
+
+  const renameBuilding = useCallback(
+    async (
+      input: RenameBuildingInput,
+    ): Promise<ApiResult<RenameBuildingResult>> => {
+      let result: ApiResult<RenameBuildingResult>
+
+      try {
+        result = await api.renameBuilding(input)
+      } catch {
+        return { ok: false, error: UNEXPECTED_ERROR }
+      }
+
+      if (!result.ok) return result
+
+      setData((current) => {
+        if (!current || current.town.editable !== true) return current
+        return {
+          ...current,
+          town: {
+            ...current.town,
+            buildings: current.town.buildings.map((building) =>
+              building.id === result.data.building.id
+                ? result.data.building
+                : building,
+            ),
+          },
+        }
+      })
+
+      return result
+    },
+    [api],
+  )
+
   const isCurrentRequest = loadedRequestKey === requestKey
   return {
     data: isCurrentRequest ? data : null,
     isLoading: !isCurrentRequest || isLoading,
     error: isCurrentRequest ? error : null,
     placeBuilding,
+    placeRoadLine,
+    unlockLand,
+    renameBuilding,
     applyStepSyncResult,
     retry,
   }

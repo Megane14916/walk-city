@@ -13,6 +13,7 @@ export type UnlockedArea = {
 export type PlacedBuilding = {
   id: string
   buildingTypeCode: string
+  customName: string | null
   anchorX: number
   anchorY: number
   createdAt: string
@@ -71,14 +72,43 @@ export type PlaceBuildingInput = {
   anchorY: number
   requestId: string
 }
+export type PlaceRoadLineInput = {
+  buildingTypeCode: string
+  cells: Cell[]
+  requestId: string
+}
 export type MoveBuildingInput = {
   buildingId: string
   anchorX: number
   anchorY: number
   requestId: string
 }
+export type RenameBuildingInput = {
+  buildingId: string
+  customName: string | null
+}
+export type RenameBuildingResult = {
+  building: PlacedBuilding
+  updatedAt: string
+}
+export type UnlockLandInput = {
+  x: number
+  y: number
+  requestId: string
+}
+export type UnlockLandResult = {
+  unlockedArea: UnlockedArea
+  coinBalance: number
+  updatedAt: string
+}
 export type TownMutationResult = {
   building: PlacedBuilding
+  coinBalance: number
+  population: number
+  updatedAt: string
+}
+export type PlaceRoadLineResult = {
+  buildings: PlacedBuilding[]
   coinBalance: number
   population: number
   updatedAt: string
@@ -95,6 +125,26 @@ export type PlacementPreviewStatus =
   | { status: 'valid' }
   | { status: 'invalid'; reason: PreviewInvalidReason }
   | { status: 'unknown'; message: string }
+export type RoadLineInvalidReason =
+  | PreviewInvalidReason
+  | 'NO_NEW_ROAD_CELLS'
+export type RoadLinePreview = {
+  cells: Cell[]
+  newCells: Cell[]
+  totalCostCoins: number
+  status:
+    | { status: 'valid' }
+    | { status: 'invalid'; reason: RoadLineInvalidReason }
+    | { status: 'unknown'; message: string }
+}
+export type LandUnlockInvalidReason =
+  | 'OUT_OF_MAP'
+  | 'AREA_ALREADY_UNLOCKED'
+  | 'AREA_NOT_ADJACENT'
+  | 'INSUFFICIENT_COINS'
+export type LandUnlockPreviewStatus =
+  | { status: 'valid' }
+  | { status: 'invalid'; reason: LandUnlockInvalidReason }
 export type MapMode =
   | { type: 'idle' }
   | {

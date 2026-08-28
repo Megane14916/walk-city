@@ -26,7 +26,7 @@ describe('createApiServices', () => {
     })
     expect(townResult).toMatchObject({
       ok: true,
-      data: { town: { coins: 500 } },
+      data: { town: { coins: 2_000 } },
     })
     expect(typeof services.stepSyncApi.syncSteps).toBe('function')
   })

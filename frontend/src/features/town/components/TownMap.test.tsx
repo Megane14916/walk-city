@@ -108,13 +108,15 @@ describe('TownOverview', () => {
     expect(
       await screen.findByRole('heading', { name: 'グリーンタウン' }),
     ).not.toBeNull()
-    expect(screen.getByText('500')).not.toBeNull()
+    expect(screen.getByText('2,000')).not.toBeNull()
     const menu = screen.getByRole('navigation', {
       name: 'ユーザーダッシュボード',
     })
     expect(within(menu).getByText('Walk City テストユーザー')).not.toBeNull()
     expect(within(menu).getByRole('button', { name: /ランキング/ })).not.toBeNull()
     expect(within(menu).getByRole('button', { name: /マーケット/ })).not.toBeNull()
+    expect(within(menu).getByText('人口')).not.toBeNull()
+    expect(within(menu).getByText('60人')).not.toBeNull()
     expect(within(menu).getByText('今日の歩数')).not.toBeNull()
     expect(within(menu).getByText('所持コイン数')).not.toBeNull()
   })
@@ -144,6 +146,10 @@ describe('TownOverview', () => {
     const api = createMockTownApi({ latencyMs: 0 })
     render(<TownOverview api={api} />)
     await screen.findByRole('heading', { name: 'グリーンタウン' })
+    const menu = screen.getByRole('navigation', {
+      name: 'ユーザーダッシュボード',
+    })
+    expect(within(menu).getByText('60人')).not.toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: /マーケット/ }))
     fireEvent.click(screen.getByRole('button', { name: '住宅（小）を選択' }))
@@ -169,13 +175,60 @@ describe('TownOverview', () => {
     expect(
       await screen.findByText('住宅（小）を配置しました。'),
     ).not.toBeNull()
-    expect(screen.getByText('450')).not.toBeNull()
-    expect(api.getTownSnapshot().town.population).toBe(60)
+    expect(screen.getByText('1,950')).not.toBeNull()
+    expect(within(menu).getByText('70人')).not.toBeNull()
+    expect(api.getTownSnapshot().town.population).toBe(70)
     expect(api.getTownSnapshot().buildings.at(-1)).toMatchObject({
       buildingTypeCode: 'house-small',
       anchorX: 41,
       anchorY: 50,
     })
+  })
+
+  it('selects a building, shows its details, and changes its display name', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    const map = screen.getByRole('application', {
+      name: /グリーンタウンのマップ/,
+    })
+    fireEvent.click(map, { clientX: 227, clientY: 267 })
+
+    expect(
+      screen.getByRole('heading', { name: '住宅（小）' }),
+    ).not.toBeNull()
+    expect(screen.getByText('+10人')).not.toBeNull()
+    expect(screen.getByText('50コイン')).not.toBeNull()
+    expect(screen.getByText('人口を10増やします')).not.toBeNull()
+
+    const input = screen.getByRole('textbox', { name: '建物の表示名' })
+    fireEvent.change(input, { target: { value: 'わが家' } })
+    fireEvent.click(screen.getByRole('button', { name: '表示名を保存' }))
+
+    expect(
+      await screen.findByText('建物の表示名を変更しました。'),
+    ).not.toBeNull()
+    expect(screen.getByRole('heading', { name: 'わが家' })).not.toBeNull()
+    expect(
+      screen.getByRole('img', { name: /^わが家、座標43,49/ }),
+    ).not.toBeNull()
+    expect(
+      api
+        .getTownSnapshot()
+        .buildings.find((building) => building.id === 'mock-house-001')
+        ?.customName,
+    ).toBe('わが家')
+    expect(api.getTownSnapshot().town.population).toBe(60)
+    expect(api.getTownSnapshot().town.coins).toBe(2_000)
+
+    fireEvent.click(screen.getByRole('button', { name: '初期名に戻す' }))
+    expect(
+      await screen.findByText('建物の表示名を初期名に戻しました。'),
+    ).not.toBeNull()
+    expect(
+      screen.getByRole('heading', { name: '住宅（小）' }),
+    ).not.toBeNull()
   })
 
   it('purchases a large house for 200 coins and increases population by 50', async () => {
@@ -203,12 +256,141 @@ describe('TownOverview', () => {
     expect(
       await screen.findByText('住宅（大）を配置しました。'),
     ).not.toBeNull()
-    expect(screen.getByText('300')).not.toBeNull()
-    expect(api.getTownSnapshot().town.population).toBe(100)
+    expect(screen.getByText('1,800')).not.toBeNull()
+    expect(api.getTownSnapshot().town.population).toBe(110)
     expect(api.getTownSnapshot().buildings.at(-1)).toMatchObject({
       buildingTypeCode: 'apartment',
       anchorX: 40,
       anchorY: 49,
+    })
+  })
+
+  it('purchases and places an effect-free model without changing population', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    fireEvent.click(screen.getByRole('button', { name: /マーケット/ }))
+    fireEvent.click(screen.getByRole('button', { name: '公園を選択' }))
+
+    const map = screen.getByRole('application', {
+      name: /グリーンタウンのマップ/,
+    })
+    fireEvent.click(map, { clientX: 180, clientY: 290 })
+
+    expect(
+      screen.getByRole('img', {
+        name: /公園の配置プレビュー、座標41,50、配置可能/,
+      }),
+    ).not.toBeNull()
+    fireEvent.click(
+      screen.getByRole('button', { name: '150コインで購入・配置' }),
+    )
+
+    expect(await screen.findByText('公園を配置しました。')).not.toBeNull()
+    expect(screen.getByText('1,850')).not.toBeNull()
+    expect(api.getTownSnapshot().town.population).toBe(60)
+    expect(api.getTownSnapshot().buildings.at(-1)).toMatchObject({
+      buildingTypeCode: 'park',
+      anchorX: 41,
+      anchorY: 50,
+    })
+  })
+
+  it('draws and purchases multiple road cells with one confirmation', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    fireEvent.click(screen.getByRole('button', { name: /マーケット/ }))
+    fireEvent.click(screen.getByRole('button', { name: '道路を選択' }))
+
+    expect(
+      screen.getByRole('heading', { name: '道路を線で配置' }),
+    ).not.toBeNull()
+
+    const map = screen.getByRole('application', {
+      name: /グリーンタウンのマップ/,
+    })
+    fireEvent.pointerDown(map, {
+      pointerId: 1,
+      clientX: 180,
+      clientY: 325,
+    })
+    fireEvent.pointerMove(map, {
+      pointerId: 1,
+      clientX: 250,
+      clientY: 325,
+    })
+    fireEvent.pointerUp(map, {
+      pointerId: 1,
+      clientX: 250,
+      clientY: 325,
+    })
+
+    expect(
+      screen.getByRole('img', {
+        name: '道路の線プレビュー、4マス、配置可能',
+      }),
+    ).not.toBeNull()
+    fireEvent.click(
+      screen.getByRole('button', { name: '4マスを無料で配置' }),
+    )
+
+    expect(await screen.findByText('4マスの道路を配置しました。')).not.toBeNull()
+    expect(
+      api
+        .getTownSnapshot()
+        .buildings.filter((building) => building.buildingTypeCode === 'road'),
+    ).toHaveLength(11)
+  })
+
+  it('purchases and unlocks a cardinally adjacent 20 by 20 block', async () => {
+    const api = createMockTownApi({
+      latencyMs: 0,
+      initialTown: {
+        ...MOCK_MY_TOWN,
+        town: { ...MOCK_MY_TOWN.town, coins: 1_500 },
+      },
+    })
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    fireEvent.click(screen.getByRole('button', { name: /マーケット/ }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '未開放領域アンロックを選択',
+      }),
+    )
+
+    expect(
+      screen.getByRole('heading', { name: '未開放領域アンロック' }),
+    ).not.toBeNull()
+
+    const map = screen.getByRole('application', {
+      name: /グリーンタウンのマップ/,
+    })
+    fireEvent.click(map, { clientX: 100, clientY: 280 })
+
+    expect(
+      screen.getByRole('img', {
+        name: '未開放領域アンロックのプレビュー、座標20,40、開放可能',
+      }),
+    ).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '1,000コインで開放' }))
+
+    expect(
+      await screen.findByText('隣接する20×20区画を開放しました。'),
+    ).not.toBeNull()
+    const menu = screen.getByRole('navigation', {
+      name: 'ユーザーダッシュボード',
+    })
+    expect(within(menu).getByText('500')).not.toBeNull()
+    expect(api.getTownSnapshot().unlockedAreas).toContainEqual({
+      x: 20,
+      y: 40,
+      width: 20,
+      height: 20,
     })
   })
 
@@ -280,11 +462,11 @@ describe('TownOverview', () => {
     fireEvent.click(screen.getByRole('button', { name: '歩数を同期 ↻' }))
 
     expect(await screen.findByText('6,500歩')).not.toBeNull()
-    expect(await screen.findByText('1,150')).not.toBeNull()
+    expect(await screen.findByText('2,650')).not.toBeNull()
     expect(
       screen.getByText('6,500歩を同期し、650コイン獲得しました。'),
     ).not.toBeNull()
-    expect(api.getTownSnapshot().town.coins).toBe(1_150)
+    expect(api.getTownSnapshot().town.coins).toBe(2_650)
 
     fireEvent.click(screen.getByRole('button', { name: '歩数を同期 ↻' }))
     expect(
@@ -292,7 +474,7 @@ describe('TownOverview', () => {
         '歩数は最新です。新しく付与されたコインはありません。',
       ),
     ).not.toBeNull()
-    expect(api.getTownSnapshot().town.coins).toBe(1_150)
+    expect(api.getTownSnapshot().town.coins).toBe(2_650)
   })
 
   it('shows a reconnection action for a permission error', async () => {
@@ -331,7 +513,7 @@ describe('TownOverview', () => {
     expect(
       within(alert).getByRole('link', { name: '再連携' }).getAttribute('href'),
     ).toBe('/health/connect')
-    expect(api.getTownSnapshot().town.coins).toBe(500)
+    expect(api.getTownSnapshot().town.coins).toBe(2_000)
   })
 
   it('does not expose or invoke step sync in a public town', async () => {
@@ -351,6 +533,30 @@ describe('TownOverview', () => {
     expect(screen.queryByText('所持コイン数')).toBeNull()
     expect(screen.queryByRole('button', { name: '歩数を同期 ↻' })).toBeNull()
     expect(syncSteps).not.toHaveBeenCalled()
+  })
+
+  it('shows read-only building details in a public town', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    render(
+      <TownOverview
+        api={api}
+        mode={{ type: 'public', userId: MOCK_PUBLIC_USER_ID }}
+      />,
+    )
+    await screen.findByRole('heading', { name: 'ブルータウン' })
+
+    const map = screen.getByRole('application', {
+      name: /ブルータウンのマップ/,
+    })
+    fireEvent.click(map, { clientX: 297, clientY: 197 })
+
+    expect(
+      screen.getByRole('heading', { name: '住宅（小）' }),
+    ).not.toBeNull()
+    expect(screen.getByText('+10人')).not.toBeNull()
+    expect(
+      screen.queryByRole('textbox', { name: '建物の表示名' }),
+    ).toBeNull()
   })
 
   it('can retry after an API error', async () => {

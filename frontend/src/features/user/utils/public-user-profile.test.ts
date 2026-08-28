@@ -49,6 +49,7 @@ describe('toPublicUserProfile', () => {
         {
           id: 'building-001',
           buildingTypeCode: 'house-small',
+          customName: null,
           anchorX: 40,
           anchorY: 40,
           createdAt: '2026-08-28T00:00:00.000Z',

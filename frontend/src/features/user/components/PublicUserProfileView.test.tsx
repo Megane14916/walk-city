@@ -168,7 +168,7 @@ describe('PublicUserProfileView', () => {
       await screen.findByRole('heading', { name: 'シティウォーカー' }),
     ).not.toBeNull()
     expect(screen.getByRole('heading', { name: 'ブルータウン' })).not.toBeNull()
-    expect(screen.getByText('50')).not.toBeNull()
+    expect(screen.getByText('60')).not.toBeNull()
   })
 
   it('retries an internal API failure', async () => {

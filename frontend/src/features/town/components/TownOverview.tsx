@@ -5,8 +5,10 @@ import type { StepSyncApi } from '../../health/api'
 import { useStepSync } from '../../health/hooks'
 import {
   MARKET_ITEMS,
+  LandUnlockControls,
   MarketList,
   PlacementControls,
+  RoadPlacementControls,
   type MarketItem,
 } from '../../market'
 import type { RankingApi } from '../../ranking/api'
@@ -17,9 +19,15 @@ import {
   useTownOverview,
   type TownPageMode,
 } from '../hooks'
-import type { BuildingCatalogItem, Cell } from '../types'
-import { evaluatePlacementPreview } from '../utils'
+import type { BuildingCatalogItem, Cell, UnlockedArea } from '../types'
+import {
+  evaluateLandUnlockPreview,
+  evaluatePlacementPreview,
+  evaluateRoadLinePreview,
+  LAND_UNLOCK_ITEM_CODE,
+} from '../utils'
 import { TownMap } from './TownMap'
+import { BuildingDetailPanel } from './BuildingDetailPanel'
 
 export type TownOverviewProps = {
   api: TownApi
@@ -38,6 +46,18 @@ type DashboardPanel = 'ranking' | 'market' | null
 type PlacementSession = {
   item: BuildingCatalogItem
   anchor: Cell | null
+  requestId: string
+}
+
+type LandUnlockSession = {
+  item: MarketItem
+  area: UnlockedArea | null
+  requestId: string
+}
+
+type RoadPlacementSession = {
+  item: BuildingCatalogItem
+  cells: Cell[]
   requestId: string
 }
 
@@ -83,9 +103,26 @@ export function TownOverview({
   const stepSync = useStepSync(mode.type === 'self' ? stepSyncApi : undefined)
   const [activePanel, setActivePanel] = useState<DashboardPanel>(null)
   const [placement, setPlacement] = useState<PlacementSession | null>(null)
+  const [landUnlock, setLandUnlock] = useState<LandUnlockSession | null>(null)
+  const [roadPlacement, setRoadPlacement] =
+    useState<RoadPlacementSession | null>(null)
   const [isSubmittingPlacement, setIsSubmittingPlacement] = useState(false)
+  const [isSubmittingLandUnlock, setIsSubmittingLandUnlock] = useState(false)
+  const [isSubmittingRoadPlacement, setIsSubmittingRoadPlacement] =
+    useState(false)
   const [placementError, setPlacementError] = useState<string | null>(null)
+  const [landUnlockError, setLandUnlockError] = useState<string | null>(null)
+  const [roadPlacementError, setRoadPlacementError] = useState<string | null>(
+    null,
+  )
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(
+    null,
+  )
+  const [isRenamingBuilding, setIsRenamingBuilding] = useState(false)
+  const [renameBuildingError, setRenameBuildingError] = useState<string | null>(
+    null,
+  )
 
   const purchasableItemCodes = useMemo(
     () => {
@@ -93,11 +130,18 @@ export function TownOverview({
         return new Set<string>()
       }
 
-      return new Set(
+      const codes = new Set(
         state.data.catalog
           .filter((item) => item.enabled && item.costCoins !== null)
           .map((item) => item.code),
       )
+      const landUnlockItem = MARKET_ITEMS.find(
+        (item) => item.code === LAND_UNLOCK_ITEM_CODE,
+      )
+      if (landUnlockItem && landUnlockItem.costCoins !== null) {
+        codes.add(LAND_UNLOCK_ITEM_CODE)
+      }
+      return codes
     },
     [mode.type, state.data],
   )
@@ -113,6 +157,29 @@ export function TownOverview({
       operation: 'place',
     })
   }, [placement, state.data])
+
+  const landUnlockPreview = useMemo(() => {
+    if (!state.data || !landUnlock?.area) return null
+
+    return evaluateLandUnlockPreview({
+      town: state.data.town,
+      area: landUnlock.area,
+      costCoins: landUnlock.item.costCoins ?? 0,
+    })
+  }, [landUnlock, state.data])
+
+  const roadLinePreview = useMemo(() => {
+    if (!state.data || !roadPlacement || roadPlacement.cells.length === 0) {
+      return null
+    }
+
+    return evaluateRoadLinePreview({
+      town: state.data.town,
+      catalog: state.data.catalog,
+      item: roadPlacement.item,
+      cells: roadPlacement.cells,
+    })
+  }, [roadPlacement, state.data])
 
   if (state.isLoading) {
     return (
@@ -173,7 +240,9 @@ export function TownOverview({
       healthStatus !== 'connected' ||
       !stepSyncApi ||
       stepSync.isSyncing ||
-      isSubmittingPlacement
+      isSubmittingPlacement ||
+      isSubmittingLandUnlock ||
+      isSubmittingRoadPlacement
     ) {
       return
     }
@@ -196,11 +265,34 @@ export function TownOverview({
   }
 
   const togglePanel = (panel: Exclude<DashboardPanel, null>) => {
+    setSelectedBuildingId(null)
+    setRenameBuildingError(null)
     setActivePanel((current) => (current === panel ? null : panel))
   }
 
   const selectMarketItem = (marketItem: MarketItem) => {
     if (mode.type !== 'self' || !town.editable) return
+    setSelectedBuildingId(null)
+    setRenameBuildingError(null)
+
+    if (
+      marketItem.code === LAND_UNLOCK_ITEM_CODE &&
+      marketItem.costCoins !== null
+    ) {
+      setPlacement(null)
+      setRoadPlacement(null)
+      setRoadPlacementError(null)
+      setPlacementError(null)
+      setLandUnlock({
+        item: marketItem,
+        area: null,
+        requestId: createRequestId(),
+      })
+      setLandUnlockError(null)
+      setFeedback(null)
+      setActivePanel(null)
+      return
+    }
 
     const catalogItem = catalog.find(
       (candidate) => candidate.code === marketItem.code,
@@ -213,11 +305,31 @@ export function TownOverview({
       return
     }
 
+    if (catalogItem.category === 'road') {
+      setRoadPlacement({
+        item: catalogItem,
+        cells: [],
+        requestId: createRequestId(),
+      })
+      setPlacement(null)
+      setPlacementError(null)
+      setLandUnlock(null)
+      setLandUnlockError(null)
+      setRoadPlacementError(null)
+      setFeedback(null)
+      setActivePanel(null)
+      return
+    }
+
     setPlacement({
       item: catalogItem,
       anchor: null,
       requestId: createRequestId(),
     })
+    setLandUnlock(null)
+    setRoadPlacement(null)
+    setRoadPlacementError(null)
+    setLandUnlockError(null)
     setPlacementError(null)
     setFeedback(null)
     setActivePanel(null)
@@ -243,12 +355,57 @@ export function TownOverview({
     setPlacementError(null)
   }
 
+  const selectLandUnlockArea = (area: UnlockedArea) => {
+    setLandUnlock((current) => {
+      if (!current) return current
+      const isSameArea =
+        current.area?.x === area.x && current.area?.y === area.y
+
+      return {
+        ...current,
+        area,
+        requestId: isSameArea ? current.requestId : createRequestId(),
+      }
+    })
+    setLandUnlockError(null)
+  }
+
+  const cancelLandUnlock = () => {
+    setLandUnlock(null)
+    setLandUnlockError(null)
+  }
+
+  const selectRoadCells = (cells: Cell[]) => {
+    setRoadPlacement((current) => {
+      if (!current) return current
+      const isSameLine =
+        current.cells.length === cells.length &&
+        current.cells.every(
+          (cell, index) =>
+            cell.x === cells[index].x && cell.y === cells[index].y,
+        )
+      return {
+        ...current,
+        cells,
+        requestId: isSameLine ? current.requestId : createRequestId(),
+      }
+    })
+    setRoadPlacementError(null)
+  }
+
+  const cancelRoadPlacement = () => {
+    setRoadPlacement(null)
+    setRoadPlacementError(null)
+  }
+
   const confirmPlacement = async () => {
     if (
       !placement?.anchor ||
       placementPreview?.status !== 'valid' ||
-      isSubmittingPlacement
-      || stepSync.isSyncing
+      isSubmittingPlacement ||
+      stepSync.isSyncing ||
+      isSubmittingLandUnlock ||
+      isSubmittingRoadPlacement
     ) {
       return
     }
@@ -270,6 +427,117 @@ export function TownOverview({
 
     setFeedback(`${placement.item.name}を配置しました。`)
     setPlacement(null)
+  }
+
+  const confirmLandUnlock = async () => {
+    if (
+      !landUnlock?.area ||
+      landUnlockPreview?.status !== 'valid' ||
+      isSubmittingLandUnlock ||
+      isSubmittingPlacement ||
+      stepSync.isSyncing ||
+      isSubmittingRoadPlacement
+    ) {
+      return
+    }
+
+    setIsSubmittingLandUnlock(true)
+    setLandUnlockError(null)
+    const result = await state.unlockLand({
+      x: landUnlock.area.x,
+      y: landUnlock.area.y,
+      requestId: landUnlock.requestId,
+    })
+    setIsSubmittingLandUnlock(false)
+
+    if (!result.ok) {
+      setLandUnlockError(result.error.message)
+      return
+    }
+
+    setFeedback('隣接する20×20区画を開放しました。')
+    setLandUnlock(null)
+  }
+
+  const confirmRoadPlacement = async () => {
+    if (
+      !roadPlacement ||
+      roadLinePreview?.status.status !== 'valid' ||
+      isSubmittingRoadPlacement ||
+      isSubmittingPlacement ||
+      isSubmittingLandUnlock ||
+      stepSync.isSyncing
+    ) {
+      return
+    }
+
+    setIsSubmittingRoadPlacement(true)
+    setRoadPlacementError(null)
+    const result = await state.placeRoadLine({
+      buildingTypeCode: roadPlacement.item.code,
+      cells: roadPlacement.cells,
+      requestId: roadPlacement.requestId,
+    })
+    setIsSubmittingRoadPlacement(false)
+
+    if (!result.ok) {
+      setRoadPlacementError(result.error.message)
+      return
+    }
+
+    setFeedback(`${result.data.buildings.length}マスの道路を配置しました。`)
+    setRoadPlacement(null)
+  }
+
+  const selectedBuilding = selectedBuildingId
+    ? town.buildings.find((building) => building.id === selectedBuildingId) ??
+      null
+    : null
+  const selectedBuildingItem = selectedBuilding
+    ? catalog.find(
+        (item) => item.code === selectedBuilding.buildingTypeCode,
+      ) ?? null
+    : null
+
+  const selectBuilding = (buildingId: string | null) => {
+    setSelectedBuildingId(buildingId)
+    setRenameBuildingError(null)
+    if (buildingId) setActivePanel(null)
+  }
+
+  const closeBuildingDetail = () => {
+    setSelectedBuildingId(null)
+    setRenameBuildingError(null)
+  }
+
+  const renameSelectedBuilding = async (customName: string | null) => {
+    if (
+      !selectedBuilding ||
+      mode.type !== 'self' ||
+      !town.editable ||
+      isRenamingBuilding
+    ) {
+      return
+    }
+
+    setIsRenamingBuilding(true)
+    setRenameBuildingError(null)
+    const result = await state.renameBuilding({
+      buildingId: selectedBuilding.id,
+      customName,
+    })
+    setIsRenamingBuilding(false)
+
+    if (!result.ok) {
+      setRenameBuildingError(result.error.message)
+      return
+    }
+
+    setFeedback(
+      result.data.building.customName
+        ? '建物の表示名を変更しました。'
+        : '建物の表示名を初期名に戻しました。',
+    )
   }
 
   return (
@@ -333,25 +601,42 @@ export function TownOverview({
             <span className="text-[11px] font-black">マーケット</span>
           </button>
 
-          {mode.type === 'self' && (
-            <div className="ml-auto flex shrink-0 items-center gap-2 max-[760px]:ml-0">
-              <dl className="m-0 flex items-center gap-2">
-              <div className="min-w-[150px] rounded-[15px] border border-[#cfe0d8] bg-[#e8f3ee] px-4 py-2.5 shadow-sm">
-                <dt className="text-[8px] font-black tracking-[.1em] text-[#548274]">今日の歩数</dt>
-                <dd className="m-0 mt-0.5 text-lg font-black tracking-[-.03em] text-[#285b4e]">
-                  {dailyStepsText}
+          <div className="ml-auto flex shrink-0 items-center gap-2 max-[760px]:ml-0">
+            <dl className="m-0 flex items-center gap-2">
+              <div className="min-w-[120px] rounded-[15px] border border-[#d6cfe6] bg-[#f2eef9] px-4 py-2.5 shadow-sm">
+                <dt className="text-[8px] font-black tracking-[.1em] text-[#766394]">
+                  人口
+                </dt>
+                <dd className="m-0 mt-0.5 text-lg font-black tracking-[-.03em] text-[#594677]">
+                  {formatNumber(town.town.population)}人
                 </dd>
               </div>
-              <div className="min-w-[130px] rounded-[15px] border border-[#e3d5a2] bg-[#fff9dc] px-4 py-2.5 shadow-sm">
-                <dt className="text-[8px] font-black tracking-[.1em] text-[#9a7d29]">所持コイン数</dt>
-                <dd className="m-0 mt-0.5 text-lg font-black tracking-[-.03em] text-[#6f581c]">
-                  {town.town.coins === undefined
-                    ? '非公開'
-                    : formatNumber(town.town.coins)}
-                </dd>
-              </div>
-              </dl>
-              {healthStatus === 'connected' ? (
+              {mode.type === 'self' && (
+                <>
+                  <div className="min-w-[150px] rounded-[15px] border border-[#cfe0d8] bg-[#e8f3ee] px-4 py-2.5 shadow-sm">
+                    <dt className="text-[8px] font-black tracking-[.1em] text-[#548274]">
+                      今日の歩数
+                    </dt>
+                    <dd className="m-0 mt-0.5 text-lg font-black tracking-[-.03em] text-[#285b4e]">
+                      {dailyStepsText}
+                    </dd>
+                  </div>
+                  <div className="min-w-[130px] rounded-[15px] border border-[#e3d5a2] bg-[#fff9dc] px-4 py-2.5 shadow-sm">
+                    <dt className="text-[8px] font-black tracking-[.1em] text-[#9a7d29]">
+                      所持コイン数
+                    </dt>
+                    <dd className="m-0 mt-0.5 text-lg font-black tracking-[-.03em] text-[#6f581c]">
+                      {town.town.coins === undefined
+                        ? '非公開'
+                        : formatNumber(town.town.coins)}
+                    </dd>
+                  </div>
+                </>
+              )}
+            </dl>
+
+            {mode.type === 'self' &&
+              (healthStatus === 'connected' ? (
                 <button
                   className="min-h-[58px] min-w-[112px] cursor-pointer rounded-[15px] border border-[#b9d8ca] bg-[#dceee6] px-3 text-[10px] font-black text-[#245f51] shadow-sm hover:bg-[#cfe8dc] disabled:cursor-not-allowed disabled:border-[#d7ddd6] disabled:bg-[#edf1ed] disabled:text-[#7f8985]"
                   type="button"
@@ -359,7 +644,9 @@ export function TownOverview({
                   disabled={
                     !stepSyncApi ||
                     stepSync.isSyncing ||
-                    isSubmittingPlacement
+                    isSubmittingPlacement ||
+                    isSubmittingLandUnlock ||
+                    isSubmittingRoadPlacement
                   }
                   aria-describedby={stepSync.error ? 'step-sync-error' : undefined}
                   title={
@@ -379,9 +666,8 @@ export function TownOverview({
                     ? '歩数を再連携'
                     : 'Healthを連携'}
                 </a>
-              )}
-            </div>
-          )}
+              ))}
+          </div>
         </nav>
         {mode.type === 'self' && stepSync.error && (
           <div
@@ -432,6 +718,27 @@ export function TownOverview({
                 }
               : null
           }
+          landUnlock={
+            landUnlock
+              ? {
+                  area: landUnlock.area,
+                  preview: landUnlockPreview,
+                  onSelectArea: selectLandUnlockArea,
+                }
+              : null
+          }
+          roadPlacement={
+            roadPlacement
+              ? {
+                  item: roadPlacement.item,
+                  cells: roadPlacement.cells,
+                  preview: roadLinePreview,
+                  onSelectCells: selectRoadCells,
+                }
+              : null
+          }
+          selectedBuildingId={selectedBuildingId}
+          onSelectBuilding={selectBuilding}
         />
 
         <div className="pointer-events-none absolute bottom-7 left-7 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-white/70 bg-[rgba(247,246,240,.86)] px-3 py-2 text-[8px] text-[#66726e] shadow-sm backdrop-blur-sm max-[560px]:right-7 max-[560px]:justify-center">
@@ -501,11 +808,28 @@ export function TownOverview({
             <MarketList
               items={MARKET_ITEMS}
               purchasableItemCodes={purchasableItemCodes}
-              selectedItemCode={placement?.item.code}
+              selectedItemCode={
+                placement?.item.code ??
+                landUnlock?.item.code ??
+                roadPlacement?.item.code
+              }
               onSelectItem={selectMarketItem}
             />
           )}
         </aside>
+      )}
+
+      {selectedBuilding && selectedBuildingItem && (
+        <BuildingDetailPanel
+          key={`${selectedBuilding.id}:${selectedBuilding.updatedAt}`}
+          building={selectedBuilding}
+          item={selectedBuildingItem}
+          editable={mode.type === 'self' && town.editable}
+          isSaving={isRenamingBuilding}
+          errorMessage={renameBuildingError}
+          onClose={closeBuildingDetail}
+          onRename={(customName) => void renameSelectedBuilding(customName)}
+        />
       )}
 
       {placement && (
@@ -514,10 +838,47 @@ export function TownOverview({
           anchor={placement.anchor}
           preview={placementPreview}
           isSubmitting={isSubmittingPlacement}
-          isConfirmBlocked={stepSync.isSyncing}
+          isConfirmBlocked={
+            stepSync.isSyncing ||
+            isSubmittingLandUnlock ||
+            isSubmittingRoadPlacement
+          }
           errorMessage={placementError}
           onCancel={cancelPlacement}
           onConfirm={confirmPlacement}
+        />
+      )}
+
+      {roadPlacement && (
+        <RoadPlacementControls
+          item={roadPlacement.item}
+          preview={roadLinePreview}
+          isSubmitting={isSubmittingRoadPlacement}
+          isConfirmBlocked={
+            stepSync.isSyncing ||
+            isSubmittingPlacement ||
+            isSubmittingLandUnlock
+          }
+          errorMessage={roadPlacementError}
+          onCancel={cancelRoadPlacement}
+          onConfirm={confirmRoadPlacement}
+        />
+      )}
+
+      {landUnlock && (
+        <LandUnlockControls
+          item={landUnlock.item}
+          area={landUnlock.area}
+          preview={landUnlockPreview}
+          isSubmitting={isSubmittingLandUnlock}
+          isConfirmBlocked={
+            stepSync.isSyncing ||
+            isSubmittingPlacement ||
+            isSubmittingRoadPlacement
+          }
+          errorMessage={landUnlockError}
+          onCancel={cancelLandUnlock}
+          onConfirm={confirmLandUnlock}
         />
       )}
     </section>

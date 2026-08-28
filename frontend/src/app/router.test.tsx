@@ -343,6 +343,8 @@ describe('AppRoutes', () => {
     expect(
       await screen.findByRole('heading', { name: 'ブルータウン' }),
     ).not.toBeNull()
+    expect(screen.getByText('人口')).not.toBeNull()
+    expect(screen.getByText('60人')).not.toBeNull()
     expect(screen.queryByText('今日の歩数')).toBeNull()
     expect(screen.queryByText('所持コイン数')).toBeNull()
   })

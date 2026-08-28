@@ -125,7 +125,16 @@ function createUnavailableSupabaseTownApi(): TownApi {
     async placeBuilding() {
       return unavailable()
     },
+    async placeRoadLine() {
+      return unavailable()
+    },
     async moveBuilding() {
+      return unavailable()
+    },
+    async renameBuilding() {
+      return unavailable()
+    },
+    async unlockLand() {
       return unavailable()
     },
   }
