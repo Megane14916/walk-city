@@ -522,7 +522,7 @@ describe('TownOverview', () => {
     vi.setSystemTime(new Date('2026-08-25T10:00:00.000Z'))
     const api = createMockTownApi({ latencyMs: 0 })
     const today = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Australia/Sydney',
+      timeZone: 'Asia/Tokyo',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',

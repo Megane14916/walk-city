@@ -122,7 +122,7 @@ Providerへの統合は完了しているが、`createUnavailableSupabaseRanking
 
 ### 4.5 日次歩数のタイムゾーンが暫定値のまま
 
-`useDailyStepsSummary()` は `Australia/Sydney` を固定使用している。一方、ゲーム上の歩数同期 `syncSteps()` は `Asia/Tokyo` を正としている。
+`useDailyStepsSummary()` とゲーム上の歩数同期 `syncSteps()` は、どちらも `Asia/Tokyo` を正とする。
 
 `getDashboard()` を実装しないため、この暫定処理は残さず、日次歩数表示も `Asia/Tokyo` に統一する。クライアントから日付・タイムゾーンを送る既存契約を維持する場合でも、報酬計算は引き続き `syncSteps()` のサーバー判定だけを使用する。
 

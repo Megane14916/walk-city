@@ -3,7 +3,7 @@ import type { GoogleIntegrationApi } from '../../auth/api'
 import type { GoogleIntegrationState } from '../../auth/types'
 import type { DailySteps } from '../../health/types'
 
-const TIMEZONE = 'Australia/Sydney'
+const TIMEZONE = 'Asia/Tokyo'
 
 type DailyStepsSummaryState = {
   dailySteps: DailySteps | null
@@ -16,13 +16,13 @@ type LoadedDailySteps = {
   dailySteps: DailySteps | null
 }
 
-function todayInSydney(): string {
+export function dateInTokyo(date: Date): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: TIMEZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date())
+  }).format(date)
 }
 
 export function useDailyStepsSummary(
@@ -39,7 +39,7 @@ export function useDailyStepsSummary(
     let active = true
     void api
       .getDailySteps({
-        date: todayInSydney(),
+        date: dateInTokyo(new Date()),
         timezone: TIMEZONE,
       })
       .then((stepsResult) => {
