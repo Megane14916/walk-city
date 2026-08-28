@@ -4,7 +4,12 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAuth } from '../../features/auth/hooks'
-import { createMockGoogleIntegrationApi } from '../../mocks/services'
+import {
+  createMockGoogleIntegrationApi,
+  createMockStepSyncApi,
+  createMockTownApi,
+  createMockWalkCityStore,
+} from '../../mocks/services'
 import { ApiProvider } from './ApiProvider'
 import { AuthProvider } from './AuthProvider'
 
@@ -44,10 +49,17 @@ function AuthProbe() {
 function renderProvider(
   api = createMockGoogleIntegrationApi({ latencyMs: 0 }),
 ) {
+  const store = createMockWalkCityStore()
   return {
     api,
     ...render(
-      <ApiProvider services={{ googleIntegrationApi: api }}>
+      <ApiProvider
+        services={{
+          googleIntegrationApi: api,
+          stepSyncApi: createMockStepSyncApi({ latencyMs: 0, store }),
+          townApi: createMockTownApi({ latencyMs: 0, store }),
+        }}
+      >
         <AuthProvider>
           <AuthProbe />
         </AuthProvider>

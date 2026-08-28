@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { GoogleIntegrationApi } from '../../auth/api'
 import type { GoogleIntegrationState } from '../../auth/types'
+import type { StepSyncApi } from '../../health/api'
+import { useStepSync } from '../../health/hooks'
 import {
   MARKET_ITEMS,
   MarketList,
@@ -23,8 +25,11 @@ export type TownOverviewProps = {
   api: TownApi
   googleApi?: GoogleIntegrationApi
   googleIntegrationState?: GoogleIntegrationState | null
+  stepSyncApi?: StepSyncApi
   rankingApi?: RankingApi
   getUserHref?: (userId: string) => string
+  healthConnectionHref?: string
+  loginHref?: string
   mode?: TownPageMode
 }
 
@@ -48,16 +53,34 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('ja-JP').format(value)
 }
 
+function stepSyncSuccessMessage(
+  steps: number,
+  newlyRewardedSteps: number,
+  coinsAwarded: number,
+): string {
+  if (coinsAwarded > 0) {
+    return `${formatNumber(steps)}歩を同期し、${formatNumber(coinsAwarded)}コイン獲得しました。`
+  }
+  if (newlyRewardedSteps > 0) {
+    return `${formatNumber(newlyRewardedSteps)}歩を新しく同期しました。今回の獲得コインは0です。`
+  }
+  return '歩数は最新です。新しく付与されたコインはありません。'
+}
+
 export function TownOverview({
   api,
   googleApi,
   googleIntegrationState,
+  stepSyncApi,
   rankingApi,
   getUserHref = (userId) => `/users/${encodeURIComponent(userId)}`,
+  healthConnectionHref = '/health/connect',
+  loginHref = '/login',
   mode = { type: 'self' },
 }: TownOverviewProps) {
   const state = useTownOverview(api, mode)
   const steps = useDailyStepsSummary(googleApi, googleIntegrationState)
+  const stepSync = useStepSync(mode.type === 'self' ? stepSyncApi : undefined)
   const [activePanel, setActivePanel] = useState<DashboardPanel>(null)
   const [placement, setPlacement] = useState<PlacementSession | null>(null)
   const [isSubmittingPlacement, setIsSubmittingPlacement] = useState(false)
@@ -131,13 +154,46 @@ export function TownOverview({
   }
 
   const { town, catalog } = state.data
-  const dailyStepsText = steps.isLoading
-    ? '確認中…'
-    : steps.dailySteps
-      ? `${formatNumber(steps.dailySteps.steps)}歩`
-      : steps.isConnected
-        ? '取得エラー'
-        : '未連携'
+  const healthStatus = googleIntegrationState?.healthConnection?.status
+  const dailyStepsText = stepSync.latest
+    ? `${formatNumber(stepSync.latest.steps)}歩`
+    : steps.isLoading
+      ? '確認中…'
+      : steps.dailySteps
+        ? `${formatNumber(steps.dailySteps.steps)}歩`
+        : healthStatus === 'permission_required'
+          ? '再連携が必要'
+          : steps.isConnected
+            ? '取得エラー'
+            : '未連携'
+
+  const syncSteps = async () => {
+    if (
+      mode.type !== 'self' ||
+      healthStatus !== 'connected' ||
+      !stepSyncApi ||
+      stepSync.isSyncing ||
+      isSubmittingPlacement
+    ) {
+      return
+    }
+
+    setFeedback(null)
+    const result = await stepSync.sync()
+    if (!result.ok) {
+      if (result.error.code === 'CONFLICT') state.retry()
+      return
+    }
+
+    state.applyStepSyncResult(result.data)
+    setFeedback(
+      stepSyncSuccessMessage(
+        result.data.steps,
+        result.data.newlyRewardedSteps,
+        result.data.coinsAwarded,
+      ),
+    )
+  }
 
   const togglePanel = (panel: Exclude<DashboardPanel, null>) => {
     setActivePanel((current) => (current === panel ? null : panel))
@@ -192,6 +248,7 @@ export function TownOverview({
       !placement?.anchor ||
       placementPreview?.status !== 'valid' ||
       isSubmittingPlacement
+      || stepSync.isSyncing
     ) {
       return
     }
@@ -294,9 +351,69 @@ export function TownOverview({
                 </dd>
               </div>
               </dl>
+              {healthStatus === 'connected' ? (
+                <button
+                  className="min-h-[58px] min-w-[112px] cursor-pointer rounded-[15px] border border-[#b9d8ca] bg-[#dceee6] px-3 text-[10px] font-black text-[#245f51] shadow-sm hover:bg-[#cfe8dc] disabled:cursor-not-allowed disabled:border-[#d7ddd6] disabled:bg-[#edf1ed] disabled:text-[#7f8985]"
+                  type="button"
+                  onClick={() => void syncSteps()}
+                  disabled={
+                    !stepSyncApi ||
+                    stepSync.isSyncing ||
+                    isSubmittingPlacement
+                  }
+                  aria-describedby={stepSync.error ? 'step-sync-error' : undefined}
+                  title={
+                    stepSync.latest
+                      ? `最終同期: ${stepSync.latest.syncedAt}`
+                      : undefined
+                  }
+                >
+                  {stepSync.isSyncing ? '同期中…' : '歩数を同期 ↻'}
+                </button>
+              ) : (
+                <a
+                  className="inline-flex min-h-[58px] min-w-[112px] items-center justify-center rounded-[15px] border border-[#b9d8ca] bg-[#dceee6] px-3 text-center text-[10px] font-black text-[#245f51] no-underline shadow-sm hover:bg-[#cfe8dc]"
+                  href={healthConnectionHref}
+                >
+                  {healthStatus === 'permission_required'
+                    ? '歩数を再連携'
+                    : 'Healthを連携'}
+                </a>
+              )}
             </div>
           )}
         </nav>
+        {mode.type === 'self' && stepSync.error && (
+          <div
+            className="mx-auto mb-2 flex w-[calc(100%-24px)] max-w-[1576px] items-center justify-between gap-3 rounded-xl border border-[#e7bbb3] bg-[#f9e6e1] px-3 py-2 text-[10px] font-bold text-[#8b473e]"
+            id="step-sync-error"
+            role="alert"
+          >
+            <span>{stepSync.error.message}</span>
+            {stepSync.error.code === 'UNAUTHENTICATED' ? (
+              <a className="shrink-0 font-black text-[#71352f]" href={loginHref}>
+                再ログイン
+              </a>
+            ) : stepSync.error.code === 'HEALTH_NOT_CONNECTED' ||
+              stepSync.error.code === 'HEALTH_PERMISSION_REQUIRED' ? (
+              <a
+                className="shrink-0 font-black text-[#71352f]"
+                href={healthConnectionHref}
+              >
+                再連携
+              </a>
+            ) : (
+              <button
+                className="shrink-0 cursor-pointer border-0 bg-transparent p-1 text-[10px] font-black text-[#71352f] underline"
+                type="button"
+                onClick={() => void syncSteps()}
+                disabled={stepSync.isSyncing}
+              >
+                再試行
+              </button>
+            )}
+          </div>
+        )}
       </header>
 
       <main className="relative mx-auto w-full max-w-[1600px] p-3">
@@ -397,6 +514,7 @@ export function TownOverview({
           anchor={placement.anchor}
           preview={placementPreview}
           isSubmitting={isSubmittingPlacement}
+          isConfirmBlocked={stepSync.isSyncing}
           errorMessage={placementError}
           onCancel={cancelPlacement}
           onConfirm={confirmPlacement}

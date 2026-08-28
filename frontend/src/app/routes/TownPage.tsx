@@ -1,16 +1,13 @@
 import { Navigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../features/auth/hooks'
 import { TownOverview } from '../../features/town/components'
-import {
-  mockRankingApi,
-  mockTownApi,
-} from '../../mocks/services'
+import { mockRankingApi } from '../../mocks/services'
 import { paths } from '../paths'
 import { useApi } from '../providers'
 
 export function TownPage() {
   const { userId } = useParams<{ userId: string }>()
-  const { googleIntegrationApi } = useApi()
+  const { googleIntegrationApi, stepSyncApi, townApi } = useApi()
   const { integrationState, state } = useAuth()
   const isPublicTown = userId !== undefined
 
@@ -28,11 +25,14 @@ export function TownPage() {
 
   return (
     <TownOverview
-      api={mockTownApi}
+      api={townApi}
       googleApi={isPublicTown ? undefined : googleIntegrationApi}
       googleIntegrationState={isPublicTown ? undefined : integrationState}
+      stepSyncApi={isPublicTown ? undefined : stepSyncApi}
       rankingApi={mockRankingApi}
       getUserHref={paths.user}
+      healthConnectionHref={paths.healthConnect}
+      loginHref={paths.login}
       mode={mode}
     />
   )

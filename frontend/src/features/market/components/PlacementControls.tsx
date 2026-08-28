@@ -10,6 +10,7 @@ export type PlacementControlsProps = {
   anchor: Cell | null
   preview: PlacementPreviewStatus | null
   isSubmitting: boolean
+  isConfirmBlocked?: boolean
   errorMessage: string | null
   onCancel: () => void
   onConfirm: () => void
@@ -44,6 +45,7 @@ export function PlacementControls({
   anchor,
   preview,
   isSubmitting,
+  isConfirmBlocked = false,
   errorMessage,
   onCancel,
   onConfirm,
@@ -113,7 +115,7 @@ export function PlacementControls({
           className="min-h-11 flex-[1.7] cursor-pointer rounded-xl border-0 bg-[#123f3c] px-4 text-[11px] font-black text-white shadow-sm hover:bg-[#0b322f] disabled:cursor-not-allowed disabled:bg-[#aeb8b3]"
           type="button"
           onClick={onConfirm}
-          disabled={!isValid || isSubmitting}
+          disabled={!isValid || isSubmitting || isConfirmBlocked}
         >
           {isSubmitting ? '購入・配置中…' : confirmLabel}
         </button>

@@ -7,6 +7,7 @@ import type {
   TownDetail,
   TownMutationResult,
 } from '../types'
+import type { StepSyncStatus } from '../../health/types'
 
 type TownOverviewData = {
   town: TownDetail
@@ -20,6 +21,7 @@ export type TownOverviewState = {
   placeBuilding: (
     input: PlaceBuildingInput,
   ) => Promise<ApiResult<TownMutationResult>>
+  applyStepSyncResult: (result: StepSyncStatus) => void
   retry: () => void
 }
 
@@ -141,12 +143,30 @@ export function useTownOverview(
     [api],
   )
 
+  const applyStepSyncResult = useCallback((result: StepSyncStatus) => {
+    setData((current) => {
+      if (!current || current.town.editable !== true) return current
+
+      return {
+        ...current,
+        town: {
+          ...current.town,
+          town: {
+            ...current.town.town,
+            coins: result.coinBalance,
+          },
+        },
+      }
+    })
+  }, [])
+
   const isCurrentRequest = loadedRequestKey === requestKey
   return {
     data: isCurrentRequest ? data : null,
     isLoading: !isCurrentRequest || isLoading,
     error: isCurrentRequest ? error : null,
     placeBuilding,
+    applyStepSyncResult,
     retry,
   }
 }
