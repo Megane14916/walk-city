@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 対象プロダクト | Walk City |
-| ステータス | In Progress（実装順6完了） |
+| ステータス | In Progress（実装順7完了） |
 | 作成日 | 2026-08-28 |
 | 対象 | 他ユーザーの公開プロフィール要約、街への導線、読み込み・エラー状態 |
 | 対象ルート | `/users/:userId` |
@@ -57,7 +57,7 @@
 - 通信失敗時に同じ対象を再取得できる。
 - URL の対象が変わったとき、直前のユーザー情報を新しい対象として表示しない。
 - 公開対象外の情報をレスポンス、表示用モデル、DOM、エラー表示へ露出しない。
-- モック API と将来の Supabase 実 API を同じ `TownApi` 契約で利用できる。
+- モック API と将来の実 Data API を同じ `TownApi` 契約で利用できる。通信先が Supabase の Query / View か、バックエンド担当が提供する HTTP API かはコンポーネントから隠蔽する。
 - PC とスマートフォン、キーボード操作、スクリーンリーダーで利用できる。
 
 ### 3.2 非目的
@@ -349,7 +349,7 @@ sequenceDiagram
     participant Page as UserPage
     participant Hook as usePublicUserProfile
     participant API as TownApi
-    participant BE as Supabase
+    participant BE as Data API / Supabase
 
     User->>Page: /users/:userId を開く
     Page->>Hook: userId と TownApi を渡す
@@ -499,9 +499,9 @@ API の `message` を無条件に表示せず、安定した `code` に応じた
 4. **完了:** スケルトン、要約、エラー状態の表示コンポーネントを実装する。
 5. **完了:** `UserPage` の準備中 UI を `PublicUserProfileView` に置き換え、`ApiProvider` の `townApi` を接続する。
 6. **完了:** ランキングからユーザーページ、ユーザーページから街までのルーター統合テストを更新する。
-7. lint、型チェック、build、全テストを実行する。
+7. **完了:** lint、型チェック、build、全テストを実行する。
 8. PC、スマートフォン、キーボード、低速・失敗シナリオを手動確認する。
-9. Supabase の `getPublicTown` 実装が利用可能になった時点で同じ契約テストを実 API アダプターにも適用する。
+9. バックエンド担当の実 Data API が利用可能になった時点で `TownApi.getPublicTown` の実アダプターを接続し、同じ契約テストを適用する。Supabase SDK / Query / View をフロントエンドから直接呼ぶか、バックエンド提供の HTTP API を `fetch` するかは、チームで合意した API 境界に従う。
 
 バックエンドが未完成でも、手順1〜8は既存の `TownApi` とモックで完了できる。実 API 接続時に Page やコンポーネントを変更せず、Provider が供給する実装だけを差し替える。
 
