@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 | --- | --- |
 | 対象プロダクト | Walk City |
-| ステータス | Phase 2 Complete（フロントエンドmock・UI実装済み、Supabase RPC未実装） |
+| ステータス | Phase 3 Complete（DB制約・RPC・権限・canonical表示名取得を実装済み） |
 | 作成日 | 2026-08-30 |
 | 契約確定日 | 2026-08-30 |
 | 対象機能 | 公開ユーザー名と街名の変更、設定ボタン、設定モーダル |
@@ -714,10 +714,14 @@ Phase 2完了時点で、フロントエンド全39テストファイル・316�
 
 ### Phase 3: バックエンド
 
-13. 既存データの名前制約適合性を確認する。
-14. DB 制約、grant / revoke、`update_user_settings` RPC の migration を作成する。
-15. database test で認証、所有権、validation、atomicity、非影響項目を検証する。
-16. integration-state の表示名取得元を profile へ変更する。
+ステータス: **完了（2026-08-30）**
+
+13. migration 冒頭で既存の`profiles.display_name`と`towns.name`を監査し、不適合データを黙って加工せず適用を中止するようにした。
+14. 1〜30 Unicode文字、ASCII空白trim、空白のみ・制御文字禁止のCHECK制約、authenticatedのbase table直接更新権限revoke、JWTの`auth.uid()`だけから対象を決定する`update_user_settings` RPCを追加した。
+15. pgTAPで認証、実行権限、所有者スコープ、validation、重複許可、atomicity、非影響項目、各公開viewへの反映を検証した。
+16. `get-google-integration-state`の表示名取得元をGoogle metadataではなく`profiles.display_name`へ変更した。
+
+Phase 3完了時点で、local database resetと全6 database testファイル・194テストが成功している。
 
 ### Phase 4: 実 API 接続
 

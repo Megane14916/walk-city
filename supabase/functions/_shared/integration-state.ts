@@ -28,17 +28,30 @@ export async function integrationState(
     email?: string;
     user_metadata?: Record<string, unknown>;
   },
-  admin: { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> },
+  admin: {
+    rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }>;
+    from: (table: "profiles") => {
+      select: (columns: "display_name") => {
+        eq: (column: "id", value: string) => {
+          maybeSingle: () => PromiseLike<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  },
 ) {
-  const { data, error } = await admin.rpc("get_health_connection", {
-    p_user_id: user.id,
-  });
+  const [{ data, error }, profileResult] = await Promise.all([
+    admin.rpc("get_health_connection", { p_user_id: user.id }),
+    admin.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+  ]);
   if (error) throw new Error("HEALTH_STATE_QUERY_FAILED");
+  if (profileResult.error) throw new Error("PROFILE_QUERY_FAILED");
   const connection = isObject(data) ? data : null;
+  const profile = isObject(profileResult.data) ? profileResult.data : null;
   const metadata = isObject(user.user_metadata) ? user.user_metadata : {};
-  const displayName = [metadata.full_name, metadata.name, metadata.user_name]
-    .find((value) => typeof value === "string" && value.trim()) ??
-    user.email?.split("@")[0] ?? `user-${user.id.replaceAll("-", "").slice(0, 8)}`;
+  if (typeof profile?.display_name !== "string" || !profile.display_name) {
+    throw new Error("PROFILE_NOT_FOUND");
+  }
+  const displayName = profile.display_name;
   const avatar = [metadata.avatar_url, metadata.picture]
     .find((value) => typeof value === "string" && value.trim());
 
