@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 | --- | --- |
 | 対象プロダクト | Walk City |
-| ステータス | Phase 1 Complete（契約確定・実装未着手） |
+| ステータス | Phase 2 Complete（フロントエンドmock・UI実装済み、Supabase RPC未実装） |
 | 作成日 | 2026-08-30 |
 | 契約確定日 | 2026-08-30 |
 | 対象機能 | 公開ユーザー名と街名の変更、設定ボタン、設定モーダル |
@@ -36,7 +36,7 @@
 - 自分の街、ランキング、公開街が共有する公開ユーザー名と街名の表示
 - `MockWalkCityStore` による自分の街、歩数、コインの共有 mock 状態
 
-現在のヘッダーでは、ユーザー情報カードの右側に「ランキング」ボタンがあり、設定導線は存在しない。`TownOverview` のパネル状態は `ranking | market | null` であり、設定は右側パネルではなく独立したモーダルとして追加する。
+Phase 2開始時点のヘッダーでは、ユーザー情報カードの右側に「ランキング」ボタンがあり、設定導線は存在しなかった。Phase 2で、ランキングの左に設定ボタンと独立した設定モーダルを追加した。既存の`TownOverview`の`ranking | market | null`パネル状態とは分離し、設定を開くと既存パネルだけを閉じる。
 
 ### 2.2 バックエンドの現状
 
@@ -338,12 +338,14 @@ RPC 以外の管理操作でも不正値を保存できないよう、次と同�
 check (
   char_length(display_name) between 1 and 30
   and display_name = btrim(display_name)
+  and display_name !~ '^[[:space:]　]*$'
   and display_name !~ '[[:cntrl:]]'
 )
 
 check (
   char_length(name) between 1 and 30
   and name = btrim(name)
+  and name !~ '^[[:space:]　]*$'
   and name !~ '[[:cntrl:]]'
 )
 ```
@@ -698,13 +700,17 @@ Phase 1 の合意に基づき、両担当は次を固定契約として実装す
 
 ### Phase 2: フロントエンド mock と UI
 
-6. 実装開始前に `API計画書.md`、`バックエンド.md`、`フロントエンド.md` の旧MVP対象外記述を、Phase 1 の決定に合わせて更新する。
-7. `SettingsApi`、型、validation と契約テストを追加する。
-8. `MockWalkCityStore` と `MockSettingsApi` を追加する。
-9. `useUserSettings` と Hook テストを実装する。
-10. `UserSettingsDialog` とアクセシビリティテストを実装する。
-11. `TownOverview` へ設定ボタン、モーダル、ローカル反映、成功通知を接続する。
-12. `ApiProvider` と既存テスト fixture へ `settingsApi` を追加する。
+ステータス: **完了（2026-08-30）**
+
+6. `API計画書.md`、`バックエンド.md`、`フロントエンド.md` の旧MVP対象外記述を、Phase 1 の決定に合わせて更新した。
+7. `SettingsApi`、型、validation と契約テストを追加した。
+8. `MockWalkCityStore` と `MockSettingsApi` を追加し、街・ランキング・認証mockで名前を共有した。
+9. `useUserSettings` と Hook テストを実装した。
+10. `UserSettingsDialog`、フォーカストラップ、背景の`inert`化、アクセシビリティテストを実装した。
+11. `TownOverview` へ設定ボタン、モーダル、ローカル反映、成功通知を接続した。
+12. `ApiProvider` と既存テスト fixture へ必須の`settingsApi`を追加した。SupabaseモードはPhase 4まで安全な準備中エラーを返す。
+
+Phase 2完了時点で、フロントエンド全39テストファイル・316テスト、lint、型チェック、production buildが成功している。
 
 ### Phase 3: バックエンド
 

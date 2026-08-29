@@ -291,7 +291,31 @@ type InitializeUserResult = {
 
 新規登録と再ログインはフロントで判定しない。`created`は今回の呼び出しで不足していた初期データを作成した場合に`true`、すでに初期化済みで何も作成しなかった場合に`false`とする。初期化済みユーザーへの再送は同じIDと`created: false`を返す。初期表示名と街名は認証ユーザーUUIDからハイフンを除いた先頭8文字を使う`user-xxxxxxxx`、`Town-xxxxxxxx`とする。導入前から存在するAuthユーザーも次回ログイン時に不足データだけを遅延作成し、全件backfill migrationは行わない。初期化失敗時はコールバック画面に留まり、再試行できるようにする。
 
-プロフィール表示名と街名の変更APIはMVPでは定義しない。建物表示名の`renameBuilding()`は別機能として維持する。
+### `updateUserSettings(input)`
+
+用途: 認証済みユーザー本人の公開ユーザー名と街名を同時に変更する。詳細は [ユーザー名・街名設定機能 設計書兼実装計画書](./ユーザー名・街名設定機能DesignDoc.md) を参照する。
+
+```ts
+type UpdateUserSettingsInput = {
+  displayName: string;
+  townName: string;
+};
+
+type UserSettings = {
+  displayName: string;
+  townName: string;
+  updatedAt: string;
+};
+```
+
+- 公開ユーザー名と街名は正規化後1〜30 Unicode文字とし、重複を許可する。
+- 2項目は常に1回のRPC、1トランザクションで原子的に更新する。
+- ユーザーIDと街IDは入力せず、JWTの`auth.uid()`から本人を特定する。
+- `profiles.display_name`をログイン後の全画面で使う正式なユーザー名とする。
+- クライアントから`profiles`または`towns`を直接更新せず、`update_user_settings` RPCを使用する。
+- エラーは`UNAUTHENTICATED`、`INVALID_INPUT`、`NOT_FOUND`、`INTERNAL_ERROR`を使用する。
+
+建物表示名の`renameBuilding()`は別機能として維持する。
 
 ### `signOut()`
 
@@ -300,6 +324,8 @@ Supabase Auth のセッションを終了する。Google Health 連携は解除�
 ### `getGoogleIntegrationState()`
 
 用途: GoogleログインとGoogle Health連携状態の復元。
+
+初期化済みユーザーの`session.user.displayName`は`profiles.display_name`を正とする。profileが存在しない認証直後だけ、Google metadataまたはUUID由来の名前へfallbackする。
 
 ```ts
 type GoogleIntegrationState = {

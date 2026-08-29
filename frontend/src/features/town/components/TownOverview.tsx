@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { GoogleIntegrationApi } from '../../auth/api'
 import type { GoogleIntegrationState } from '../../auth/types'
 import type { StepSyncApi } from '../../health/api'
@@ -13,6 +13,9 @@ import {
 } from '../../market'
 import type { RankingApi } from '../../ranking/api'
 import { PopulationRanking } from '../../ranking/components'
+import type { SettingsApi } from '../../settings/api'
+import { UserSettingsDialog } from '../../settings/components'
+import type { UserSettings } from '../../settings/types'
 import type { TownApi } from '../api'
 import {
   useDailyStepsSummary,
@@ -41,6 +44,8 @@ export type TownOverviewProps = {
   googleIntegrationState?: GoogleIntegrationState | null
   stepSyncApi?: StepSyncApi
   rankingApi?: RankingApi
+  settingsApi?: SettingsApi
+  refreshAuth?: () => Promise<unknown>
   getUserHref?: (userId: string) => string
   myTownHref?: string
   healthConnectionHref?: string
@@ -107,6 +112,8 @@ export function TownOverview({
   googleIntegrationState,
   stepSyncApi,
   rankingApi,
+  settingsApi,
+  refreshAuth,
   getUserHref = (userId) => `/town/${encodeURIComponent(userId)}`,
   myTownHref = '/',
   healthConnectionHref = '/health/connect',
@@ -117,6 +124,7 @@ export function TownOverview({
   const steps = useDailyStepsSummary(googleApi, googleIntegrationState)
   const stepSync = useStepSync(mode.type === 'self' ? stepSyncApi : undefined)
   const [activePanel, setActivePanel] = useState<DashboardPanel>(null)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [placement, setPlacement] = useState<PlacementSession | null>(null)
   const [move, setMove] = useState<MoveSession | null>(null)
   const [landUnlock, setLandUnlock] = useState<LandUnlockSession | null>(null)
@@ -226,6 +234,25 @@ export function TownOverview({
       cells: roadPlacement.cells,
     })
   }, [roadPlacement, state.data])
+
+  const openSettings = useCallback(() => {
+    setActivePanel(null)
+    setIsSettingsOpen(true)
+  }, [])
+
+  const closeSettings = useCallback(() => {
+    setIsSettingsOpen(false)
+  }, [])
+
+  const applySavedSettings = useCallback(
+    (settings: UserSettings) => {
+      state.applyUserSettings(settings)
+      setFeedback('設定を保存しました。')
+      const refreshResult = refreshAuth?.()
+      void refreshResult?.catch(() => undefined)
+    },
+    [refreshAuth, state],
+  )
 
   if (state.isLoading) {
     return (
@@ -753,6 +780,28 @@ export function TownOverview({
             </a>
           )}
 
+          {mode.type === 'self' && settingsApi && (
+            <button
+              className={`flex min-h-[58px] min-w-[126px] shrink-0 cursor-pointer items-center gap-2.5 rounded-[15px] border px-3.5 text-left transition-[background,border-color,transform] hover:-translate-y-px ${
+                isSettingsOpen
+                  ? 'border-[#7d9ea7] bg-[#e2edf0] text-[#315d67]'
+                  : 'border-[#d7ddd6] bg-white/70 text-[#315f56] hover:bg-white'
+              }`}
+              type="button"
+              onClick={openSettings}
+              aria-expanded={isSettingsOpen}
+              aria-controls="user-settings-dialog"
+            >
+              <span
+                className="grid h-8 w-8 place-items-center rounded-[10px] bg-[#e5eef0] text-sm"
+                aria-hidden="true"
+              >
+                ⚙
+              </span>
+              <span className="text-[11px] font-black">設定</span>
+            </button>
+          )}
+
           <button
             className={`flex min-h-[58px] min-w-[126px] shrink-0 cursor-pointer items-center gap-2.5 rounded-[15px] border px-3.5 text-left transition-[background,border-color,transform] hover:-translate-y-px ${
               activePanel === 'ranking'
@@ -1020,6 +1069,17 @@ export function TownOverview({
             />
           )}
         </aside>
+      )}
+
+      {isSettingsOpen && mode.type === 'self' && settingsApi && (
+        <UserSettingsDialog
+          api={settingsApi}
+          displayName={town.town.owner.displayName}
+          townName={town.town.name}
+          loginHref={loginHref}
+          onSaved={applySavedSettings}
+          onClose={closeSettings}
+        />
       )}
 
       {selectedBuilding && selectedBuildingItem && (

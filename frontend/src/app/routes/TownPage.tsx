@@ -6,8 +6,14 @@ import { useApi } from '../providers'
 
 export function TownPage() {
   const { userId } = useParams<{ userId: string }>()
-  const { googleIntegrationApi, stepSyncApi, rankingApi, townApi } = useApi()
-  const { integrationState, state } = useAuth()
+  const {
+    googleIntegrationApi,
+    stepSyncApi,
+    rankingApi,
+    settingsApi,
+    townApi,
+  } = useApi()
+  const { integrationState, refresh, state } = useAuth()
   const isPublicTown = userId !== undefined
 
   if (
@@ -29,6 +35,8 @@ export function TownPage() {
       googleIntegrationState={isPublicTown ? undefined : integrationState}
       stepSyncApi={isPublicTown ? undefined : stepSyncApi}
       rankingApi={rankingApi}
+      settingsApi={settingsApi}
+      refreshAuth={refresh}
       getUserHref={paths.town}
       myTownHref={paths.root}
       healthConnectionHref={paths.healthConnect}

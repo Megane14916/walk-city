@@ -17,6 +17,7 @@ import type {
   UnlockLandResult,
 } from '../types'
 import type { StepSyncStatus } from '../../health/types'
+import type { UserSettings } from '../../settings/types'
 
 type TownOverviewData = {
   town: TownDetail
@@ -51,6 +52,7 @@ export type TownOverviewState = {
   deleteRoad: (
     input: DeleteRoadInput,
   ) => Promise<ApiResult<DeleteRoadResult>>
+  applyUserSettings: (settings: UserSettings) => void
   applyStepSyncResult: (result: StepSyncStatus) => void
   retry: () => void
 }
@@ -234,6 +236,27 @@ export function useTownOverview(
     })
   }, [])
 
+  const applyUserSettings = useCallback((settings: UserSettings) => {
+    setData((current) => {
+      if (!current || current.town.editable !== true) return current
+
+      return {
+        ...current,
+        town: {
+          ...current.town,
+          town: {
+            ...current.town.town,
+            name: settings.townName,
+            owner: {
+              ...current.town.town.owner,
+              displayName: settings.displayName,
+            },
+          },
+        },
+      }
+    })
+  }, [])
+
   const placeRoadLine = useCallback(
     async (
       input: PlaceRoadLineInput,
@@ -404,6 +427,7 @@ export function useTownOverview(
     unlockLand,
     renameBuilding,
     deleteRoad,
+    applyUserSettings,
     applyStepSyncResult,
     retry,
   }
