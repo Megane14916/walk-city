@@ -107,7 +107,7 @@ export function TownOverview({
   googleIntegrationState,
   stepSyncApi,
   rankingApi,
-  getUserHref = (userId) => `/users/${encodeURIComponent(userId)}`,
+  getUserHref = (userId) => `/town/${encodeURIComponent(userId)}`,
   myTownHref = '/',
   healthConnectionHref = '/health/connect',
   loginHref = '/login',
@@ -956,6 +956,10 @@ export function TownOverview({
           <span className="inline-flex items-center gap-1">
             <i className="h-2.5 w-2.5 rounded-[3px] border border-[#b66b52] bg-[#f3c9aa]" />
             建物
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <i className="h-2.5 w-2.5 rounded-[3px] border border-[#5798aa] bg-[#73c5e3]" />
+            川
           </span>
         </div>
       </main>

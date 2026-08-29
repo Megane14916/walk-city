@@ -6,9 +6,7 @@ import { AuthCallbackPage } from './routes/AuthCallbackPage'
 import { HealthConnectionPage } from './routes/HealthConnectionPage'
 import { LoginPage } from './routes/LoginPage'
 import { NotFoundPage } from './routes/NotFoundPage'
-import { RankingPage } from './routes/RankingPage'
 import { TownPage } from './routes/TownPage'
-import { UserPage } from './routes/UserPage'
 
 export function AppRoutes() {
   return (
@@ -32,8 +30,6 @@ export function AppRoutes() {
       >
         <Route path={paths.root} element={<TownPage />} />
         <Route path={paths.townPattern} element={<TownPage />} />
-        <Route path={paths.ranking} element={<RankingPage />} />
-        <Route path={paths.userPattern} element={<UserPage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
