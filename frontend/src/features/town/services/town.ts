@@ -2,9 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabaseFailure } from '../../../lib/supabase-api'
 import type { ApiErrorCode, ApiResult } from '../../../types/common'
 import type { TownApi } from '../api'
+import { FIXED_MAP_LAYOUT } from '../data/map-layout'
 import type {
   BuildingCatalogItem,
   BuildingEffect,
+  DeleteRoadResult,
   PlaceRoadLineResult,
   RenameBuildingResult,
   TownDetail,
@@ -23,6 +25,7 @@ export type SupabaseTownRpcNames = {
   placeBuilding: string
   moveBuilding: string
   placeRoadLine: string
+  deleteRoad: string
   unlockLand: string
 }
 
@@ -41,6 +44,7 @@ const DEFAULT_RPC_NAMES: SupabaseTownRpcNames = {
   placeBuilding: 'place_building',
   moveBuilding: 'move_building',
   placeRoadLine: 'place_road_line',
+  deleteRoad: 'delete_road',
   unlockLand: 'unlock_land',
 }
 
@@ -215,29 +219,51 @@ function mapCatalogItem(value: unknown): BuildingCatalogItem | null {
 function mapPlacedBuilding(value: unknown): TownDetail['buildings'][number] | null {
   if (!isRecord(value)) return null
 
-  const anchorX = toSafeInteger(value.anchor_x)
-  const anchorY = toSafeInteger(value.anchor_y)
+  const buildingTypeCode = value.building_type_code ?? value.buildingTypeCode
+  const customName = nullableString(value.custom_name ?? value.customName ?? null)
+  const anchorX = toSafeInteger(value.anchor_x ?? value.anchorX)
+  const anchorY = toSafeInteger(value.anchor_y ?? value.anchorY)
+  const roadStructureId = nullableString(
+    value.road_structure_id ?? value.roadStructureId ?? null,
+  )
+  const rawRoadVariant = value.road_variant ?? value.roadVariant
+  const roadVariant =
+    rawRoadVariant === undefined && buildingTypeCode === 'road'
+      ? 'normal'
+      : rawRoadVariant ?? null
+  const createdAt = value.created_at ?? value.createdAt
+  const updatedAt = value.updated_at ?? value.updatedAt
   if (
     !isNonEmptyString(value.id) ||
-    !isNonEmptyString(value.building_type_code) ||
+    !isNonEmptyString(buildingTypeCode) ||
+    customName === undefined ||
     anchorX === undefined ||
     anchorX < 0 ||
     anchorY === undefined ||
     anchorY < 0 ||
-    !isNonEmptyString(value.created_at) ||
-    !isNonEmptyString(value.updated_at)
+    roadStructureId === undefined ||
+    !(
+      roadVariant === null ||
+      roadVariant === 'normal' ||
+      roadVariant === 'bridge_horizontal' ||
+      roadVariant === 'bridge_vertical'
+    ) ||
+    !isNonEmptyString(createdAt) ||
+    !isNonEmptyString(updatedAt)
   ) {
     return null
   }
 
   return {
     id: value.id,
-    buildingTypeCode: value.building_type_code,
-    customName: null,
+    buildingTypeCode,
+    customName,
     anchorX,
     anchorY,
-    createdAt: value.created_at,
-    updatedAt: value.updated_at,
+    roadStructureId,
+    roadVariant,
+    createdAt,
+    updatedAt,
   }
 }
 
@@ -250,15 +276,16 @@ function mapTownMutationResult(value: unknown): TownMutationResult | null {
   if (!isRecord(data)) return null
 
   const building = mapPlacedBuilding(data.building)
-  const coinBalance = toSafeInteger(data.coin_balance)
+  const coinBalance = toSafeInteger(data.coin_balance ?? data.coinBalance)
   const population = toSafeInteger(data.population)
+  const updatedAt = data.updated_at ?? data.updatedAt
   if (
     building === null ||
     coinBalance === undefined ||
     coinBalance < 0 ||
     population === undefined ||
     population < 0 ||
-    !isNonEmptyString(data.updated_at)
+    !isNonEmptyString(updatedAt)
   ) {
     return null
   }
@@ -267,7 +294,7 @@ function mapTownMutationResult(value: unknown): TownMutationResult | null {
     building,
     coinBalance,
     population,
-    updatedAt: data.updated_at,
+    updatedAt,
   }
 }
 
@@ -276,24 +303,78 @@ function mapPlaceRoadLineResult(value: unknown): PlaceRoadLineResult | null {
   if (!isRecord(data) || !Array.isArray(data.buildings)) return null
 
   const buildings = data.buildings.map(mapPlacedBuilding)
-  const coinBalance = toSafeInteger(data.coin_balance)
+  const placementKind = data.placement_kind ?? data.placementKind ?? 'road'
+  const roadStructureId = nullableString(
+    data.road_structure_id ?? data.roadStructureId ?? null,
+  )
+  const totalCostCoins = toSafeInteger(
+    data.total_cost_coins ?? data.totalCostCoins ?? 0,
+  )
+  const coinBalance = toSafeInteger(data.coin_balance ?? data.coinBalance)
   const population = toSafeInteger(data.population)
+  const updatedAt = data.updated_at ?? data.updatedAt
   if (
     buildings.some((building) => building === null) ||
+    (placementKind !== 'road' && placementKind !== 'bridge') ||
+    roadStructureId === undefined ||
+    totalCostCoins === undefined ||
+    totalCostCoins < 0 ||
     coinBalance === undefined ||
     coinBalance < 0 ||
     population === undefined ||
     population < 0 ||
-    !isNonEmptyString(data.updated_at)
+    !isNonEmptyString(updatedAt)
   ) {
     return null
   }
 
   return {
     buildings: buildings as PlaceRoadLineResult['buildings'],
+    placementKind,
+    roadStructureId,
+    totalCostCoins,
     coinBalance,
     population,
-    updatedAt: data.updated_at,
+    updatedAt,
+  }
+}
+
+function mapDeleteRoadResult(value: unknown): DeleteRoadResult | null {
+  const data = unwrapRpcData(value)
+  if (!isRecord(data) || !Array.isArray(data.deletedBuildingIds ?? data.deleted_building_ids)) {
+    return null
+  }
+
+  const deletionKind = data.deletion_kind ?? data.deletionKind
+  const deletedBuildingIds = data.deleted_building_ids ?? data.deletedBuildingIds
+  const deletedRoadStructureId = nullableString(
+    data.deleted_road_structure_id ?? data.deletedRoadStructureId ?? null,
+  )
+  const coinBalance = toSafeInteger(data.coin_balance ?? data.coinBalance)
+  const population = toSafeInteger(data.population)
+  const updatedAt = data.updated_at ?? data.updatedAt
+  if (
+    (deletionKind !== 'road' && deletionKind !== 'bridge') ||
+    !Array.isArray(deletedBuildingIds) ||
+    deletedBuildingIds.length === 0 ||
+    deletedBuildingIds.some((id) => !isNonEmptyString(id)) ||
+    deletedRoadStructureId === undefined ||
+    coinBalance === undefined ||
+    coinBalance < 0 ||
+    population === undefined ||
+    population < 0 ||
+    !isNonEmptyString(updatedAt)
+  ) {
+    return null
+  }
+
+  return {
+    deletionKind,
+    deletedBuildingIds: deletedBuildingIds as string[],
+    deletedRoadStructureId,
+    coinBalance,
+    population,
+    updatedAt,
   }
 }
 
@@ -403,6 +484,7 @@ function mapTownDetail(value: unknown, editable: boolean): TownDetail | null {
     buildings: buildings as TownDetail['buildings'],
     unlockedAreas: unlockedAreas as TownDetail['unlockedAreas'],
     obstacles: [],
+    mapLayout: FIXED_MAP_LAYOUT,
     catalogVersion,
     editable,
   }
@@ -615,6 +697,33 @@ export function createSupabaseTownApi(
           : failure('INTERNAL_ERROR', '建物を移動できませんでした。')
       } catch {
         return failure('INTERNAL_ERROR', '建物を移動できませんでした。')
+      }
+    },
+    async deleteRoad(input): Promise<ApiResult<DeleteRoadResult>> {
+      if (
+        !UUID_PATTERN.test(input.buildingId) ||
+        !UUID_PATTERN.test(input.requestId)
+      ) {
+        return failure('INVALID_INPUT', '削除する道路を確認してください。')
+      }
+
+      try {
+        const { data, error } = await supabase.rpc(rpcNames.deleteRoad, {
+          p_building_id: input.buildingId,
+          p_request_id: input.requestId,
+        })
+        if (error) {
+          return supabaseFailure(error, {
+            fallbackMessage: '道路を削除できませんでした。',
+          })
+        }
+
+        const result = mapDeleteRoadResult(data)
+        return result
+          ? { ok: true, data: result }
+          : failure('INTERNAL_ERROR', '道路を削除できませんでした。')
+      } catch {
+        return failure('INTERNAL_ERROR', '道路を削除できませんでした。')
       }
     },
     async renameBuilding(): Promise<ApiResult<RenameBuildingResult>> {

@@ -1,6 +1,8 @@
 import type { TownApi } from '../../features/town/api'
 import type {
   BuildingCatalogItem,
+  DeleteRoadInput,
+  DeleteRoadResult,
   MoveBuildingInput,
   PlaceBuildingInput,
   PlaceRoadLineInput,
@@ -15,6 +17,7 @@ import type {
 import {
   evaluateLandUnlockPreview,
   evaluateRoadLinePreview,
+  classifyBridgeLine,
   areCellsUnlocked,
   areCellsWithinMap,
   createOccupiedCellIndex,
@@ -22,6 +25,7 @@ import {
   getOccupiedCells,
   hasAdjacentRoad,
   hasCollision,
+  hasTerrainCollision,
   LAND_UNLOCK_BLOCK_SIZE,
   LAND_UNLOCK_COST_COINS,
   isStraightRoadLine,
@@ -48,6 +52,7 @@ export type MockTownOperation =
   | 'placeBuilding'
   | 'placeRoadLine'
   | 'moveBuilding'
+  | 'deleteRoad'
   | 'renameBuilding'
   | 'unlockLand'
 
@@ -61,6 +66,14 @@ export type TownMockErrorCode =
   | 'LAND_LOCKED'
   | 'CELL_OCCUPIED'
   | 'ROAD_REQUIRED'
+  | 'RIVER_BLOCKED'
+  | 'BRIDGE_SPAN_REQUIRED'
+  | 'BRIDGE_DIRECTION_INVALID'
+  | 'BRIDGE_CORNER_FORBIDDEN'
+  | 'PLACEMENT_IMMOVABLE'
+  | 'DELETE_NOT_ALLOWED'
+  | 'ROAD_IN_USE'
+  | 'BRIDGE_GROUP_INVALID'
   | 'AREA_ALREADY_UNLOCKED'
   | 'AREA_NOT_ADJACENT'
   | 'NOT_OWNER'
@@ -97,6 +110,14 @@ const errorMessages: Record<TownMockErrorCode, string> = {
   LAND_LOCKED: '開放済みの土地を選んでください。',
   CELL_OCCUPIED: '他の建物または障害物と重なっています。',
   ROAD_REQUIRED: '建物は道路に隣接する必要があります。',
+  RIVER_BLOCKED: '川の上には配置できません。',
+  BRIDGE_SPAN_REQUIRED: '両岸を含む7セルを一度に選んでください。',
+  BRIDGE_DIRECTION_INVALID: '川を直角に横断してください。',
+  BRIDGE_CORNER_FORBIDDEN: '川の直線部分を選んでください。',
+  PLACEMENT_IMMOVABLE: '道路と橋は移動できません。',
+  DELETE_NOT_ALLOWED: 'この配置物は削除できません。',
+  ROAD_IN_USE: '建物が利用中の道路は削除できません。',
+  BRIDGE_GROUP_INVALID: '橋の状態を確認できません。再読み込みしてください。',
   AREA_ALREADY_UNLOCKED: 'この区画はすでに開放されています。',
   AREA_NOT_ADJACENT: '開放済み区画の上下左右を選んでください。',
   NOT_OWNER: 'この街は編集できません。',
@@ -157,6 +178,10 @@ function copyTown(town: TownDetail): TownDetail {
     buildings: town.buildings.map((building) => ({ ...building })),
     unlockedAreas: town.unlockedAreas.map((area) => ({ ...area })),
     obstacles: town.obstacles.map((obstacle) => ({ ...obstacle })),
+    mapLayout: {
+      ...town.mapLayout,
+      terrainAreas: town.mapLayout.terrainAreas.map((area) => ({ ...area })),
+    },
     catalogVersion: town.catalogVersion,
     editable: town.editable,
   }
@@ -203,6 +228,10 @@ function placementError(
   )
   if (hasCollision(cells, occupied)) {
     return 'CELL_OCCUPIED'
+  }
+
+  if (hasTerrainCollision(cells, town.mapLayout, 'river')) {
+    return 'RIVER_BLOCKED'
   }
 
   if (
@@ -270,6 +299,37 @@ function sameUnlockInput(
   return left.x === right.x && left.y === right.y
 }
 
+function sameDeleteRoadInput(
+  left: DeleteRoadInput,
+  right: DeleteRoadInput,
+): boolean {
+  return left.buildingId === right.buildingId
+}
+
+function allBuildingsKeepRoadAccess(
+  town: TownDetail,
+  catalog: BuildingCatalogItem[],
+  deletedIds: Set<string>,
+): boolean {
+  const remainingBuildings = town.buildings.filter(
+    (building) => !deletedIds.has(building.id),
+  )
+  const roadCells = createRoadCellIndex(remainingBuildings, catalog)
+
+  return remainingBuildings.every((building) => {
+    const item = catalogItemFor(catalog, building)
+    if (!item || item.category === 'road') return true
+    return hasAdjacentRoad(
+      getOccupiedCells(
+        { x: building.anchorX, y: building.anchorY },
+        item.width,
+        item.height,
+      ),
+      roadCells,
+    )
+  })
+}
+
 export function createMockTownApi(
   options: MockTownApiOptions = {},
 ): MockTownApi {
@@ -303,6 +363,10 @@ export function createMockTownApi(
     string,
     { input: UnlockLandInput; result: UnlockLandResult }
   >()
+  const deleteRoadResults = new Map<
+    string,
+    { input: DeleteRoadInput; result: DeleteRoadResult }
+  >()
 
   let catalog = initialCatalog.map(copyCatalogItem)
   let publicTowns = Object.fromEntries(
@@ -312,6 +376,7 @@ export function createMockTownApi(
     ]),
   )
   let nextBuildingNumber = 1
+  let nextRoadStructureNumber = 1
 
   const wait = async () => {
     if (latencyMs <= 0) return
@@ -407,6 +472,8 @@ export function createMockTownApi(
         customName: null,
         anchorX: input.anchorX,
         anchorY: input.anchorY,
+        roadStructureId: null,
+        roadVariant: item.category === 'road' ? 'normal' : null,
         createdAt: timestamp,
         updatedAt: timestamp,
       }
@@ -478,6 +545,11 @@ export function createMockTownApi(
       }
 
       const timestamp = now().toISOString()
+      const roadStructureId =
+        preview.placementKind === 'bridge'
+          ? `mock-road-structure-${String(nextRoadStructureNumber).padStart(3, '0')}`
+          : null
+      if (roadStructureId) nextRoadStructureNumber += 1
       const buildings = preview.newCells.map((cell) => {
         const building: PlacedBuilding = {
           id: `mock-building-${String(nextBuildingNumber).padStart(3, '0')}`,
@@ -485,6 +557,13 @@ export function createMockTownApi(
           customName: null,
           anchorX: cell.x,
           anchorY: cell.y,
+          roadStructureId,
+          roadVariant:
+            preview.placementKind === 'bridge'
+              ? preview.bridgeOrientation === 'vertical'
+                ? 'bridge_vertical'
+                : 'bridge_horizontal'
+              : 'normal',
           createdAt: timestamp,
           updatedAt: timestamp,
         }
@@ -497,6 +576,9 @@ export function createMockTownApi(
 
       const result: PlaceRoadLineResult = {
         buildings: buildings.map((building) => ({ ...building })),
+        placementKind: preview.placementKind,
+        roadStructureId,
+        totalCostCoins: preview.totalCostCoins,
         coinBalance: town.town.coins,
         population: town.town.population,
         updatedAt: timestamp,
@@ -540,6 +622,9 @@ export function createMockTownApi(
 
       const item = catalogItemFor(catalog, building)
       if (!item) return failure('NOT_FOUND')
+      if (item.category === 'road' || building.roadStructureId !== null) {
+        return failure('PLACEMENT_IMMOVABLE')
+      }
 
       const invalidReason = placementError(
         town,
@@ -567,6 +652,100 @@ export function createMockTownApi(
         result: { ...result, building: { ...result.building } },
       })
 
+      return success(result)
+    },
+
+    async deleteRoad(input) {
+      await wait()
+      throwConfiguredException('deleteRoad')
+      const failed = configuredFailure<DeleteRoadResult>('deleteRoad')
+      if (failed) return failed
+      if (input.requestId.trim() === '' || input.buildingId.trim() === '') {
+        return failure('INVALID_INPUT')
+      }
+
+      const previous = deleteRoadResults.get(input.requestId)
+      if (previous) {
+        return sameDeleteRoadInput(previous.input, input)
+          ? success({
+              ...previous.result,
+              deletedBuildingIds: [...previous.result.deletedBuildingIds],
+            })
+          : failure('CONFLICT')
+      }
+
+      const town = store.getMutableTown()
+      if (town.editable !== true || town.town.coins === undefined) {
+        return failure('NOT_OWNER')
+      }
+      const target = town.buildings.find(
+        (building) => building.id === input.buildingId,
+      )
+      if (!target) return failure('NOT_FOUND')
+      const targetItem = catalogItemFor(catalog, target)
+      if (!targetItem) return failure('NOT_FOUND')
+      if (targetItem.category !== 'road') return failure('DELETE_NOT_ALLOWED')
+
+      const group = target.roadStructureId
+        ? town.buildings.filter(
+            (building) => building.roadStructureId === target.roadStructureId,
+          )
+        : [target]
+      const orderedBridgeCells = group
+        .map((building) => ({ x: building.anchorX, y: building.anchorY }))
+        .sort((left, right) =>
+          target.roadVariant === 'bridge_vertical'
+            ? left.y - right.y
+            : left.x - right.x,
+        )
+      const bridgeClassification = target.roadStructureId
+        ? classifyBridgeLine(orderedBridgeCells, town.mapLayout)
+        : null
+      if (
+        target.roadStructureId &&
+        (group.length !== 7 ||
+          group.some((building) => {
+            const item = catalogItemFor(catalog, building)
+            return (
+              item?.category !== 'road' ||
+              building.roadVariant !== target.roadVariant ||
+              (building.roadVariant !== 'bridge_horizontal' &&
+                building.roadVariant !== 'bridge_vertical')
+            )
+          }) ||
+          bridgeClassification?.kind !== 'bridge' ||
+          (target.roadVariant === 'bridge_horizontal' &&
+            bridgeClassification.orientation !== 'horizontal') ||
+          (target.roadVariant === 'bridge_vertical' &&
+            bridgeClassification.orientation !== 'vertical'))
+      ) {
+        return failure('BRIDGE_GROUP_INVALID')
+      }
+
+      const deletedIds = new Set(group.map((building) => building.id))
+      if (!allBuildingsKeepRoadAccess(town, catalog, deletedIds)) {
+        return failure('ROAD_IN_USE')
+      }
+
+      const timestamp = now().toISOString()
+      town.buildings = town.buildings.filter(
+        (building) => !deletedIds.has(building.id),
+      )
+      const result: DeleteRoadResult = {
+        deletionKind: target.roadStructureId ? 'bridge' : 'road',
+        deletedBuildingIds: [...deletedIds],
+        deletedRoadStructureId: target.roadStructureId,
+        coinBalance: town.town.coins,
+        population: town.town.population,
+        updatedAt: timestamp,
+      }
+      deleteRoadResults.set(input.requestId, {
+        input: { ...input },
+        result: {
+          ...result,
+          deletedBuildingIds: [...result.deletedBuildingIds],
+        },
+      })
       return success(result)
     },
 
@@ -685,6 +864,7 @@ export function createMockTownApi(
       roadLineResults.clear()
       moveResults.clear()
       unlockResults.clear()
+      deleteRoadResults.clear()
       store.reset()
       catalog = initialCatalog.map(copyCatalogItem)
       publicTowns = Object.fromEntries(
@@ -694,6 +874,7 @@ export function createMockTownApi(
         ]),
       )
       nextBuildingNumber = 1
+      nextRoadStructureNumber = 1
     },
   }
 }

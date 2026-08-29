@@ -1,6 +1,8 @@
 import type { ApiResult } from '../../../types/common'
 import type {
   BuildingCatalogItem,
+  DeleteRoadInput,
+  DeleteRoadResult,
   MoveBuildingInput,
   PlaceBuildingInput,
   PlaceRoadLineInput,
@@ -27,6 +29,7 @@ export interface TownApi {
   moveBuilding(
     input: MoveBuildingInput,
   ): Promise<ApiResult<TownMutationResult>>
+  deleteRoad(input: DeleteRoadInput): Promise<ApiResult<DeleteRoadResult>>
   renameBuilding(
     input: RenameBuildingInput,
   ): Promise<ApiResult<RenameBuildingResult>>

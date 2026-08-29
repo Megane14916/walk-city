@@ -24,6 +24,7 @@ const invalidReasonMessages: Record<PreviewInvalidReason, string> = {
   PRICE_NOT_SET: 'このアイテムは価格の準備中です。',
   INSUFFICIENT_COINS: '購入に必要なコインが不足しています。',
   ROAD_REQUIRED: '道路に隣接する位置を選んでください。',
+  RIVER_BLOCKED: '川の上には配置できません。',
 }
 
 function previewMessage(

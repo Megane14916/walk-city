@@ -171,6 +171,22 @@ export function TownMap({
     [catalog],
   )
 
+  const selectedBuildingIds = useMemo(() => {
+    if (!selectedBuildingId) return new Set<string>()
+    const selected = town.buildings.find(
+      (building) => building.id === selectedBuildingId,
+    )
+    if (!selected?.roadStructureId) return new Set([selectedBuildingId])
+    return new Set(
+      town.buildings
+        .filter(
+          (building) =>
+            building.roadStructureId === selected.roadStructureId,
+        )
+        .map((building) => building.id),
+    )
+  }, [selectedBuildingId, town.buildings])
+
   const roadCellIndex = useMemo(() => {
     const roadCodes = new Set(
       catalog.filter((item) => item.category === 'road').map((item) => item.code),
@@ -201,6 +217,16 @@ export function TownMap({
         (roadPlacement?.preview?.newCells ?? []).map((cell) => getCellKey(cell)),
       ),
     [roadPlacement?.preview?.newCells],
+  )
+
+  const roadPreviewRiverCellIndex = useMemo(
+    () =>
+      new Set(
+        (roadPlacement?.preview?.riverCells ?? []).map((cell) =>
+          getCellKey(cell),
+        ),
+      ),
+    [roadPlacement?.preview?.riverCells],
   )
 
   const zoomAtCenter = useCallback(
@@ -533,6 +559,29 @@ export function TownMap({
           ))}
 
           <div
+            className="pointer-events-none absolute inset-0 z-[5]"
+            role="img"
+            aria-label="固定地形の川"
+          >
+            {town.mapLayout.terrainAreas
+              .filter((area) => area.terrainType === 'river')
+              .map((area) => (
+                <div
+                  key={area.id}
+                  className="absolute bg-[#73c5e3]"
+                  style={{
+                    left: area.x * MAP_CELL_SIZE,
+                    top: area.y * MAP_CELL_SIZE,
+                    width: area.width * MAP_CELL_SIZE,
+                    height: area.height * MAP_CELL_SIZE,
+                  }}
+                  data-terrain-code={area.code}
+                  aria-hidden="true"
+                />
+              ))}
+          </div>
+
+          <div
             className="pointer-events-none absolute inset-0 z-10"
             style={{
               backgroundImage:
@@ -567,7 +616,7 @@ export function TownMap({
                   ? getRoadConnections(building.anchorX, building.anchorY)
                   : undefined
               }
-              isSelected={building.id === selectedBuildingId}
+              isSelected={selectedBuildingIds.has(building.id)}
             />
           ))}
 
@@ -591,16 +640,25 @@ export function TownMap({
             <div
               className="pointer-events-none absolute inset-0 z-30"
               role="img"
-              aria-label={`道路の線プレビュー、${roadPlacement.cells.length}マス、${roadPlacement.preview?.status.status === 'valid' ? '配置可能' : '配置不可'}`}
+              aria-label={`${roadPlacement.preview?.placementKind === 'bridge' ? '橋' : '道路の線'}プレビュー、${roadPlacement.cells.length}マス、${roadPlacement.preview?.status.status === 'valid' ? '配置可能' : '配置不可'}`}
             >
               {roadPlacement.cells.map((cell) => {
                 const isNew = roadPreviewNewCellIndex.has(getCellKey(cell))
+                const isBridge =
+                  roadPlacement.preview?.placementKind === 'bridge'
+                const isRiverBridgeCell = roadPreviewRiverCellIndex.has(
+                  getCellKey(cell),
+                )
                 return (
                   <div
                     key={getCellKey(cell)}
                     className={`absolute grid place-items-center rounded-[4px] border-2 border-dashed text-[9px] font-black shadow-[0_3px_8px_rgba(18,55,49,.2)] ${
                       isNew
-                        ? roadPlacementTone
+                        ? isBridge
+                          ? isRiverBridgeCell
+                            ? 'border-[#365f6b] bg-[#536f72]/90 text-[#fff1bd]'
+                            : 'border-[#7a6742] bg-[#b79b62]/85 text-white'
+                          : roadPlacementTone
                         : 'border-[#50605a] bg-[#aeb8b3]/65 text-[#31423c]'
                     }`}
                     style={{
@@ -611,7 +669,14 @@ export function TownMap({
                     }}
                     aria-hidden="true"
                   >
-                    {isNew ? '•' : '↔'}
+                    {isNew
+                      ? isBridge
+                        ? roadPlacement.preview?.bridgeOrientation ===
+                          'vertical'
+                          ? '║'
+                          : '═'
+                        : '•'
+                      : '↔'}
                   </div>
                 )
               })}
@@ -636,8 +701,20 @@ export function TownMap({
         </div>
 
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-16 bg-gradient-to-b from-[#193b38]/10 to-transparent" />
-        <div className="absolute top-4 left-4 z-40 rounded-full border border-white/70 bg-[rgba(247,246,240,.88)] px-3 py-1.5 text-[9px] font-black tracking-[.08em] text-[#3d665c] shadow-sm backdrop-blur-sm">
-          {Math.round(view.zoom * 100)}%
+        <div className="absolute top-4 left-4 z-40 flex items-center gap-2">
+          <div className="rounded-full border border-white/70 bg-[rgba(247,246,240,.88)] px-3 py-1.5 text-[9px] font-black tracking-[.08em] text-[#3d665c] shadow-sm backdrop-blur-sm">
+            {Math.round(view.zoom * 100)}%
+          </div>
+          <div
+            className="flex items-center gap-1.5 rounded-full border border-white/70 bg-[rgba(247,246,240,.88)] px-2.5 py-1.5 text-[9px] font-black text-[#376b78] shadow-sm backdrop-blur-sm"
+            aria-label="マップ凡例、水色は川"
+          >
+            <span
+              className="h-2.5 w-2.5 rounded-sm bg-[#73c5e3] shadow-[inset_0_0_0_1px_rgba(55,107,120,.22)]"
+              aria-hidden="true"
+            />
+            川
+          </div>
         </div>
 
         <div

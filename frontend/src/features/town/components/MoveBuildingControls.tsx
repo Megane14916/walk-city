@@ -25,6 +25,7 @@ const invalidReasonMessages: Record<PreviewInvalidReason, string> = {
   PRICE_NOT_SET: 'この建物の情報を確認できません。',
   INSUFFICIENT_COINS: 'コイン残高を確認できません。',
   ROAD_REQUIRED: '道路に隣接する位置を選んでください。',
+  RIVER_BLOCKED: '川の上には建物を移動できません。',
 }
 
 function previewMessage(

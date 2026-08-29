@@ -155,6 +155,9 @@ function createLazySupabaseServiceBundle(
     async moveBuilding(input) {
       return (await loadService()).townApi.moveBuilding(input)
     },
+    async deleteRoad(input) {
+      return (await loadService()).townApi.deleteRoad(input)
+    },
     async renameBuilding(input) {
       return (await loadService()).townApi.renameBuilding(input)
     },

@@ -306,6 +306,8 @@ describe('createSupabaseTownApi', () => {
           customName: null,
           anchorX: 40,
           anchorY: 40,
+          roadStructureId: null,
+          roadVariant: null,
           createdAt: BUILDING_ROW.created_at,
           updatedAt: MUTATION_ROW.building.updated_at,
         },
@@ -463,6 +465,49 @@ describe('createSupabaseTownApi', () => {
     })
   })
 
+  it('deletes a whole bridge through the production RPC', async () => {
+    const bridgeStructureId = '90000000-0000-4000-8000-000000000001'
+    const deletedBuildingIds = [
+      '91000000-0000-4000-8000-000000000001',
+      '91000000-0000-4000-8000-000000000002',
+    ]
+    const mock = createSupabaseMock({}, {
+      delete_road: {
+        data: {
+          deletionKind: 'bridge',
+          deletedBuildingIds,
+          deletedRoadStructureId: bridgeStructureId,
+          coinBalance: '900',
+          population: '20',
+          updatedAt: '2026-08-29T04:00:00.000Z',
+        },
+        error: null,
+      },
+    })
+    const api = createSupabaseTownApi(mock.client)
+
+    await expect(
+      api.deleteRoad({
+        buildingId: deletedBuildingIds[0],
+        requestId: REQUEST_ID,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      data: {
+        deletionKind: 'bridge',
+        deletedBuildingIds,
+        deletedRoadStructureId: bridgeStructureId,
+        coinBalance: 900,
+        population: 20,
+        updatedAt: '2026-08-29T04:00:00.000Z',
+      },
+    })
+    expect(mock.rpc).toHaveBeenCalledWith('delete_road', {
+      p_building_id: deletedBuildingIds[0],
+      p_request_id: REQUEST_ID,
+    })
+  })
+
   it('rejects malformed road and land inputs before calling RPC', async () => {
     const mock = createSupabaseMock({})
     const api = createSupabaseTownApi(mock.client)
@@ -476,6 +521,12 @@ describe('createSupabaseTownApi', () => {
     ).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } })
     await expect(
       api.unlockLand({ x: -20, y: 40, requestId: REQUEST_ID }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } })
+    await expect(
+      api.deleteRoad({
+        buildingId: 'not-a-uuid',
+        requestId: REQUEST_ID,
+      }),
     ).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } })
     expect(mock.rpc).not.toHaveBeenCalled()
   })

@@ -3,6 +3,8 @@ import type { ApiError, ApiErrorCode, ApiResult } from '../../../types/common'
 import type { TownApi } from '../api'
 import type {
   BuildingCatalogItem,
+  DeleteRoadInput,
+  DeleteRoadResult,
   MoveBuildingInput,
   PlaceBuildingInput,
   PlaceRoadLineInput,
@@ -46,6 +48,9 @@ export type TownOverviewState = {
   renameBuilding: (
     input: RenameBuildingInput,
   ) => Promise<ApiResult<RenameBuildingResult>>
+  deleteRoad: (
+    input: DeleteRoadInput,
+  ) => Promise<ApiResult<DeleteRoadResult>>
   applyStepSyncResult: (result: StepSyncStatus) => void
   retry: () => void
 }
@@ -352,6 +357,42 @@ export function useTownOverview(
     [api],
   )
 
+  const deleteRoad = useCallback(
+    async (input: DeleteRoadInput): Promise<ApiResult<DeleteRoadResult>> => {
+      let result: ApiResult<DeleteRoadResult>
+
+      try {
+        result = await api.deleteRoad(input)
+      } catch {
+        return { ok: false, error: UNEXPECTED_ERROR }
+      }
+
+      if (!result.ok) return result
+
+      setData((current) => {
+        if (!current || current.town.editable !== true) return current
+        const deletedIds = new Set(result.data.deletedBuildingIds)
+        return {
+          ...current,
+          town: {
+            ...current.town,
+            town: {
+              ...current.town.town,
+              coins: result.data.coinBalance,
+              population: result.data.population,
+            },
+            buildings: current.town.buildings.filter(
+              (building) => !deletedIds.has(building.id),
+            ),
+          },
+        }
+      })
+
+      return result
+    },
+    [api],
+  )
+
   const isCurrentRequest = loadedRequestKey === requestKey
   return {
     data: isCurrentRequest ? data : null,
@@ -362,6 +403,7 @@ export function useTownOverview(
     placeRoadLine,
     unlockLand,
     renameBuilding,
+    deleteRoad,
     applyStepSyncResult,
     retry,
   }
