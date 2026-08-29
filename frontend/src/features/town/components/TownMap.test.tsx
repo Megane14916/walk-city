@@ -34,15 +34,12 @@ describe('TownMap', () => {
   it.each([
     ['my town', MOCK_MY_TOWN],
     ['public town', MOCK_PUBLIC_TOWN],
-  ])('renders the fixed river and its legend in %s', (_label, town) => {
+  ])('renders the fixed river in %s', (_label, town) => {
     const { container } = render(
       <TownMap town={town} catalog={MOCK_BUILDING_CATALOG} />,
     )
 
     expect(screen.getByRole('img', { name: '固定地形の川' })).not.toBeNull()
-    expect(
-      screen.getByLabelText('マップ凡例、水色は川'),
-    ).not.toBeNull()
     expect(container.querySelectorAll('[data-terrain-code]')).toHaveLength(5)
   })
 
@@ -233,6 +230,11 @@ describe('TownOverview', () => {
     expect(within(menu).getByText('60人')).not.toBeNull()
     expect(within(menu).getByText('今日の歩数')).not.toBeNull()
     expect(within(menu).getByText('所持コイン数')).not.toBeNull()
+    expect(screen.getByText('開放済み')).not.toBeNull()
+    expect(screen.getByText('未開放')).not.toBeNull()
+    expect(screen.getByText('道路')).not.toBeNull()
+    expect(screen.getByText('建物')).not.toBeNull()
+    expect(screen.getByText('川')).not.toBeNull()
   })
 
   it('keeps the map visible while the market panel is open', async () => {

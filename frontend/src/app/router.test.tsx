@@ -5,7 +5,6 @@ import {
   fireEvent,
   render,
   screen,
-  waitFor,
 } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -64,10 +63,6 @@ afterEach(() => {
 })
 
 describe('paths', () => {
-  it('encodes user IDs in one centralized path helper', () => {
-    expect(paths.user('user/with space')).toBe('/users/user%2Fwith%20space')
-  })
-
   it('encodes user IDs for public town links', () => {
     expect(paths.town('user/with space')).toBe('/town/user%2Fwith%20space')
   })
@@ -302,28 +297,6 @@ describe('AppRoutes', () => {
     ).not.toBeNull()
   })
 
-  it('redirects an unauthenticated ranking request to login', async () => {
-    renderRoute(paths.ranking)
-
-    expect(
-      await screen.findByRole('heading', {
-        name: /今日の一歩から、街づくりを始めよう。/,
-      }, { timeout: 3000 }),
-    ).not.toBeNull()
-  })
-
-  it('shows the ranking to an authenticated user', async () => {
-    await mockGoogleIntegrationApi.signInWithGoogle()
-    renderRoute(paths.ranking)
-
-    expect(
-      await screen.findByRole('heading', { name: '人口ランキング' }),
-    ).not.toBeNull()
-    await waitFor(() =>
-      expect(screen.getAllByRole('listitem')).toHaveLength(20),
-    )
-  })
-
   it('shows the read-only town map at the authenticated root route', async () => {
     await mockGoogleIntegrationApi.signInWithGoogle()
     renderRoute(paths.root)
@@ -398,32 +371,16 @@ describe('AppRoutes', () => {
     ).not.toBeNull()
   })
 
-  it('navigates from a ranking item through the user page to the public town', async () => {
+  it('navigates directly from a ranking item to the public town', async () => {
     await mockGoogleIntegrationApi.signInWithGoogle()
-    renderRoute(paths.ranking)
+    renderRoute(paths.root)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+    fireEvent.click(screen.getByRole('button', { name: /ランキング/ }))
 
     const firstRankingLink = await screen.findByRole('link', {
       name: /^1位、/,
     })
     fireEvent.click(firstRankingLink)
-
-    expect(
-      await screen.findByRole('heading', {
-        name: 'あかり',
-      }),
-    ).not.toBeNull()
-    expect(screen.getByTestId('current-path').textContent).toBe(
-      paths.user('mock-ranking-user-001'),
-    )
-    expect(
-      screen.getByRole('heading', { name: 'サンライズシティ' }),
-    ).not.toBeNull()
-    expect(screen.getByText('500')).not.toBeNull()
-    expect(screen.queryByText('mock-ranking-user-001')).toBeNull()
-
-    fireEvent.click(
-      screen.getByRole('link', { name: /このユーザーの街を訪問/ }),
-    )
 
     expect(
       await screen.findByRole('application', {
@@ -435,98 +392,6 @@ describe('AppRoutes', () => {
     )
     expect(screen.queryByText('今日の歩数')).toBeNull()
     expect(screen.queryByText('所持コイン数')).toBeNull()
-  })
-
-  it('loads the same public profile from a direct URL and after remount', async () => {
-    await mockGoogleIntegrationApi.signInWithGoogle()
-    const getPublicTown = vi.spyOn(mockTownApi, 'getPublicTown')
-    const userPath = paths.user(MOCK_PUBLIC_USER_ID)
-    const firstRender = renderRoute(userPath)
-
-    expect(
-      await screen.findByRole('heading', { name: 'シティウォーカー' }),
-    ).not.toBeNull()
-    expect(screen.getByTestId('current-path').textContent).toBe(userPath)
-    firstRender.unmount()
-
-    renderRoute(userPath)
-
-    expect(
-      await screen.findByRole('heading', { name: 'シティウォーカー' }),
-    ).not.toBeNull()
-    expect(screen.getByRole('heading', { name: 'ブルータウン' })).not.toBeNull()
-    expect(screen.getByTestId('current-path').textContent).toBe(userPath)
-    expect(getPublicTown).toHaveBeenCalledTimes(2)
-  })
-
-  it('routes the current user from the public profile to the editable root town', async () => {
-    await mockGoogleIntegrationApi.signInWithGoogle()
-    renderRoute(paths.user(MOCK_AUTH_USER.id))
-
-    expect(
-      await screen.findByRole('heading', {
-        name: 'Walk City テストユーザー',
-      }),
-    ).not.toBeNull()
-    fireEvent.click(
-      screen.getByRole('link', { name: /このユーザーの街を訪問/ }),
-    )
-
-    expect(
-      await screen.findByRole('heading', { name: 'グリーンタウン' }),
-    ).not.toBeNull()
-    expect(screen.getByTestId('current-path').textContent).toBe(paths.root)
-  })
-
-  it('retries a user-page request without leaving its URL', async () => {
-    await mockGoogleIntegrationApi.signInWithGoogle()
-    const userPath = paths.user(MOCK_PUBLIC_USER_ID)
-    mockTownApi.setFailure('getPublicTown', 'INTERNAL_ERROR')
-    renderRoute(userPath)
-
-    expect(
-      await screen.findByRole('heading', {
-        name: 'ユーザー情報を読み込めませんでした',
-      }),
-    ).not.toBeNull()
-    expect(screen.getByTestId('current-path').textContent).toBe(userPath)
-
-    mockTownApi.setFailure('getPublicTown', null)
-    fireEvent.click(screen.getByRole('button', { name: 'もう一度試す' }))
-
-    expect(
-      await screen.findByRole('heading', { name: 'シティウォーカー' }),
-    ).not.toBeNull()
-    expect(screen.getByTestId('current-path').textContent).toBe(userPath)
-  })
-
-  it('shows a safe page-level error for a missing public user', async () => {
-    await mockGoogleIntegrationApi.signInWithGoogle()
-    const missingUserPath = paths.user('missing-user')
-    renderRoute(missingUserPath)
-
-    expect(
-      await screen.findByRole('heading', {
-        name: 'ユーザーを見つけられませんでした',
-      }),
-    ).not.toBeNull()
-    expect(
-      screen.getByRole('link', { name: 'ランキングへ戻る' }).getAttribute('href'),
-    ).toBe(paths.ranking)
-    expect(screen.getByTestId('current-path').textContent).toBe(
-      missingUserPath,
-    )
-  })
-
-  it('redirects an unauthenticated user-page request to login', async () => {
-    renderRoute(paths.user(MOCK_PUBLIC_USER_ID))
-
-    expect(
-      await screen.findByRole('heading', {
-        name: /今日の一歩から、街づくりを始めよう。/,
-      }),
-    ).not.toBeNull()
-    expect(screen.getByTestId('current-path').textContent).toBe(paths.login)
   })
 
   it('shows a not-found page for an undefined route', () => {
@@ -542,7 +407,7 @@ describe('AppRoutes', () => {
       'getGoogleIntegrationState',
       'INTERNAL_ERROR',
     )
-    renderRoute(paths.ranking)
+    renderRoute(paths.root)
 
     expect(
       await screen.findByRole('heading', {

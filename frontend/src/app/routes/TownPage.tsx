@@ -29,7 +29,7 @@ export function TownPage() {
       googleIntegrationState={isPublicTown ? undefined : integrationState}
       stepSyncApi={isPublicTown ? undefined : stepSyncApi}
       rankingApi={rankingApi}
-      getUserHref={paths.user}
+      getUserHref={paths.town}
       myTownHref={paths.root}
       healthConnectionHref={paths.healthConnect}
       loginHref={paths.login}

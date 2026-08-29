@@ -17,7 +17,7 @@ import { PopulationRanking } from './PopulationRanking'
 import { RankingItem } from './RankingItem'
 import { RankingList } from './RankingList'
 
-const getUserHref = (userId: string) => `/users/${encodeURIComponent(userId)}`
+const getUserHref = (userId: string) => `/town/${encodeURIComponent(userId)}`
 
 afterEach(cleanup)
 
@@ -42,7 +42,7 @@ describe('RankingItem', () => {
     )
 
     const link = screen.getByRole('link')
-    expect(link.getAttribute('href')).toBe(`/users/${currentUser.userId}`)
+    expect(link.getAttribute('href')).toBe(`/town/${currentUser.userId}`)
     expect(link.getAttribute('aria-current')).toBe('true')
     expect(link.getAttribute('aria-label')).toBe(
       `${currentUser.rank}位、${currentUser.displayName}、${currentUser.townName}、人口60人、あなた`,

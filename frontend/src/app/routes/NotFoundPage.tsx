@@ -9,13 +9,13 @@ export function NotFoundPage() {
       </span>
       <h1 className="m-0 text-2xl text-[#193b38]">ページが見つかりません</h1>
       <p className="m-0 text-xs text-[#747e7a]">
-        URLを確認するか、ランキングへ戻ってください。
+        URLを確認するか、自分の街へ戻ってください。
       </p>
       <Link
         className="mt-2 inline-flex min-h-11 items-center rounded-xl bg-[#123f3c] px-5 text-xs font-extrabold text-white no-underline"
-        to={paths.ranking}
+        to={paths.root}
       >
-        ランキングへ
+        自分の街へ
       </Link>
     </main>
   )

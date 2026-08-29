@@ -701,19 +701,9 @@ export function TownMap({
         </div>
 
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-16 bg-gradient-to-b from-[#193b38]/10 to-transparent" />
-        <div className="absolute top-4 left-4 z-40 flex items-center gap-2">
+        <div className="absolute top-4 left-4 z-40">
           <div className="rounded-full border border-white/70 bg-[rgba(247,246,240,.88)] px-3 py-1.5 text-[9px] font-black tracking-[.08em] text-[#3d665c] shadow-sm backdrop-blur-sm">
             {Math.round(view.zoom * 100)}%
-          </div>
-          <div
-            className="flex items-center gap-1.5 rounded-full border border-white/70 bg-[rgba(247,246,240,.88)] px-2.5 py-1.5 text-[9px] font-black text-[#376b78] shadow-sm backdrop-blur-sm"
-            aria-label="マップ凡例、水色は川"
-          >
-            <span
-              className="h-2.5 w-2.5 rounded-sm bg-[#73c5e3] shadow-[inset_0_0_0_1px_rgba(55,107,120,.22)]"
-              aria-hidden="true"
-            />
-            川
           </div>
         </div>
 
