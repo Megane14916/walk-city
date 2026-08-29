@@ -44,7 +44,7 @@ React フロントエンドと Supabase バックエンドを別担当者が並�
 
 - 日時は ISO 8601 文字列で返す。
 - 歩数集計の日付は `YYYY-MM-DD`。
-- 日付境界のタイムゾーンは TBD。決定後、API の `timezone` として明示する。
+- 初期リリースの日付境界は `Asia/Tokyo` に固定し、API の `timezone` に同じ値を返す。
 
 ## 4. レスポンスとエラー
 
@@ -81,6 +81,14 @@ type ApiErrorCode =
   | "LAND_LOCKED"
   | "CELL_OCCUPIED"
   | "ROAD_REQUIRED"
+  | "RIVER_BLOCKED"
+  | "BRIDGE_SPAN_REQUIRED"
+  | "BRIDGE_DIRECTION_INVALID"
+  | "BRIDGE_CORNER_FORBIDDEN"
+  | "PLACEMENT_IMMOVABLE"
+  | "DELETE_NOT_ALLOWED"
+  | "ROAD_IN_USE"
+  | "BRIDGE_GROUP_INVALID"
   | "NOT_OWNER"
   | "NOT_FOUND"
   | "CONFLICT"
@@ -159,12 +167,14 @@ type PlacedBuilding = {
   buildingTypeCode: string;
   anchorX: number;
   anchorY: number;
+  roadStructureId: string | null;
+  roadVariant: "normal" | "bridge_horizontal" | "bridge_vertical" | null;
   createdAt: string;
   updatedAt: string;
 };
 ```
 
-サイズ・効果はカタログを参照する。購入後の価格は公開レスポンスへ含めない。
+サイズ・効果はカタログを参照する。購入後の価格は公開レスポンスへ含めない。非道路では道路用フィールドを `null`、通常道路では `roadStructureId = null`、`roadVariant = "normal"` とする。橋の 7 セルは同じ非 null の `roadStructureId` を持つ。
 
 ### `UnlockedArea`
 
@@ -179,7 +189,32 @@ type UnlockedArea = {
 };
 ```
 
-初期状態では 20×20 の矩形を一つ返す。開始位置は TBD。
+初期状態では `(40, 40)` を左上とする 20×20 の矩形を一つ返す。範囲は `40 <= x <= 59`、`40 <= y <= 59` とする。
+
+### `MapLayout`
+
+地形は全ユーザー共通の固定レイアウトとして返す。クライアントは描画と事前判定に使用し、最終判定ではサーバー上の同じレイアウトを参照する。
+
+```ts
+type MapTerrainArea = {
+  id: string;
+  code: string;
+  terrainType: "river" | string;
+  segmentKind: "horizontal" | "vertical" | "corner" | string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  bridgeable: boolean;
+};
+
+type MapLayout = {
+  id: string;
+  version: number;
+  bridgeCellCostCoins: number;
+  terrainAreas: MapTerrainArea[];
+};
+```
 
 ### `TownDetail`
 
@@ -189,6 +224,7 @@ type TownDetail = {
   buildings: PlacedBuilding[];
   unlockedAreas: UnlockedArea[];
   obstacles: MapObstacle[];
+  mapLayout: MapLayout;
   catalogVersion: number;
   editable: boolean;
 };
@@ -311,13 +347,14 @@ type Dashboard = {
 | code          | 名前       | サイズ | 効果                                        |
 | ------------- | ---------- | -----: | ------------------------------------------- |
 | `small_house` | 住宅（小） |    1×1 | 人口 +10                                    |
-| `small_park`  | 公園（小） |    1×1 | なし                                        |
+| `apartment`   | 住宅（大） |    2×2 | 人口 +50                                    |
+| `small_park`  | 公園       |    1×1 | なし                                        |
 | `hospital`    | 病院       |    2×2 | なし                                        |
 | `commercial`  | 商業施設   |    1×1 | コイン増加、値 TBD                          |
 | `farm`        | 農場       |    2×2 | 人口 +5                                     |
 | `road`        | 道路       |    1×1 | 周辺建築許可、範囲 TBD                      |
 | `town_hall`   | 役所       |    2×2 | 住宅（小）1軒あたり人口 +20、範囲・重複 TBD |
-| `factory`     | 工場       |    2×2 | コイン増加、値 TBD                          |
+| `factory`     | 工場       |    2×2 | なし                                        |
 
 価格 TBD の間は全項目を `costCoins: null`、`enabled: false` とする。
 
@@ -421,7 +458,33 @@ type TownMutationResult = {
 };
 ```
 
-サーバーは、種別・有効状態・価格、マップ境界、開放範囲、衝突、道路条件、残高を検証する。
+サーバーは、種別・有効状態・価格、マップ境界、開放範囲、衝突、固定地形、道路条件、残高を検証する。道路以外の建物が川セルに重なる場合は `RIVER_BLOCKED` を返す。
+
+### `placeRoadLine(input)`
+
+連続した直線の道路を一括購入する。川と交差する場合、サーバーが通常道路か橋かを自動判定する。
+
+```ts
+type Cell = { x: number; y: number };
+
+type PlaceRoadLineInput = {
+  buildingTypeCode: string;
+  cells: Cell[];
+  requestId: string;
+};
+
+type PlaceRoadLineResult = {
+  buildings: PlacedBuilding[];
+  placementKind: "road" | "bridge";
+  roadStructureId: string | null;
+  totalCostCoins: number;
+  coinBalance: number;
+  population: number;
+  updatedAt: string;
+};
+```
+
+クライアントは橋判定、価格、構造 ID を送らない。橋は川と直交する連続 7 セル（陸 1 + 川 5 + 陸 1）に限定し、全セルが開放済み・未占有で、曲がり角を含まない場合だけ配置できる。川セルは 1 セル 200 コイン、両岸セルは通常道路価格としてサーバーが合計する。
 
 ### `moveBuilding(input)`
 
@@ -434,7 +497,27 @@ type MoveBuildingInput = {
 };
 ```
 
-成功レスポンスは `TownMutationResult`。移動では購入費を消費しない。所有権、境界、開放範囲、衝突、道路条件を再検証する。
+成功レスポンスは `TownMutationResult`。移動では購入費を消費しない。所有権、境界、開放範囲、衝突、固定地形、道路条件を再検証する。道路と橋は移動不可とし、`PLACEMENT_IMMOVABLE` を返す。
+
+### `deleteRoad(input)`
+
+```ts
+type DeleteRoadInput = {
+  buildingId: string;
+  requestId: string;
+};
+
+type DeleteRoadResult = {
+  deletionKind: "road" | "bridge";
+  deletedBuildingIds: string[];
+  deletedRoadStructureId: string | null;
+  coinBalance: number;
+  population: number;
+  updatedAt: string;
+};
+```
+
+通常道路は指定した 1 セルだけを削除する。橋のセルを指定した場合は同じ `roadStructureId` の 7 セルを一括削除する。どちらも返金しない。削除により既存建物の道路隣接条件が壊れる場合は `ROAD_IN_USE` とし、橋グループが不完全な場合は `BRIDGE_GROUP_INVALID` として部分削除しない。
 
 ### `unlockLand(input)`（予約）
 
@@ -449,9 +532,9 @@ type UnlockLandInput = {
 
 クライアントがコイン・アイテム・必要歩数を指定しない。`areaId` に対応するサーバー設定から条件を検証する。
 
-### 建物削除
+### 道路以外の建物削除
 
-仕様が TBD のため API を定義しない。売却、返金、人口再計算のルール確定後に追加する。
+仕様が TBD のため API を定義しない。道路と橋の削除だけは `deleteRoad` で扱う。
 
 ## 10. 配置ルールの共有
 
@@ -462,6 +545,7 @@ type UnlockLandInput = {
   AND 全セルが開放済み
   AND 全セルが未占有
   AND 障害物と非衝突
+  AND 固定地形の配置ルールを満たす
   AND 道路ルールを満たす
   AND コインが十分
 ```
@@ -479,6 +563,13 @@ type UnlockLandInput = {
 - 2×2 建物の境界・衝突エラーコードが一致する。
 - 同じ `requestId` の配置再送で二重購入されない。
 - 他ユーザーの配置物を移動できない。
+- 川セルへ通常建物を配置できない。
+- 川の直線部を横断する 7 セルだけが橋になり、川の曲がり角や平行方向では拒否される。
+- 橋の価格が `5 * 200 + 2 * 通常道路価格` になる。
+- 道路と橋を移動できない。
+- 通常道路は 1 セルだけ削除され、橋は 7 セルが同じトランザクションで削除される。
+- 道路削除で既存建物の道路条件を壊す場合は削除されない。
+- 橋削除の再送で部分削除や二重処理が起きない。
 - ランキング人口と街詳細人口が一致する。
 
 ## 12. 変更管理
@@ -491,12 +582,12 @@ type UnlockLandInput = {
 ## 13. 未確定事項
 
 - Google Health API と必要スコープ
-- 日付境界のタイムゾーン
+- ユーザーがタイムゾーンを変更した場合の過去歩数再集計ルール（初期リリースの日付境界は `Asia/Tokyo` 固定）
 - 歩数からコインへの変換式
-- 商業施設・工場のボーナス式
+- 商業施設のボーナス式
 - 全建物のコスト
 - 役所効果の範囲と重複ルール
 - 道路の隣接ルール
-- 土地開放ルールと初期 20×20 の位置
-- 障害物、建物削除
+- 土地開放ルール
+- 川以外の障害物、道路以外の建物削除
 - ランキングの同率・ページング仕様

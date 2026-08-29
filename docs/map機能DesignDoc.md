@@ -6,11 +6,11 @@
 | ステータス | Draft（レビュー待ち） |
 | 作成日 | 2026-08-25 |
 | 対象 | 自分の街の編集、他ユーザーの街の閲覧 |
-| 関連 API | `getMyTown`、`getPublicTown`、`getBuildingCatalog`、`placeBuilding`、`moveBuilding` |
+| 関連 API | `getMyTown`、`getPublicTown`、`getBuildingCatalog`、`placeBuilding`、`placeRoadLine`、`moveBuilding`、`deleteRoad` |
 
 ## 1. 概要
 
-Map 機能は、Walk City の 100×100 セルの街を表示し、開放済みの土地に 1×1 または 2×2 の建物・道路を購入配置、移動する機能である。同じ描画コンポーネントを使って、他ユーザーの街を閲覧専用で表示する。
+Map 機能は、Walk City の 100×100 セルの街と全ユーザー共通の固定地形を表示し、開放済みの土地に 1×1 または 2×2 の建物・道路を購入配置、移動する機能である。道路が川を正しく横断するときは橋へ自動変換する。同じ描画コンポーネントを使って、他ユーザーの街を閲覧専用で表示する。
 
 フロントエンドは、取得済みデータを使って配置可否を事前表示し、ユーザーの操作を補助する。コイン残高、所有権、建物サイズ、開放状態、衝突、道路条件を含む最終的な配置可否はバックエンドが判定する。
 
@@ -24,6 +24,9 @@ Map 機能は、Walk City の 100×100 セルの街を表示し、開放済み�
 - 開放済み・未開放・占有済みのセルを視覚的に区別できる。
 - 1×1、2×2 の建物を正しい座標でプレビューし、購入配置できる。
 - 配置済み建物を移動できる。
+- 固定の川を開放状態にかかわらず表示し、通常建物を川へ配置できないようにする。
+- 川を直交して両岸へ届く道路を橋として購入できる。
+- 通常道路を 1 セル単位、橋を構造単位で削除できる。
 - API が拒否した理由をユーザーへ伝え、サーバー状態と表示を再同期できる。
 - 自分の街と他ユーザーの街で同じ座標・描画規則を使う。
 
@@ -31,9 +34,9 @@ Map 機能は、Walk City の 100×100 セルの街を表示し、開放済み�
 
 次の項目は仕様が確定するまで Map 機能の初期リリースに含めない。
 
-- 建物の回転、削除、売却
+- 建物の回転、道路以外の建物の削除・売却
 - 土地開放の実行
-- 障害物の生成・編集
+- 川以外の障害物の生成・編集
 - 建物アニメーションや天候などの演出
 - オフライン編集、複数操作の一括送信
 - リアルタイム共同編集
@@ -49,6 +52,9 @@ Map 機能は、Walk City の 100×100 セルの街を表示し、開放済み�
 | ワールド座標 | 0〜99 の整数で表すマップ上のセル座標 |
 | スクリーン座標 | ブラウザ画面上のピクセル座標 |
 | 開放領域 | ユーザーが建築できるセルを含む矩形 |
+| 固定地形 | 開放状態やユーザーに依存せず、共通マップに存在する地形 |
+| 川 | 通常建物・通常道路を配置できない、幅 5 セルの固定地形 |
+| 橋 | 川 5 セルと両岸 2 セルを一体として扱う道路構造 |
 | 配置プレビュー | API 送信前に予定位置と既知の可否を示す一時表示 |
 | 編集モード | 自分の街で購入配置・移動ができる状態 |
 | 閲覧モード | 他ユーザーの街など、Map を操作できない状態 |
@@ -85,6 +91,7 @@ Map 機能は、Walk City の 100×100 セルの街を表示し、開放済み�
 - 配置座標は建物矩形の左上アンカーとする。
 - 建物サイズはカタログの `width`、`height` を使用する。
 - 回転は行わない。
+- 初期開放範囲を左上（40,40）、左下（40,59）、右上（59,40）、右下（59,59）とする。
 
 幅 `w`、高さ `h` の配置物が `(x, y)` をアンカーとするとき、占有セルは次で求める。
 
@@ -329,6 +336,10 @@ erDiagram
     TOWN ||--o{ UNLOCKED_AREA : unlocks
     TOWN ||--o{ MAP_OBSTACLE : has
     TOWN ||--o{ COIN_LEDGER : posts
+    MAP_LAYOUT ||--o{ TOWN : applies_to
+    MAP_LAYOUT ||--o{ MAP_TERRAIN_AREA : contains
+    TOWN ||--o{ ROAD_STRUCTURE : owns
+    ROAD_STRUCTURE ||--o{ PLACED_BUILDING : groups
 
     TOWN {
       uuid id PK
@@ -337,6 +348,7 @@ erDiagram
       bigint population
       smallint map_width
       smallint map_height
+      uuid map_layout_id FK
       timestamptz updated_at
     }
     BUILDING_TYPE {
@@ -355,6 +367,7 @@ erDiagram
       smallint anchor_x
       smallint anchor_y
       bigint purchased_cost_coins
+      uuid road_structure_id FK
       timestamptz updated_at
     }
     UNLOCKED_AREA {
@@ -372,6 +385,28 @@ erDiagram
       smallint anchor_y
       smallint width
       smallint height
+    }
+    MAP_LAYOUT {
+      uuid id PK
+      integer version
+      bigint bridge_cell_cost_coins
+    }
+    MAP_TERRAIN_AREA {
+      uuid id PK
+      uuid map_layout_id FK
+      text terrain_type
+      text segment_kind
+      smallint x
+      smallint y
+      smallint width
+      smallint height
+      boolean bridgeable
+    }
+    ROAD_STRUCTURE {
+      uuid id PK
+      uuid town_id FK
+      text structure_type
+      text orientation
     }
 ```
 
@@ -395,6 +430,7 @@ type TownDetail = {
   buildings: PlacedBuilding[]
   unlockedAreas: UnlockedArea[]
   obstacles: MapObstacle[]
+  mapLayout: MapLayout
   catalogVersion: number
   editable: boolean
 }
@@ -404,6 +440,8 @@ type PlacedBuilding = {
   buildingTypeCode: string
   anchorX: number
   anchorY: number
+  roadStructureId: string | null
+  roadVariant: 'normal' | 'bridge_horizontal' | 'bridge_vertical' | null
   createdAt: string
   updatedAt: string
 }
@@ -423,7 +461,28 @@ type MapObstacle = {
   width: number
   height: number
 }
+
+type MapTerrainArea = {
+  id: string
+  code: string
+  terrainType: 'river' | string
+  segmentKind: 'horizontal' | 'vertical' | 'corner' | string
+  x: number
+  y: number
+  width: number
+  height: number
+  bridgeable: boolean
+}
+
+type MapLayout = {
+  id: string
+  version: number
+  bridgeCellCostCoins: number
+  terrainAreas: MapTerrainArea[]
+}
 ```
+
+川の正確な座標、橋の成立条件、価格、削除単位は [川・橋機能DesignDoc.md](./川・橋機能DesignDoc.md) を正本とする。
 
 ### 7.2 カタログ型
 
@@ -467,7 +526,40 @@ type MoveBuildingInput = {
 }
 ```
 
-### 7.5 更新成功レスポンス
+### 7.5 道路・橋の配置
+
+```ts
+type PlaceRoadLineInput = {
+  buildingTypeCode: string
+  cells: Cell[]
+  requestId: string
+}
+
+type PlaceRoadLineResult = {
+  buildings: PlacedBuilding[]
+  placementKind: 'road' | 'bridge'
+  roadStructureId: string | null
+  totalCostCoins: number
+  coinBalance: number
+  population: number
+  updatedAt: string
+}
+```
+
+クライアントは選択セルだけを送り、通常道路か橋か、価格、橋グループ ID はサーバーが決定する。
+
+### 7.6 道路・橋の削除
+
+```ts
+type DeleteRoadInput = {
+  buildingId: string
+  requestId: string
+}
+```
+
+通常道路は指定した 1 セル、橋は同じ構造に属する 7 セルを削除する。削除前に対象範囲を強調し、返金がないことを確認ダイアログで示す。
+
+### 7.7 更新成功レスポンス
 
 ```ts
 type TownMutationResult = {
@@ -478,14 +570,16 @@ type TownMutationResult = {
 }
 ```
 
-### 7.6 Map 内部型
+### 7.8 Map 内部型
 
 ```ts
 type MapMode =
   | { type: 'idle' }
   | { type: 'placing'; item: BuildingCatalogItem; anchor: Cell | null; requestId: string }
+  | { type: 'placing-road'; cells: Cell[]; requestId: string }
   | { type: 'moving'; buildingId: string; anchor: Cell | null; requestId: string }
-  | { type: 'submitting'; operation: 'place' | 'move' }
+  | { type: 'confirming-road-delete'; buildingId: string; affectedIds: string[] }
+  | { type: 'submitting'; operation: 'place' | 'place-road' | 'move' | 'delete-road' }
 
 type Cell = { x: number; y: number }
 
@@ -493,6 +587,10 @@ type PreviewInvalidReason =
   | 'OUT_OF_MAP'
   | 'LAND_LOCKED'
   | 'CELL_OCCUPIED'
+  | 'RIVER_BLOCKED'
+  | 'BRIDGE_SPAN_REQUIRED'
+  | 'BRIDGE_DIRECTION_INVALID'
+  | 'BRIDGE_CORNER_FORBIDDEN'
   | 'CATALOG_ITEM_DISABLED'
   | 'PRICE_NOT_SET'
   | 'INSUFFICIENT_COINS'
@@ -511,6 +609,14 @@ type PreviewInvalidReason =
 | `LAND_LOCKED` | 未開放パターンを強調 | 開放済みの土地を選ぶよう案内する |
 | `CELL_OCCUPIED` | 街を再取得 | 他の建物と重なっていることを表示する |
 | `ROAD_REQUIRED` | プレビューを維持 | 道路条件を満たす位置を選ぶよう案内する |
+| `RIVER_BLOCKED` | 川セルを強調 | 川の上には配置できないと表示する |
+| `BRIDGE_SPAN_REQUIRED` | 橋候補を維持 | 両岸を含む 7 セルを選ぶよう案内する |
+| `BRIDGE_DIRECTION_INVALID` | 橋候補を維持 | 川を直角に横断するよう案内する |
+| `BRIDGE_CORNER_FORBIDDEN` | 曲がり角を強調 | 川の直線部分を選ぶよう案内する |
+| `PLACEMENT_IMMOVABLE` | 移動操作を解除 | 道路と橋は移動できないと表示する |
+| `DELETE_NOT_ALLOWED` | 選択を解除 | この配置物は削除できないと表示する |
+| `ROAD_IN_USE` | 削除対象を維持 | 建物が利用中の道路は削除できないと表示する |
+| `BRIDGE_GROUP_INVALID` | 街を再取得 | 再読み込み後も失敗する場合の再試行を案内する |
 | `NOT_OWNER` | 編集を停止 | この街は編集できないと表示する |
 | `NOT_FOUND` | 街または建物を再取得 | 対象が存在しないと表示する |
 | `CONFLICT` | `getMyTown()` で再同期 | 街が更新されたため再操作を案内する |
@@ -520,12 +626,12 @@ type PreviewInvalidReason =
 
 ## 9. バックエンドの検証と整合性
 
-`place_building` と `move_building` は、次の処理をバックエンドの一つのトランザクションで行う。
+`place_building`、`place_road_line`、`move_building`、`delete_road` は、対象操作に必要な検証と更新をバックエンドの一つのトランザクションで行う。
 
 1. JWT からユーザーを決定する。
 2. 対象の街をロックし、所有権を確認する。
 3. 建物種別、有効状態、サイズ、価格をサーバーカタログから取得する。
-4. 全占有セルについて境界、開放状態、衝突、障害物、道路条件を検証する。
+4. 全占有セルについて境界、開放状態、衝突、固定地形、障害物、道路条件を検証する。
 5. 購入時のみ残高を検証し、コイン台帳と残高を更新する。
 6. 配置または座標を更新する。
 7. 人口を再計算する。
@@ -569,6 +675,8 @@ type PreviewInvalidReason =
 - 複数の開放矩形に対する開放判定が正しい。
 - 自分自身を除外した移動時の衝突判定が正しい。
 - 未知の `buildingTypeCode` や `assetKey` でも Map 全体が壊れない。
+- 5 個の地形矩形が指定された幅 5 セルの連続した川を構成する。
+- 直線 7 セル、方向、両岸、曲がり角の橋判定が正しい。
 
 ### 11.2 コンポーネントテスト
 
@@ -578,6 +686,9 @@ type PreviewInvalidReason =
 - 送信中に配置操作を二重送信しない。
 - API エラーごとに正しい案内を表示する。
 - 成功後に建物、コイン、人口が更新される。
+- 川が未開放領域にも表示され、建物プレビューが川上で無効になる。
+- 橋の対象 7 セルと削除確認範囲を視覚的に確認できる。
+- 道路と橋には移動操作が表示されない。
 
 ### 11.3 API 契約・統合テスト
 
@@ -586,6 +697,10 @@ type PreviewInvalidReason =
 - 未開放セルを一つでも含む配置は `LAND_LOCKED` になる。
 - 既存配置と一セルでも重なると `CELL_OCCUPIED` になる。
 - 他ユーザーの建物移動は `NOT_OWNER` になる。
+- 川へ通常建物・通常道路を配置できない。
+- 正しい横断だけが橋となり、橋 5 セル分は各 200 コインで計算される。
+- 通常道路は 1 セル、橋は 7 セル一括で削除され、返金されない。
+- 橋削除の失敗・再送で部分削除されない。
 - 購入失敗時にコイン、台帳、配置、人口の一部だけが更新されない。
 - 公開街にコイン、歩数、Google 連携情報が含まれない。
 
@@ -601,18 +716,22 @@ type PreviewInvalidReason =
 
 ### 12.1 実装順序
 
-1. Map の共有型、モック、座標変換・占有判定の純粋関数
-2. 読み取り専用 Map、開放領域、建物、パン、ズーム
-3. ショップと 1×1・2×2 の配置プレビュー
-4. `placeBuilding` 接続とエラー処理
-5. 建物選択と `moveBuilding` 接続
-6. 他ユーザーの街の閲覧モード
-7. 性能、スマートフォン、アクセシビリティの確認
+1. API・バックエンド・Map 設計書へ固定地形と道路構造の契約を反映する。
+2. 固定レイアウト、地形、道路構造の Supabase migration と seed を追加する。
+3. 共通型、モック API、川セル・橋判定・価格計算の純粋関数を追加する。
+4. Map に薄い水色の川を描画し、通常建物の配置を禁止する。
+5. `placeRoadLine` と `place_road_line` を橋の自動判定・保存へ対応させる。
+6. 橋用の道路画像バリアントと配置確認 UI を追加する。
+7. `deleteRoad` と `delete_road`、通常道路 1 セル・橋 7 セルの削除 UI を追加する。
+8. 契約・単体・統合・手動テストを実施する。
 
 ### 12.2 完了条件
 
 - 100×100 Map と API が返す開放領域を表示できる。
 - 1×1 と 2×2 の建物を購入配置・移動できる。
+- 固定の川が全ユーザーの同じ座標に表示され、川へ通常建物を配置できない。
+- 正しい 7 セル横断が橋として保存・描画される。
+- 通常道路と橋が移動不可で、返金なしの正しい単位で削除できる。
 - 正常系と本書の API エラーを画面で処理できる。
 - 同一コンポーネントで他ユーザーの街を閲覧でき、編集できない。
 - 単体、コンポーネント、主要な統合テストが通る。
@@ -622,11 +741,9 @@ type PreviewInvalidReason =
 
 未確定事項は Map 内に独自ルールをハードコードせず、決定時に本書、[API計画書.md](./API計画書.md)、バックエンド実装、テストを同時に更新する。
 
-- 道路の隣接範囲と最初の道路の配置条件
-- 初期 20×20 の位置
 - 土地開放の方式、単位、価格、UI
-- 障害物の種類と配置ルール
-- 建物の削除・売却・返金ルール
+- 川以外の障害物の種類と配置ルール
+- 道路以外の建物の削除・売却・返金ルール
 - 正式な建物画像とアセット解決方式
 - 対応ブラウザと具体的な性能計測端末
 
@@ -636,3 +753,4 @@ type PreviewInvalidReason =
 - [フロントエンド設計書](./フロントエンド.md)
 - [バックエンド設計書](./バックエンド.md)
 - [API 設計書](./API計画書.md)
+- [川・橋機能 Design Doc](./川・橋機能DesignDoc.md)
