@@ -1,4 +1,3 @@
-import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
 
 const SOURCE = "google_health";
@@ -197,7 +196,7 @@ export default {
         records.push({ step_date: stepDate, steps });
       }
 
-      const syncData = await syncStepRewards(ctx.supabaseAdmin as SupabaseAdminClient, userId, records);
+      const syncData = await syncStepRewards(ctx.supabaseAdmin as unknown as SupabaseAdminClient, userId, records);
 
       return response({
         status: "ok",
