@@ -94,7 +94,7 @@ describe('TownMap', () => {
     render(<TownMap town={MOCK_MY_TOWN} catalog={[]} />)
 
     expect(
-      screen.getByRole('img', { name: /^不明な建物（house-small）、/ }),
+      screen.getByRole('img', { name: /^不明な建物（small_house）、/ }),
     ).not.toBeNull()
   })
 })
@@ -179,10 +179,35 @@ describe('TownOverview', () => {
     expect(within(menu).getByText('70人')).not.toBeNull()
     expect(api.getTownSnapshot().town.population).toBe(70)
     expect(api.getTownSnapshot().buildings.at(-1)).toMatchObject({
-      buildingTypeCode: 'house-small',
+      buildingTypeCode: 'small_house',
       anchorX: 41,
       anchorY: 50,
     })
+  })
+
+  it('prevents duplicate placement submissions while a request is pending', async () => {
+    const api = createMockTownApi({ latencyMs: 50 })
+    const placeBuilding = vi.spyOn(api, 'placeBuilding')
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    fireEvent.click(screen.getByRole('button', { name: /マーケット/ }))
+    fireEvent.click(screen.getByRole('button', { name: '住宅（小）を選択' }))
+    fireEvent.click(
+      screen.getByRole('application', { name: /グリーンタウンのマップ/ }),
+      { clientX: 180, clientY: 290 },
+    )
+
+    const submit = screen.getByRole('button', {
+      name: '50コインで購入・配置',
+    })
+    fireEvent.click(submit)
+    fireEvent.click(submit)
+
+    expect((submit as HTMLButtonElement).disabled).toBe(true)
+    expect(placeBuilding).toHaveBeenCalledTimes(1)
+    await screen.findByText('住宅（小）を配置しました。')
+    expect(api.getTownSnapshot().town.coins).toBe(1_950)
   })
 
   it('selects a building, shows its details, and changes its display name', async () => {
@@ -270,6 +295,25 @@ describe('TownOverview', () => {
     ).toMatchObject({ anchorX: 41, anchorY: 50 })
   })
 
+  it('hides only rename controls when the production API does not support them', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    Object.defineProperty(api, 'supportsBuildingRename', { value: false })
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    const map = screen.getByRole('application', {
+      name: /グリーンタウンのマップ/,
+    })
+    fireEvent.click(map, { clientX: 227, clientY: 267 })
+
+    expect(
+      screen.queryByRole('textbox', { name: '建物の表示名' }),
+    ).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'この建物を移動する' }),
+    ).not.toBeNull()
+  })
+
   it('does not submit a move when the current position is selected', async () => {
     const api = createMockTownApi({ latencyMs: 0 })
     render(<TownOverview api={api} />)
@@ -297,6 +341,7 @@ describe('TownOverview', () => {
 
   it('keeps the move selection and allows retrying after an API error', async () => {
     const api = createMockTownApi({ latencyMs: 0 })
+    const moveBuilding = vi.spyOn(api, 'moveBuilding')
     api.setFailure('moveBuilding', 'INTERNAL_ERROR')
     render(<TownOverview api={api} />)
     await screen.findByRole('heading', { name: 'グリーンタウン' })
@@ -328,6 +373,10 @@ describe('TownOverview', () => {
     expect(api.getTownSnapshot().buildings.find(
       (building) => building.id === 'mock-house-001',
     )).toMatchObject({ anchorX: 41, anchorY: 50 })
+    expect(moveBuilding).toHaveBeenCalledTimes(2)
+    expect(moveBuilding.mock.calls[1][0].requestId).toBe(
+      moveBuilding.mock.calls[0][0].requestId,
+    )
   })
 
   it('purchases a large house for 200 coins and increases population by 50', async () => {
@@ -390,7 +439,7 @@ describe('TownOverview', () => {
     expect(screen.getByText('1,850')).not.toBeNull()
     expect(api.getTownSnapshot().town.population).toBe(60)
     expect(api.getTownSnapshot().buildings.at(-1)).toMatchObject({
-      buildingTypeCode: 'park',
+      buildingTypeCode: 'small_park',
       anchorX: 41,
       anchorY: 50,
     })
@@ -498,7 +547,7 @@ describe('TownOverview', () => {
     vi.setSystemTime(new Date('2026-08-25T10:00:00.000Z'))
     const api = createMockTownApi({ latencyMs: 0 })
     const today = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Australia/Sydney',
+      timeZone: 'Asia/Tokyo',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',

@@ -976,6 +976,7 @@ export function TownOverview({
           building={selectedBuilding}
           item={selectedBuildingItem}
           editable={mode.type === 'self' && town.editable}
+          canRename={api.supportsBuildingRename !== false}
           isSaving={isRenamingBuilding}
           errorMessage={renameBuildingError}
           onClose={closeBuildingDetail}

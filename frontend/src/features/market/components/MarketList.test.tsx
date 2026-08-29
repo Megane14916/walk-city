@@ -41,7 +41,7 @@ describe('MarketList', () => {
     render(
       <MarketList
         items={MARKET_ITEMS}
-        purchasableItemCodes={new Set(['house-small', 'apartment', 'road'])}
+        purchasableItemCodes={new Set(['small_house', 'apartment', 'road'])}
         onSelectItem={onSelectItem}
       />,
     )
@@ -59,11 +59,11 @@ describe('MarketList', () => {
 
   it('allows every effect-free model to be selected when catalog-backed', () => {
     const modelCodes = [
-      'park',
+      'small_park',
       'hospital',
-      'commercial-facility',
+      'commercial',
       'farm',
-      'city-hall',
+      'town_hall',
       'factory',
     ]
     render(

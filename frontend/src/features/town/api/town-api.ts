@@ -14,6 +14,7 @@ import type {
 } from '../types'
 
 export interface TownApi {
+  readonly supportsBuildingRename?: boolean
   getBuildingCatalog(): Promise<ApiResult<BuildingCatalogItem[]>>
   getMyTown(): Promise<ApiResult<TownDetail>>
   getPublicTown(userId: string): Promise<ApiResult<TownDetail>>

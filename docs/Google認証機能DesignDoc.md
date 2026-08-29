@@ -464,7 +464,7 @@ const connectionResult =
 
 const stepsResult = await api.getDailySteps({
   date: '2026-08-25',
-  timezone: 'Australia/Sydney',
+  timezone: 'Asia/Tokyo',
 })
 ```
 

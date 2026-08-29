@@ -4,7 +4,7 @@ import { useAuth } from '../../auth/hooks'
 import type { GoogleHealthConnection } from '../../auth/types'
 import type { DailySteps } from '../types'
 
-const TIMEZONE = 'Australia/Sydney'
+const TIMEZONE = 'Asia/Tokyo'
 
 export type HealthConnectionPendingAction =
   | 'connecting'
@@ -12,7 +12,7 @@ export type HealthConnectionPendingAction =
   | 'disconnecting'
   | null
 
-function todayInSydney() {
+function todayInTokyo() {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: TIMEZONE,
     year: 'numeric',
@@ -24,7 +24,7 @@ function todayInSydney() {
 export function useHealthConnection() {
   const { googleIntegrationApi } = useApi()
   const { integrationState, refresh } = useAuth()
-  const [today] = useState(todayInSydney)
+  const [today] = useState(todayInTokyo)
   const [dailySteps, setDailySteps] = useState<DailySteps | null>(null)
   const [pending, setPending] =
     useState<HealthConnectionPendingAction>(null)
