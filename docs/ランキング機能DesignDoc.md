@@ -83,7 +83,7 @@
 | カーソル | 次ページ取得位置を表す、クライアントから見て不透明な文字列 |
 | 初回取得 | 画面表示後、ランキングデータがない状態で行う取得 |
 | 追加取得 | 表示済みエントリを維持したまま次ページを取得する操作 |
-| 現在ユーザー | Supabase JWT のユーザーと一致し、`isCurrentUser: true` が返るエントリ |
+| 現在ユーザー | Serviceが取得済みAuthユーザーIDと`userId`を比較し、`isCurrentUser: true`を付加したエントリ |
 | 実 API | Supabase View、Query または RPC を呼び出すサービス実装 |
 | モック API | 外部通信なしで実 API と同じ契約を再現するサービス実装 |
 
@@ -127,7 +127,7 @@
 ### 5.4 認証と公開範囲
 
 - `/ranking` は初期版では認証必須とする。
-- `isCurrentUser` はサーバーが JWT から判定し、クライアントから対象ユーザー ID を送らない。
+- ランキングViewは`user_id`を返し、Serviceが取得済みAuthユーザーIDとの比較で`isCurrentUser`を付加する。ComponentやAPI入力から判定用ユーザーIDを受け取らない。
 - ランキングレスポンスにはメールアドレス、コイン、歩数、Google Health 連携状態を含めない。
 - 表示名、街名、人口、公開用 ID だけを UI で使用する。
 
@@ -632,7 +632,7 @@ erDiagram
 
 - `RankingEntry.population` は同時点の `towns.population` と一致する。
 - `rank` はサーバーのクエリで算出する。
-- `isCurrentUser` は JWT の `sub` と `userId` の比較で返す。
+- `isCurrentUser`はServiceが取得済みAuthユーザーIDと`userId`を比較して返す。View/RPCに`is_current_user`列を設けない。
 - 公開対象外の情報を SELECT または RPC 戻り値に含めない。
 - ページング中の人口更新で重複・欠落が起こり得ることを前提とし、カーソルに安定ソートキーを含める。
 - カーソルの内容を信用せず、署名または厳格な形式・値検証を行う。
@@ -686,7 +686,7 @@ erDiagram
 
 - 認証済みユーザーだけランキングを取得できる。
 - 人口の降順と合意した同率ルールで返る。
-- `isCurrentUser` が JWT のユーザーにだけ true になる。
+- `isCurrentUser`が取得済みAuthユーザーIDと一致する行だけtrueになる。
 - 同じカーソルの再送で同じページを取得できる。
 - 不正カーソルを `INVALID_INPUT` として安全に拒否する。
 - ページ境界で安定した順序になる。

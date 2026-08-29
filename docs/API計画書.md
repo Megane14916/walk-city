@@ -89,6 +89,8 @@ type ApiErrorCode =
   | "DELETE_NOT_ALLOWED"
   | "ROAD_IN_USE"
   | "BRIDGE_GROUP_INVALID"
+  | "AREA_ALREADY_UNLOCKED"
+  | "AREA_NOT_ADJACENT"
   | "NOT_OWNER"
   | "NOT_FOUND"
   | "CONFLICT"
@@ -126,8 +128,6 @@ type TownSummary = {
 type BuildingEffect = {
   type:
     | "population_flat"
-    | "step_coin_bonus_flat"
-    | "enables_adjacent_construction"
     | string;
   value: number | null;
   targetCategory: string | null;
@@ -138,7 +138,7 @@ type BuildingEffect = {
 };
 ```
 
-`type` は将来追加されるため、フロントエンドでは未知の文字列を受け入れる。
+`building_effects`に表示用`description`列は置かない。SupabaseのViewは構造化された効果データを返し、フロントエンドServiceが既知の`type`を説明文へ変換する。未知の効果では`description: ""`とする。`type`は将来追加されるため、フロントエンドでは未知の文字列を受け入れる。
 
 ### `BuildingCatalogItem`
 
@@ -177,7 +177,7 @@ type PlacedBuilding = {
 
 ### `UnlockedArea`
 
-土地開放の保存方式が未確定のため、クライアントには描画しやすい矩形として返す。
+土地開放は`unlocked_areas`へ20×20の矩形として保存し、クライアントにも矩形として返す。
 
 ```ts
 type UnlockedArea = {
@@ -277,6 +277,22 @@ supabase.auth.signInWithOAuth({
 
 Google ログインと Google Health 連携に必要な同意・スコープが異なる場合、歩数連携は別操作として提供する。具体的なスコープは採用する Google Health API の決定後に確定する。
 
+### `initializeUser()`
+
+Google OAuth後の`/auth/callback`でセッションを復元した直後、`/health/connect`へ遷移する前に`initialize-user` Edge Functionを空bodyで呼ぶ。ユーザーIDはJWTから決定する。
+
+```ts
+type InitializeUserResult = {
+  profileId: string;
+  townId: string;
+  created: boolean;
+};
+```
+
+新規登録と再ログインはフロントで判定しない。`created`は今回の呼び出しで不足していた初期データを作成した場合に`true`、すでに初期化済みで何も作成しなかった場合に`false`とする。初期化済みユーザーへの再送は同じIDと`created: false`を返す。初期表示名と街名は認証ユーザーUUIDからハイフンを除いた先頭8文字を使う`user-xxxxxxxx`、`Town-xxxxxxxx`とする。導入前から存在するAuthユーザーも次回ログイン時に不足データだけを遅延作成し、全件backfill migrationは行わない。初期化失敗時はコールバック画面に留まり、再試行できるようにする。
+
+プロフィール表示名と街名の変更APIはMVPでは定義しない。建物表示名の`renameBuilding()`は別機能として維持する。
+
 ### `signOut()`
 
 Supabase Auth のセッションを終了する。Google Health 連携は解除せず、同じユーザーが再ログインしたときに接続状態を復元する。
@@ -330,7 +346,7 @@ type StartGoogleHealthConnectionResult =
 | 表示値 | 取得元 |
 | --- | --- |
 | ユーザー、街名、コイン、人口 | `getMyTown()` |
-| 今日の歩数 | `getDailySteps()`。歩数精算後は `syncSteps()` の成功レスポンス |
+| 今日の歩数 | 初期表示は未同期状態。ユーザー操作後は`syncSteps()`の成功レスポンス |
 | Health 接続状態、最終同期日時 | `getGoogleIntegrationState()` |
 
 ### `getBuildingCatalog()`
@@ -345,13 +361,15 @@ type StartGoogleHealthConnectionResult =
 | `apartment`   | 住宅（大） |    2×2 |       200 |  true   | 人口 +50                                    |
 | `small_park`  | 公園       |    1×1 |       150 |  true   | なし                                        |
 | `hospital`    | 病院       |    2×2 |       600 |  true   | なし                                        |
-| `commercial`  | 商業施設   |    1×1 |       300 |  true   | コイン増加、値 TBD                          |
+| `commercial`  | 商業施設   |    1×1 |       300 |  true   | なし                                        |
 | `farm`        | 農場       |    2×2 |       100 |  true   | なし                                        |
-| `road`        | 道路       |    1×1 |         0 |  true   | 周辺建築許可（上下左右4方向、斜め不可）      |
+| `road`        | 道路       |    1×1 |         0 |  true   | 建物効果なし                                |
 | `town_hall`   | 役所       |    2×2 |     3,000 |  true   | なし                                        |
 | `factory`     | 工場       |    2×2 |       700 |  true   | なし                                        |
 
 上記の価格は仮決定であり、正式な確定額ではない（[本番Supabase接続Phase0契約決定書.md](./本番Supabase接続Phase0契約決定書.md) §8）。価格が未設定の新規カタログ項目を追加する場合だけ `costCoins: null`、`enabled: false` とする。
+
+`building_effects`を持つのは住宅（小）と住宅（大）だけとする。道路隣接と橋変換は建物効果ではなく、§9・§10のマップルールとして扱う。
 
 ### `getMyTown()`
 
@@ -387,6 +405,8 @@ type RankingPage = {
 };
 ```
 
+ランキングViewは`user_id`を返し、フロントエンドServiceが取得済みAuthユーザーIDとの比較で`isCurrentUser`を付加する。判定用ユーザーIDはComponentやAPI入力から受け取らない。
+
 上限件数、同率順位、カーソル仕様は TBD。レスポンス型はページングを追加しても画面の関数を変更しなくて済む形にする。
 
 ## 8. 歩数同期 API
@@ -411,15 +431,17 @@ Supabase Edge Function `sync-health-steps` を呼び出す。クライアント�
     "timezone": "Asia/Tokyo",
     "steps": 6500,
     "newlyRewardedSteps": 1500,
-    "coinsAwarded": 0,
-    "coinBalance": 0,
+    "coinsAwarded": 150,
+    "coinBalance": 150,
     "appliedBonuses": [],
     "syncedAt": "2026-08-25T12:00:00+09:00"
   }
 }
 ```
 
-例のコイン値は変換率未決定のため 0 としている。実装時はサーバー設定から計算する。
+基本報酬は10歩につき1コイン、端数切り捨て、日次上限なしとする。同日の追加同期では`max(0, floor(totalSteps / 10) - floor(previousRewardedSteps / 10))`を付与し、分割同期で10歩未満の端数を失わない。住宅以外の建物によるコインボーナスは付与しない。
+
+`appliedBonuses`はAPI後方互換と将来拡張のためレスポンス型に残し、MVPでは常に空配列`[]`を返す。
 
 冪等性:
 
@@ -514,9 +536,9 @@ type DeleteRoadResult = {
 
 通常道路は指定した 1 セルだけを削除する。橋のセルを指定した場合は同じ `roadStructureId` の 7 セルを一括削除する。どちらも返金しない。削除により既存建物の道路隣接条件が壊れる場合は `ROAD_IN_USE` とし、橋グループが不完全な場合は `BRIDGE_GROUP_INVALID` として部分削除しない。
 
-### `unlockLand(input)`（予約）
+### `unlockLand(input)`
 
-土地開放ルールの決定後に有効化する。
+MVPで正式に実装する。
 
 ```ts
 type UnlockLandInput = {
@@ -526,7 +548,7 @@ type UnlockLandInput = {
 };
 ```
 
-`x`、`y` は開放する 20×20 ブロックの左上アンカー座標とし、20 の倍数とする。クライアントがコイン・アイテム・必要歩数を指定しない。`x`、`y` に対応するサーバー設定から条件を検証する。詳細は [本番Supabase接続Phase0契約決定書.md](./本番Supabase接続Phase0契約決定書.md) §7.4 を正本とする。
+`x`、`y` は開放する20×20ブロックの左上アンカー座標とし、20の倍数とする。既存開放領域と上下左右の辺で隣接し、斜め隣接は不可。コストは1000コインとし、残高減算、台帳追加、領域追加を一つのトランザクションで行う。クライアントがコイン・アイテム・必要歩数を指定しない。詳細は [本番Supabase接続Phase0契約決定書.md](./本番Supabase接続Phase0契約決定書.md) §7.4 を正本とする。
 
 ### 道路以外の建物削除
 
@@ -579,9 +601,6 @@ type UnlockLandInput = {
 
 - Google Health API と必要スコープ
 - ユーザーがタイムゾーンを変更した場合の過去歩数再集計ルール（初期リリースの日付境界は `Asia/Tokyo` 固定）
-- 歩数からコインへの変換式
-- 商業施設のボーナス式
 - 全建物のコスト
-- 土地開放ルール
 - 川以外の障害物、道路以外の建物削除
 - ランキングの同率・ページング仕様

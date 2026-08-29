@@ -25,7 +25,7 @@
 | 表示値 | 取得元 |
 |---|---|
 | ユーザー、街名、コイン、人口 | `getMyTown()` |
-| 今日の歩数 | `getDailySteps()`。歩数精算後は `syncSteps()` の成功レスポンス |
+| 今日の歩数 | 初期表示は未同期状態。ユーザー操作後は`syncSteps()`の成功レスポンス |
 | Health 接続状態、最終同期日時 | `getGoogleIntegrationState()` |
 | 建物、開放領域、障害物 | `getMyTown()` / `getPublicTown()` |
 | 建物価格、サイズ、効果、有効状態 | `getBuildingCatalog()` |
@@ -114,11 +114,11 @@ Providerへの統合は完了しているが、`createUnavailableSupabaseRanking
 ### 4.4 正式 API 契約と現行 UI に差がある
 
 - `placeRoadLine()` は現行 UI とモックにあり、`API計画書.md` §9 の正式な街編集 API として実装対象に確定済みである（[本番Supabase接続Phase0契約決定書.md](./本番Supabase接続Phase0契約決定書.md) §3.1）。
-- `unlockLand()` は現行 UI とモックにあるが、`API計画書.md` では予約扱いである。
+- `unlockLand()` は20×20・1000コインの正式なMVP機能として採用済みである。
 - `unlockLand()` の入力は `{ x, y, requestId }`（座標ベース）に統一した（[API計画書.md](./API計画書.md) §9、[本番Supabase接続Phase0契約決定書.md](./本番Supabase接続Phase0契約決定書.md) §7.4）。
 - `renameBuilding()` は追加設計書にあり、`custom_name` 列は既に追加済みである。更新用の `rename_building` RPC の実装を待つ（[Supabaseバックエンド実装計画書.md](./Supabaseバックエンド実装計画書.md) §5.9）。
 
-道路一括配置を複数回の `placeBuilding()` に分解すると原子性と冪等性を失うため行わない。`placeRoadLine()` は実装対象として確定しているため本番へ接続する。`unlockLand()` など、正式な原子 RPC がまだ確定していない操作は、本番では非表示または無効にする。
+道路一括配置を複数回の `placeBuilding()` に分解すると原子性と冪等性を失うため行わない。`placeRoadLine()`と`unlockLand()`は実装対象として確定しているため本番へ接続する。
 
 ### 4.5 日次歩数のタイムゾーンが暫定値のまま
 
@@ -152,7 +152,7 @@ Providerへの統合は完了しているが、`createUnavailableSupabaseRanking
    - `placeBuilding(input)`
    - `moveBuilding(input)`
    - `placeRoadLine(input)`、`renameBuilding(input)`（採用確定）
-   - 採用する場合のみ `unlockLand(input)`
+   - `unlockLand(input)`（採用確定）
 4. レスポンス
    - `ApiResult<T>` envelope の有無
    - DB の `snake_case` をどの層で `camelCase` にするか
@@ -213,7 +213,7 @@ type ApiServices = {
 1. 第5章の契約をバックエンド担当とレビューする。
 2. 実 API の成功・主要エラーの request / response fixture を受け取る。
 3. 正式な building type code を確定する。
-4. `placeRoadLine()`、`renameBuilding()` は実装対象として確定済み。`unlockLand()` の今回スコープを決める。
+4. `placeRoadLine()`、`renameBuilding()`、`unlockLand()`は実装対象として確定済み。
 5. スコープ外の操作はSupabaseモードのUIで非表示または無効にする方法を決める。
 6. `getDashboard()` を使用しない方針を関連文書へ反映する。
 
@@ -284,7 +284,7 @@ type ApiServices = {
 1. `createSupabaseRankingApi(supabase, options)` を追加する。
 2. `getPopulationRanking({ limit, cursor })` を View / RPC へ接続する。
 3. Supabaseモードの `createUnavailableSupabaseRankingApi()` を実 Service に置き換える。
-4. バックエンドが返した rank、population、`isCurrentUser` をそのまま使用する。
+4. バックエンドが返した`user_id`と取得済みAuthユーザーIDをServiceで比較し、`isCurrentUser`を付加する。Componentから判定用ユーザーIDは受け取らない。
 5. 人口、表示名、ユーザーIDによる安定した並び順と同率順位を検証する。
 6. カーソルをフロントエンドで解釈・生成しない。
 7. 建物配置後にランキングを再表示または更新すると、変更後人口と順位が返ることを統合テストする。
@@ -300,24 +300,23 @@ type ApiServices = {
 
 ### Phase 6: 追加の街更新 API
 
-`renameBuilding()`、`placeRoadLine()` は実装対象として確定済み。`unlockLand()` はPhase 0で採用が決まった場合だけ実装する。
+`renameBuilding()`、`placeRoadLine()`、`unlockLand()`は実装対象として確定済み。
 
 1. `renameBuilding()` の `custom_name` と所有権検証を持つ RPC へ接続する。
 2. `placeRoadLine()` の全道路セルを単一トランザクション・単一 `requestId` で処理する RPC へ接続する。
-3. `unlockLand()` を採用する場合、`{ x, y, requestId }` の座標ベース契約で接続する。
-4. 未採用の操作はSupabaseモードで表示しない。
+3. `unlockLand()`を`{ x, y, requestId }`の座標ベース契約で接続する。
+4. スコープ外の操作はSupabaseモードで表示しない。
 5. モックと本番の公開 interface を一致させる。
 
 ### Phase 7: 歩数表示と既存 Auth / Health の本番確認
 
-1. `useDailyStepsSummary()` の日付境界を `Asia/Tokyo` に変更する。
-2. `getDailySteps()` は表示専用、`syncSteps()` は報酬精算用という境界を維持する。
+1. 旧`useDailyStepsSummary()` / `getDailySteps()`依存を廃止し、歩数取得・報酬精算を`syncSteps()`へ統合する。
+2. 初期表示は未同期状態とし、同期成功後に歩数と残高を同時反映する。
 3. OAuth callback と許可 Redirect URL をステージング・本番で確認する。
 4. 次の既定 Edge Function 名をデプロイ名と照合する。
    - `get-google-integration-state`
    - `begin-google-health-auth`
    - `disconnect-google-health`
-   - `get-daily-steps`
    - `sync-health-steps`
 5. Edge Function の非2xx応答から安定した `ApiErrorCode` を復元する。
 6. ログや画面に token、内部 stack、SQL、生レスポンスを出さない。
@@ -374,7 +373,7 @@ type ApiServices = {
 | P1 | Phase 7 日次歩数のタイムゾーン統一 | Dashboardなしで暫定処理を解消する |
 | P2 | Phase 6 `renameBuilding()` | バックエンド RPC の準備後に接続する（列は追加済み） |
 | P2 | Phase 6 `placeRoadLine()` | 実装対象として確定済み。バックエンド RPC の準備後に接続する |
-| 保留 | `unlockLand()` | 上位契約とバックエンド実装が確定するまで本番では無効化する |
+| P2 | Phase 6 `unlockLand()` | 20×20・1000コインの採用済み契約でバックエンドRPCへ接続する |
 
 `getDashboard()` は優先度表に含めず、実装しない。
 
