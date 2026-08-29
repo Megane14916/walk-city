@@ -4,6 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ApiResult } from '../../../types/common'
 import type { TownDetail } from '../../town/types'
+import { FIXED_MAP_LAYOUT } from '../../../mocks/data/map-layout'
 import {
   usePublicUserProfile,
   type PublicUserApi,
@@ -25,6 +26,7 @@ function createPublicTown(
     buildings: [],
     unlockedAreas: [],
     obstacles: [],
+    mapLayout: FIXED_MAP_LAYOUT,
     catalogVersion: 1,
     editable: false,
   }

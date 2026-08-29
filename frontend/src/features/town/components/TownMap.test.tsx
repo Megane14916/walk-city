@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MOCK_BUILDING_CATALOG,
   MOCK_MY_TOWN,
+  MOCK_PUBLIC_TOWN,
   MOCK_PUBLIC_USER_ID,
 } from '../../../mocks/data/towns'
 import {
@@ -20,6 +21,7 @@ import {
   createMockWalkCityStore,
 } from '../../../mocks/services'
 import { createMockTownApi } from '../../../mocks/services/town'
+import { evaluateRoadLinePreview, getRoadLineCells } from '../utils'
 import { TownMap } from './TownMap'
 import { TownOverview } from './TownOverview'
 
@@ -29,6 +31,21 @@ afterEach(() => {
 })
 
 describe('TownMap', () => {
+  it.each([
+    ['my town', MOCK_MY_TOWN],
+    ['public town', MOCK_PUBLIC_TOWN],
+  ])('renders the fixed river and its legend in %s', (_label, town) => {
+    const { container } = render(
+      <TownMap town={town} catalog={MOCK_BUILDING_CATALOG} />,
+    )
+
+    expect(screen.getByRole('img', { name: '固定地形の川' })).not.toBeNull()
+    expect(
+      screen.getByLabelText('マップ凡例、水色は川'),
+    ).not.toBeNull()
+    expect(container.querySelectorAll('[data-terrain-code]')).toHaveLength(5)
+  })
+
   it('renders placed roads and buildings with accessible names', () => {
     render(
       <TownMap town={MOCK_MY_TOWN} catalog={MOCK_BUILDING_CATALOG} />,
@@ -86,6 +103,103 @@ describe('TownMap', () => {
     expect(
       screen.getByRole('img', {
         name: '道路、座標45,50、上右下左に接続',
+      }),
+    ).not.toBeNull()
+  })
+
+  it('renders a saved bridge with a dedicated horizontal illustration', () => {
+    const roadTemplate = MOCK_MY_TOWN.buildings.find(
+      (building) => building.buildingTypeCode === 'road',
+    )!
+    const bridgeCells = getRoadLineCells({ x: 64, y: 55 }, { x: 70, y: 55 })
+    const townWithBridge = {
+      ...MOCK_MY_TOWN,
+      unlockedAreas: [
+        ...MOCK_MY_TOWN.unlockedAreas,
+        { x: 60, y: 40, width: 20, height: 20 },
+      ],
+      buildings: [
+        ...MOCK_MY_TOWN.buildings,
+        ...bridgeCells.map((cell, index) => ({
+          ...roadTemplate,
+          id: `bridge-cell-${index}`,
+          anchorX: cell.x,
+          anchorY: cell.y,
+          roadStructureId: 'bridge-001',
+          roadVariant: 'bridge_horizontal' as const,
+        })),
+      ],
+    }
+
+    render(
+      <TownMap town={townWithBridge} catalog={MOCK_BUILDING_CATALOG} />,
+    )
+
+    expect(
+      screen.getAllByRole('img', { name: /^橋（横向き）、/ }),
+    ).toHaveLength(7)
+  })
+
+  it('highlights all seven cells when one bridge cell is selected', () => {
+    const roadTemplate = MOCK_MY_TOWN.buildings.find(
+      (building) => building.buildingTypeCode === 'road',
+    )!
+    const bridgeCells = getRoadLineCells({ x: 64, y: 55 }, { x: 70, y: 55 })
+    const bridgeBuildings = bridgeCells.map((cell, index) => ({
+      ...roadTemplate,
+      id: `selected-bridge-cell-${index}`,
+      anchorX: cell.x,
+      anchorY: cell.y,
+      roadStructureId: 'selected-bridge',
+      roadVariant: 'bridge_horizontal' as const,
+    }))
+
+    render(
+      <TownMap
+        town={{
+          ...MOCK_MY_TOWN,
+          buildings: [...MOCK_MY_TOWN.buildings, ...bridgeBuildings],
+        }}
+        catalog={MOCK_BUILDING_CATALOG}
+        selectedBuildingId="selected-bridge-cell-3"
+      />,
+    )
+
+    expect(
+      screen
+        .getAllByRole('img', { name: /^橋（横向き）、/ })
+        .every((element) => element.className.includes('ring-4')),
+    ).toBe(true)
+  })
+
+  it('shows a valid bridge preview differently from a normal road line', () => {
+    const road = MOCK_BUILDING_CATALOG.find((item) => item.code === 'road')!
+    const cells = getRoadLineCells({ x: 64, y: 55 }, { x: 70, y: 55 })
+    const town = {
+      ...MOCK_MY_TOWN,
+      unlockedAreas: [
+        ...MOCK_MY_TOWN.unlockedAreas,
+        { x: 60, y: 40, width: 20, height: 20 },
+      ],
+    }
+    const preview = evaluateRoadLinePreview({
+      town,
+      catalog: MOCK_BUILDING_CATALOG,
+      item: road,
+      cells,
+    })
+
+    render(
+      <TownMap
+        town={town}
+        catalog={MOCK_BUILDING_CATALOG}
+        roadPlacement={{ item: road, cells, preview, onSelectCells: vi.fn() }}
+      />,
+    )
+
+    expect(
+      screen.getByRole('img', {
+        name: '橋プレビュー、7マス、配置可能',
       }),
     ).not.toBeNull()
   })
@@ -229,6 +343,66 @@ describe('TownOverview', () => {
     expect(
       screen.getByRole('heading', { name: '住宅（小）' }),
     ).not.toBeNull()
+  })
+
+  it('confirms and deletes one unused road cell without changing coins', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    const map = screen.getByRole('application', {
+      name: /グリーンタウンのマップ/,
+    })
+    fireEvent.click(map, { clientX: 204, clientY: 290 })
+    fireEvent.click(screen.getByRole('button', { name: '道路 1セルを削除' }))
+
+    expect(
+      screen.getByRole('heading', {
+        name: '道路 1セルを削除しますか？',
+      }),
+    ).not.toBeNull()
+    expect(
+      screen.getByText('削除してもコインは返却されません。'),
+    ).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '削除する' }))
+
+    expect(await screen.findByText('道路 1セルを削除しました。')).not.toBeNull()
+    expect(api.getTownSnapshot().town.coins).toBe(2_000)
+    expect(
+      api
+        .getTownSnapshot()
+        .buildings.some((building) => building.id === 'mock-road-001'),
+    ).toBe(false)
+  })
+
+  it('keeps an in-use road and retries with the same deletion request', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+    const deleteRoad = vi.spyOn(api, 'deleteRoad')
+    render(<TownOverview api={api} />)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    fireEvent.click(
+      screen.getByRole('application', {
+        name: /グリーンタウンのマップ/,
+      }),
+      { clientX: 227, clientY: 290 },
+    )
+    fireEvent.click(screen.getByRole('button', { name: '道路 1セルを削除' }))
+    fireEvent.click(screen.getByRole('button', { name: '削除する' }))
+
+    expect(
+      await screen.findByText('建物が利用中の道路は削除できません。'),
+    ).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '削除する' }))
+    await waitFor(() => expect(deleteRoad).toHaveBeenCalledTimes(2))
+    expect(deleteRoad.mock.calls[1][0].requestId).toBe(
+      deleteRoad.mock.calls[0][0].requestId,
+    )
+    expect(
+      api
+        .getTownSnapshot()
+        .buildings.some((building) => building.id === 'mock-road-002'),
+    ).toBe(true)
   })
 
   it('purchases a large house for 200 coins and increases population by 50', async () => {
@@ -563,6 +737,7 @@ describe('TownOverview', () => {
     expect(
       screen.queryByRole('textbox', { name: '建物の表示名' }),
     ).toBeNull()
+    expect(screen.queryByRole('button', { name: /削除/ })).toBeNull()
   })
 
   it('can retry after an API error', async () => {

@@ -29,6 +29,10 @@ function copyTown(town: TownDetail): TownDetail {
     buildings: town.buildings.map((building) => ({ ...building })),
     unlockedAreas: town.unlockedAreas.map((area) => ({ ...area })),
     obstacles: town.obstacles.map((obstacle) => ({ ...obstacle })),
+    mapLayout: {
+      ...town.mapLayout,
+      terrainAreas: town.mapLayout.terrainAreas.map((area) => ({ ...area })),
+    },
     catalogVersion: town.catalogVersion,
     editable: town.editable,
   }

@@ -13,6 +13,7 @@ import {
   hasAdjacentRoad,
   hasCollision,
 } from './map-geometry'
+import { hasTerrainCollision } from './map-terrain'
 
 export type EvaluatePlacementPreviewInput = {
   town: TownDetail
@@ -54,6 +55,10 @@ export function evaluatePlacementPreview(
   )
   if (hasCollision(cells, occupiedCellIndex)) {
     return { status: 'invalid', reason: 'CELL_OCCUPIED' }
+  }
+
+  if (hasTerrainCollision(cells, input.town.mapLayout, 'river')) {
+    return { status: 'invalid', reason: 'RIVER_BLOCKED' }
   }
 
   if (input.operation === 'place') {

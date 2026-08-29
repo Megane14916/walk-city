@@ -1,5 +1,6 @@
 export * from './land-unlock'
 export * from './map-geometry'
+export * from './map-terrain'
 export * from './map-viewport'
 export * from './placement'
 export * from './road-line'

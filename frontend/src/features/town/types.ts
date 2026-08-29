@@ -16,6 +16,8 @@ export type PlacedBuilding = {
   customName: string | null
   anchorX: number
   anchorY: number
+  roadStructureId: string | null
+  roadVariant: 'normal' | 'bridge_horizontal' | 'bridge_vertical' | null
   createdAt: string
   updatedAt: string
 }
@@ -26,6 +28,23 @@ export type MapObstacle = {
   anchorY: number
   width: number
   height: number
+}
+export type MapTerrainArea = {
+  id: string
+  code: string
+  terrainType: 'river' | string
+  segmentKind: 'horizontal' | 'vertical' | 'corner' | string
+  x: number
+  y: number
+  width: number
+  height: number
+  bridgeable: boolean
+}
+export type MapLayout = {
+  id: string
+  version: number
+  bridgeCellCostCoins: number
+  terrainAreas: MapTerrainArea[]
 }
 export type BuildingEffect = {
   type: string
@@ -63,6 +82,7 @@ export type TownDetail = {
   buildings: PlacedBuilding[]
   unlockedAreas: UnlockedArea[]
   obstacles: MapObstacle[]
+  mapLayout: MapLayout
   catalogVersion: number
   editable: boolean
 }
@@ -75,6 +95,10 @@ export type PlaceBuildingInput = {
 export type PlaceRoadLineInput = {
   buildingTypeCode: string
   cells: Cell[]
+  requestId: string
+}
+export type DeleteRoadInput = {
+  buildingId: string
   requestId: string
 }
 export type MoveBuildingInput = {
@@ -109,6 +133,17 @@ export type TownMutationResult = {
 }
 export type PlaceRoadLineResult = {
   buildings: PlacedBuilding[]
+  placementKind: 'road' | 'bridge'
+  roadStructureId: string | null
+  totalCostCoins: number
+  coinBalance: number
+  population: number
+  updatedAt: string
+}
+export type DeleteRoadResult = {
+  deletionKind: 'road' | 'bridge'
+  deletedBuildingIds: string[]
+  deletedRoadStructureId: string | null
   coinBalance: number
   population: number
   updatedAt: string
@@ -121,16 +156,25 @@ export type PreviewInvalidReason =
   | 'PRICE_NOT_SET'
   | 'INSUFFICIENT_COINS'
   | 'ROAD_REQUIRED'
+  | 'RIVER_BLOCKED'
 export type PlacementPreviewStatus =
   | { status: 'valid' }
   | { status: 'invalid'; reason: PreviewInvalidReason }
   | { status: 'unknown'; message: string }
 export type RoadLineInvalidReason =
   | PreviewInvalidReason
+  | 'BRIDGE_SPAN_REQUIRED'
+  | 'BRIDGE_DIRECTION_INVALID'
+  | 'BRIDGE_CORNER_FORBIDDEN'
   | 'NO_NEW_ROAD_CELLS'
+export type BridgeOrientation = 'horizontal' | 'vertical'
 export type RoadLinePreview = {
   cells: Cell[]
   newCells: Cell[]
+  placementKind: 'road' | 'bridge'
+  bridgeOrientation: BridgeOrientation | null
+  riverCells: Cell[]
+  approachCells: Cell[]
   totalCostCoins: number
   status:
     | { status: 'valid' }

@@ -22,6 +22,10 @@ const invalidReasonMessages: Record<RoadLineInvalidReason, string> = {
   PRICE_NOT_SET: '道路の価格は準備中です。',
   INSUFFICIENT_COINS: '購入に必要なコインが不足しています。',
   ROAD_REQUIRED: '道路の配置条件を確認してください。',
+  RIVER_BLOCKED: '川を通らない位置を選んでください。',
+  BRIDGE_SPAN_REQUIRED: '両岸を含む7マスを一度に選んでください。',
+  BRIDGE_DIRECTION_INVALID: '川を直角に横断してください。',
+  BRIDGE_CORNER_FORBIDDEN: '川の曲がり角を避けてください。',
   NO_NEW_ROAD_CELLS: '選択した場所にはすでに道路があります。',
 }
 
@@ -34,6 +38,10 @@ function previewMessage(preview: RoadLinePreview | null): string {
   if (preview.status.status === 'unknown') return preview.status.message
   if (preview.status.status === 'invalid') {
     return invalidReasonMessages[preview.status.reason]
+  }
+
+  if (preview.placementKind === 'bridge') {
+    return `橋5マスと両岸の進入道路2マスを建設できます。合計${formatNumber(preview.totalCostCoins)}コインです。`
   }
 
   const existingCount = preview.cells.length - preview.newCells.length
@@ -53,15 +61,20 @@ export function RoadPlacementControls({
 }: RoadPlacementControlsProps) {
   const isValid = preview?.status.status === 'valid'
   const totalCost = preview?.totalCostCoins ?? 0
+  const isBridge = preview?.placementKind === 'bridge'
   const statusTone = !preview
     ? 'bg-[#edf1ed] text-[#66726e]'
     : isValid
       ? 'bg-[#e1f1e9] text-[#28624f]'
       : 'bg-[#f8e4de] text-[#985044]'
   const confirmLabel =
-    totalCost === 0
-      ? `${preview?.newCells.length ?? 0}マスを無料で配置`
-      : `${formatNumber(totalCost)}コインでまとめて配置`
+    isBridge && isValid
+      ? `${formatNumber(totalCost)}コインで橋を建設`
+      : isBridge
+        ? '橋を建設'
+      : totalCost === 0
+        ? `${preview?.newCells.length ?? 0}マスを無料で配置`
+        : `${formatNumber(totalCost)}コインでまとめて配置`
 
   return (
     <section
@@ -73,17 +86,17 @@ export function RoadPlacementControls({
           className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[#e5e9e6] text-xl font-black text-[#52615c]"
           aria-hidden="true"
         >
-          ━
+          {isBridge ? '═' : '━'}
         </span>
         <div className="min-w-0 flex-1">
           <span className="text-[8px] font-black tracking-[.14em] text-[#66726e]">
-            道路作成モード
+            {isBridge ? '橋建設モード' : '道路作成モード'}
           </span>
           <h2
             className="m-0 truncate text-[15px] tracking-[-.02em] text-[#193b38]"
             id="road-placement-title"
           >
-            {item.name}を線で配置
+            {isBridge ? '橋を配置' : `${item.name}を線で配置`}
           </h2>
         </div>
         {preview && (
@@ -116,7 +129,11 @@ export function RoadPlacementControls({
           onClick={onConfirm}
           disabled={!isValid || isSubmitting || isConfirmBlocked}
         >
-          {isSubmitting ? '道路を配置中…' : confirmLabel}
+          {isSubmitting
+            ? isBridge
+              ? '橋を建設中…'
+              : '道路を配置中…'
+            : confirmLabel}
         </button>
       </div>
     </section>

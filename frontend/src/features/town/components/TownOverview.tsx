@@ -125,6 +125,11 @@ export function TownOverview({
   const [renameBuildingError, setRenameBuildingError] = useState<string | null>(
     null,
   )
+  const [isDeletingRoad, setIsDeletingRoad] = useState(false)
+  const [deleteRoadError, setDeleteRoadError] = useState<string | null>(null)
+  const [deleteRoadRequestId, setDeleteRoadRequestId] = useState<string | null>(
+    null,
+  )
 
   const purchasableItemCodes = useMemo(
     () => {
@@ -487,7 +492,11 @@ export function TownOverview({
       return
     }
 
-    setFeedback(`${result.data.buildings.length}マスの道路を配置しました。`)
+    setFeedback(
+      result.data.placementKind === 'bridge'
+        ? `${result.data.buildings.length}マスの橋を建設しました。`
+        : `${result.data.buildings.length}マスの道路を配置しました。`,
+    )
     setRoadPlacement(null)
   }
 
@@ -504,12 +513,16 @@ export function TownOverview({
   const selectBuilding = (buildingId: string | null) => {
     setSelectedBuildingId(buildingId)
     setRenameBuildingError(null)
+    setDeleteRoadError(null)
+    setDeleteRoadRequestId(buildingId ? createRequestId() : null)
     if (buildingId) setActivePanel(null)
   }
 
   const closeBuildingDetail = () => {
     setSelectedBuildingId(null)
     setRenameBuildingError(null)
+    setDeleteRoadError(null)
+    setDeleteRoadRequestId(null)
   }
 
   const renameSelectedBuilding = async (customName: string | null) => {
@@ -540,6 +553,41 @@ export function TownOverview({
         ? '建物の表示名を変更しました。'
         : '建物の表示名を初期名に戻しました。',
     )
+  }
+
+  const deleteSelectedRoad = async () => {
+    if (
+      !selectedBuilding ||
+      !selectedBuildingItem ||
+      selectedBuildingItem.category !== 'road' ||
+      !deleteRoadRequestId ||
+      mode.type !== 'self' ||
+      !town.editable ||
+      isDeletingRoad
+    ) {
+      return
+    }
+
+    setIsDeletingRoad(true)
+    setDeleteRoadError(null)
+    const result = await state.deleteRoad({
+      buildingId: selectedBuilding.id,
+      requestId: deleteRoadRequestId,
+    })
+    setIsDeletingRoad(false)
+
+    if (!result.ok) {
+      setDeleteRoadError(result.error.message)
+      return
+    }
+
+    setFeedback(
+      result.data.deletionKind === 'bridge'
+        ? '橋 7セルを削除しました。'
+        : '道路 1セルを削除しました。',
+    )
+    setSelectedBuildingId(null)
+    setDeleteRoadRequestId(null)
   }
 
   return (
@@ -840,9 +888,15 @@ export function TownOverview({
           item={selectedBuildingItem}
           editable={mode.type === 'self' && town.editable}
           isSaving={isRenamingBuilding}
-          errorMessage={renameBuildingError}
+          isDeleting={isDeletingRoad}
+          errorMessage={
+            selectedBuildingItem.category === 'road'
+              ? deleteRoadError
+              : renameBuildingError
+          }
           onClose={closeBuildingDetail}
           onRename={(customName) => void renameSelectedBuilding(customName)}
+          onDeleteRoad={() => void deleteSelectedRoad()}
         />
       )}
 

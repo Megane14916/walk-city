@@ -6,9 +6,11 @@ export type BuildingDetailPanelProps = {
   item: BuildingCatalogItem
   editable: boolean
   isSaving: boolean
+  isDeleting: boolean
   errorMessage: string | null
   onClose: () => void
   onRename: (customName: string | null) => void
+  onDeleteRoad: () => void
 }
 
 const categoryLabels: Record<string, string> = {
@@ -49,13 +51,19 @@ export function BuildingDetailPanel({
   item,
   editable,
   isSaving,
+  isDeleting,
   errorMessage,
   onClose,
   onRename,
+  onDeleteRoad,
 }: BuildingDetailPanelProps) {
-  const displayName = building.customName ?? item.name
+  const isRoad = item.category === 'road'
+  const isBridge = building.roadStructureId !== null
+  const displayName = isBridge ? '橋' : building.customName ?? item.name
   const [nameInput, setNameInput] = useState(displayName)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
+    useState(false)
   const populationEffect = useMemo(
     () =>
       item.effects.reduce((total, effect) => {
@@ -104,7 +112,7 @@ export function BuildingDetailPanel({
           >
             {displayName}
           </h2>
-          {building.customName && (
+          {building.customName && !isBridge && (
             <p className="m-0 mt-1 text-[9px] text-[#7b8581]">
               建物の種類: {item.name}
             </p>
@@ -171,7 +179,7 @@ export function BuildingDetailPanel({
         )}
       </section>
 
-      {editable && (
+      {editable && !isRoad && (
         <form
           className="mt-3 rounded-2xl border border-[#cfe0d8] bg-[#e8f3ee] p-3"
           onSubmit={submitName}
@@ -228,6 +236,71 @@ export function BuildingDetailPanel({
             </button>
           </div>
         </form>
+      )}
+
+      {editable && isRoad && (
+        <section className="mt-3 rounded-2xl border border-[#e4c2b8] bg-[#fff1ed] p-3">
+          <h3 className="m-0 text-[11px] text-[#743f37]">
+            {isBridge ? '橋の操作' : '道路の操作'}
+          </h3>
+          <p className="m-0 mt-2 text-[10px] font-bold leading-5 text-[#76564f]">
+            道路と橋は移動できません。
+          </p>
+
+          {!isDeleteConfirmationOpen ? (
+            <button
+              className="mt-3 min-h-11 w-full cursor-pointer rounded-xl border border-[#c87365] bg-white px-3 text-[10px] font-black text-[#9b463b] hover:bg-[#fbe4df]"
+              type="button"
+              onClick={() => setIsDeleteConfirmationOpen(true)}
+            >
+              {isBridge ? '橋 7セルを削除' : '道路 1セルを削除'}
+            </button>
+          ) : (
+            <div
+              className="mt-3 rounded-xl border border-[#d9988c] bg-white p-3"
+              role="dialog"
+              aria-labelledby="delete-road-confirm-title"
+            >
+              <h4
+                className="m-0 text-[11px] font-black text-[#743f37]"
+                id="delete-road-confirm-title"
+              >
+                {isBridge
+                  ? '橋 7セルをまとめて削除しますか？'
+                  : '道路 1セルを削除しますか？'}
+              </h4>
+              <p className="m-0 mt-2 text-[10px] font-bold leading-5 text-[#985044]">
+                削除してもコインは返却されません。
+              </p>
+              {errorMessage && (
+                <p
+                  className="m-0 mt-2 rounded-lg bg-[#f8e4de] px-2 py-1.5 text-[9px] font-bold text-[#985044]"
+                  role="alert"
+                >
+                  {errorMessage}
+                </p>
+              )}
+              <div className="mt-3 flex gap-2">
+                <button
+                  className="min-h-10 flex-1 cursor-pointer rounded-xl border border-[#d7ddd6] bg-white px-3 text-[10px] font-black text-[#52615c] hover:bg-[#edf1ed] disabled:opacity-50"
+                  type="button"
+                  onClick={() => setIsDeleteConfirmationOpen(false)}
+                  disabled={isDeleting}
+                >
+                  キャンセル
+                </button>
+                <button
+                  className="min-h-10 flex-[1.2] cursor-pointer rounded-xl border-0 bg-[#a84f43] px-3 text-[10px] font-black text-white hover:bg-[#8f4036] disabled:cursor-not-allowed disabled:bg-[#c9aaa4]"
+                  type="button"
+                  onClick={onDeleteRoad}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? '削除中…' : '削除する'}
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
       )}
     </aside>
   )

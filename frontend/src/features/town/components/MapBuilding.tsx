@@ -63,6 +63,56 @@ export const MapBuilding = memo(function MapBuilding({
   const isRoad = item?.category === 'road'
 
   if (isRoad) {
+    const bridgeOrientation =
+      building.roadVariant === 'bridge_horizontal'
+        ? 'horizontal'
+        : building.roadVariant === 'bridge_vertical'
+          ? 'vertical'
+          : null
+    if (bridgeOrientation) {
+      const isHorizontal = bridgeOrientation === 'horizontal'
+      return (
+        <div
+          className={`absolute ${isSelected ? 'z-30 rounded ring-4 ring-[#ffcf57] ring-offset-2 ring-offset-white/80' : 'z-20'}`}
+          style={{
+            left: building.anchorX * MAP_CELL_SIZE,
+            top: building.anchorY * MAP_CELL_SIZE,
+            width: width * MAP_CELL_SIZE,
+            height: height * MAP_CELL_SIZE,
+          }}
+          role="img"
+          aria-label={`橋（${isHorizontal ? '横向き' : '縦向き'}）、座標${building.anchorX},${building.anchorY}、7セル構造`}
+          title="橋"
+        >
+          <svg
+            className="h-full w-full overflow-visible drop-shadow-[0_2px_2px_rgba(27,47,43,.3)]"
+            viewBox="0 0 32 32"
+            aria-hidden="true"
+          >
+            {isHorizontal ? (
+              <>
+                <rect x="0" y="7" width="32" height="18" fill="#6f7975" />
+                <line x1="0" y1="6" x2="32" y2="6" stroke="#4b5551" strokeWidth="2" />
+                <line x1="0" y1="26" x2="32" y2="26" stroke="#4b5551" strokeWidth="2" />
+                <line x1="0" y1="9" x2="32" y2="9" stroke="#d8c18b" strokeWidth="2" />
+                <line x1="0" y1="23" x2="32" y2="23" stroke="#d8c18b" strokeWidth="2" />
+                <line x1="1" y1="16" x2="31" y2="16" stroke="#f1d36a" strokeWidth="1.5" strokeDasharray="5 4" />
+              </>
+            ) : (
+              <>
+                <rect x="7" y="0" width="18" height="32" fill="#6f7975" />
+                <line x1="6" y1="0" x2="6" y2="32" stroke="#4b5551" strokeWidth="2" />
+                <line x1="26" y1="0" x2="26" y2="32" stroke="#4b5551" strokeWidth="2" />
+                <line x1="9" y1="0" x2="9" y2="32" stroke="#d8c18b" strokeWidth="2" />
+                <line x1="23" y1="0" x2="23" y2="32" stroke="#d8c18b" strokeWidth="2" />
+                <line x1="16" y1="1" x2="16" y2="31" stroke="#f1d36a" strokeWidth="1.5" strokeDasharray="5 4" />
+              </>
+            )}
+          </svg>
+        </div>
+      )
+    }
+
     const connections = normalizeRoadConnections(roadConnections)
     const actualConnections = roadConnections ?? EMPTY_ROAD_CONNECTIONS
     const connectionLabel = getRoadConnectionLabel(actualConnections)

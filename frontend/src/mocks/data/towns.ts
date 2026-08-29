@@ -4,6 +4,7 @@ import type {
   TownDetail,
 } from '../../features/town/types'
 import { MOCK_RANKING_ENTRIES } from './rankings'
+import { FIXED_MAP_LAYOUT } from './map-layout'
 
 const MOCK_TIMESTAMP = '2026-08-26T00:00:00.000Z'
 
@@ -19,6 +20,8 @@ function createPlacedBuilding(
     customName: null,
     anchorX,
     anchorY,
+    roadStructureId: null,
+    roadVariant: buildingTypeCode === 'road' ? 'normal' : null,
     createdAt: MOCK_TIMESTAMP,
     updatedAt: MOCK_TIMESTAMP,
   }
@@ -162,6 +165,7 @@ export const MOCK_MY_TOWN: TownDetail = {
   ],
   unlockedAreas: [{ x: 40, y: 40, width: 20, height: 20 }],
   obstacles: [],
+  mapLayout: FIXED_MAP_LAYOUT,
   catalogVersion: 1,
   editable: true,
 }
@@ -192,6 +196,7 @@ export const MOCK_PUBLIC_TOWN: TownDetail = {
   ],
   unlockedAreas: [{ x: 40, y: 40, width: 20, height: 20 }],
   obstacles: [],
+  mapLayout: FIXED_MAP_LAYOUT,
   catalogVersion: 1,
   editable: false,
 }
@@ -225,6 +230,7 @@ function createPublicProfileTown(
     buildings: [],
     unlockedAreas: [{ x: 40, y: 40, width: 20, height: 20 }],
     obstacles: [],
+    mapLayout: FIXED_MAP_LAYOUT,
     catalogVersion: 1,
     editable: false,
   }
@@ -317,6 +323,7 @@ export const MOCK_EMPTY_TOWN: TownDetail = {
   buildings: [],
   unlockedAreas: MOCK_MY_TOWN.unlockedAreas.map((area) => ({ ...area })),
   obstacles: [],
+  mapLayout: FIXED_MAP_LAYOUT,
   catalogVersion: 1,
   editable: true,
 }

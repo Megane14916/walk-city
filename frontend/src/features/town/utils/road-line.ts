@@ -1,6 +1,10 @@
 import type {
+  BridgeOrientation,
   BuildingCatalogItem,
   Cell,
+  MapLayout,
+  MapTerrainArea,
+  RoadLineInvalidReason,
   RoadLinePreview,
   TownDetail,
 } from '../types'
@@ -11,6 +15,24 @@ import {
   createRoadCellIndex,
   getCellKey,
 } from './map-geometry'
+import { getTerrainAreaAtCell } from './map-terrain'
+
+export type BridgeLineClassification =
+  | { kind: 'road' }
+  | {
+      kind: 'bridge'
+      orientation: BridgeOrientation
+      cells: Cell[]
+      riverCells: Cell[]
+      approachCells: Cell[]
+    }
+  | {
+      kind: 'invalid-bridge'
+      reason:
+        | 'BRIDGE_SPAN_REQUIRED'
+        | 'BRIDGE_DIRECTION_INVALID'
+        | 'BRIDGE_CORNER_FORBIDDEN'
+    }
 
 export function getRoadLineCells(start: Cell, end: Cell): Cell[] {
   const horizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y)
@@ -45,6 +67,71 @@ export function isStraightRoadLine(cells: Cell[]): boolean {
   )
 }
 
+export function classifyBridgeLine(
+  cells: Cell[],
+  layout: MapLayout,
+): BridgeLineClassification {
+  const riverAreas = cells.map((cell) =>
+    getTerrainAreaAtCell(layout, cell, 'river'),
+  )
+  if (riverAreas.every((area) => area === null)) return { kind: 'road' }
+
+  if (riverAreas.some((area) => area?.segmentKind === 'corner')) {
+    return { kind: 'invalid-bridge', reason: 'BRIDGE_CORNER_FORBIDDEN' }
+  }
+
+  const bridgeableAreas = riverAreas.filter(
+    (area): area is MapTerrainArea => area !== null && area.bridgeable,
+  )
+  const bridgeableAreaIds = new Set(bridgeableAreas.map((area) => area.id))
+  if (bridgeableAreaIds.size !== 1 || bridgeableAreas.length === 0) {
+    return { kind: 'invalid-bridge', reason: 'BRIDGE_SPAN_REQUIRED' }
+  }
+
+  const bridgeableArea = bridgeableAreas[0]
+  const horizontalLine = cells.every((cell) => cell.y === cells[0].y)
+  const verticalLine = cells.every((cell) => cell.x === cells[0].x)
+  const orientation: BridgeOrientation | null = horizontalLine
+    ? 'horizontal'
+    : verticalLine
+      ? 'vertical'
+      : null
+  const directionIsValid =
+    (bridgeableArea.segmentKind === 'vertical' &&
+      orientation === 'horizontal') ||
+    (bridgeableArea.segmentKind === 'horizontal' &&
+      orientation === 'vertical')
+  if (!directionIsValid || orientation === null) {
+    return { kind: 'invalid-bridge', reason: 'BRIDGE_DIRECTION_INVALID' }
+  }
+
+  if (cells.length !== 7) {
+    return { kind: 'invalid-bridge', reason: 'BRIDGE_SPAN_REQUIRED' }
+  }
+
+  const orderedCells = getRoadLineCells(cells[0], cells[cells.length - 1])
+  const orderedAreas = orderedCells.map((cell) =>
+    getTerrainAreaAtCell(layout, cell, 'river'),
+  )
+  const riverCells = orderedCells.slice(1, 6)
+  const approachCells = [orderedCells[0], orderedCells[6]]
+  const hasExpectedSpan =
+    orderedAreas[0] === null &&
+    orderedAreas[6] === null &&
+    orderedAreas.slice(1, 6).every((area) => area?.id === bridgeableArea.id)
+  if (!hasExpectedSpan) {
+    return { kind: 'invalid-bridge', reason: 'BRIDGE_SPAN_REQUIRED' }
+  }
+
+  return {
+    kind: 'bridge',
+    orientation,
+    cells: orderedCells,
+    riverCells,
+    approachCells,
+  }
+}
+
 export function evaluateRoadLinePreview(input: {
   town: TownDetail
   catalog: BuildingCatalogItem[]
@@ -54,6 +141,10 @@ export function evaluateRoadLinePreview(input: {
   const emptyResult = {
     cells: input.cells,
     newCells: [] as Cell[],
+    placementKind: 'road' as const,
+    bridgeOrientation: null,
+    riverCells: [] as Cell[],
+    approachCells: [] as Cell[],
     totalCostCoins: 0,
   }
 
@@ -94,26 +185,58 @@ export function evaluateRoadLinePreview(input: {
     }
   }
 
+  const bridgeClassification = classifyBridgeLine(
+    input.cells,
+    input.town.mapLayout,
+  )
+  if (bridgeClassification.kind === 'invalid-bridge') {
+    return {
+      ...emptyResult,
+      placementKind: 'bridge',
+      status: {
+        status: 'invalid',
+        reason: bridgeClassification.reason satisfies RoadLineInvalidReason,
+      },
+    }
+  }
+
   const roadIndex = createRoadCellIndex(input.town.buildings, input.catalog)
   const occupiedIndex = createOccupiedCellIndex(
     input.town.buildings,
     input.catalog,
     input.town.obstacles,
   )
-  const collidesWithNonRoad = input.cells.some((cell) => {
+  const hasOccupiedCell = input.cells.some((cell) => {
     const key = getCellKey(cell)
-    return occupiedIndex.has(key) && !roadIndex.has(key)
+    return bridgeClassification.kind === 'bridge'
+      ? occupiedIndex.has(key)
+      : occupiedIndex.has(key) && !roadIndex.has(key)
   })
-  if (collidesWithNonRoad) {
+  if (hasOccupiedCell) {
     return {
       ...emptyResult,
+      placementKind:
+        bridgeClassification.kind === 'bridge' ? 'bridge' : 'road',
       status: { status: 'invalid', reason: 'CELL_OCCUPIED' },
     }
   }
 
-  const newCells = input.cells.filter((cell) => !roadIndex.has(getCellKey(cell)))
-  const totalCostCoins = input.item.costCoins * newCells.length
-  const result = { cells: input.cells, newCells, totalCostCoins }
+  const isBridge = bridgeClassification.kind === 'bridge'
+  const newCells = isBridge
+    ? bridgeClassification.cells
+    : input.cells.filter((cell) => !roadIndex.has(getCellKey(cell)))
+  const totalCostCoins = isBridge
+    ? input.town.mapLayout.bridgeCellCostCoins * 5 + input.item.costCoins * 2
+    : input.item.costCoins * newCells.length
+  const result = {
+    cells: input.cells,
+    newCells,
+    placementKind: isBridge ? ('bridge' as const) : ('road' as const),
+    bridgeOrientation: isBridge ? bridgeClassification.orientation : null,
+    riverCells: isBridge ? bridgeClassification.riverCells : [],
+    approachCells: isBridge ? bridgeClassification.approachCells : [],
+    totalCostCoins,
+  }
   if (newCells.length === 0) {
     return {
       ...result,

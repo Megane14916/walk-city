@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TownDetail } from '../../town/types'
+import { FIXED_MAP_LAYOUT } from '../../../mocks/data/map-layout'
 import { toPublicUserProfile } from './public-user-profile'
 
 const REQUESTED_USER_ID = 'public-user-001'
@@ -25,6 +26,7 @@ function createPublicTown(
     catalogVersion: 1,
     editable: false,
     ...overrides,
+    mapLayout: overrides.mapLayout ?? FIXED_MAP_LAYOUT,
   }
 }
 
@@ -52,6 +54,8 @@ describe('toPublicUserProfile', () => {
           customName: null,
           anchorX: 40,
           anchorY: 40,
+          roadStructureId: null,
+          roadVariant: null,
           createdAt: '2026-08-28T00:00:00.000Z',
           updatedAt: '2026-08-28T00:00:00.000Z',
         },
