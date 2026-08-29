@@ -1,5 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { supabaseFailure } from '../../../lib/supabase-api'
+import {
+  parseApiResultEnvelope,
+  supabaseFailure,
+} from '../../../lib/supabase-api'
 import type { ApiErrorCode, ApiResult } from '../../../types/common'
 import type { TownApi } from '../api'
 import { FIXED_MAP_LAYOUT } from '../data/map-layout'
@@ -27,6 +30,7 @@ export type SupabaseTownRpcNames = {
   placeRoadLine: string
   deleteRoad: string
   unlockLand: string
+  renameBuilding: string
 }
 
 export type SupabaseTownApiOptions = {
@@ -46,6 +50,7 @@ const DEFAULT_RPC_NAMES: SupabaseTownRpcNames = {
   placeRoadLine: 'place_road_line',
   deleteRoad: 'delete_road',
   unlockLand: 'unlock_land',
+  renameBuilding: 'rename_building',
 }
 
 const CATALOG_COLUMNS = [
@@ -103,6 +108,13 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0
+    return codePoint < 32 || codePoint === 127
+  })
+}
+
 function toSafeInteger(value: unknown): number | undefined {
   if (typeof value === 'number') {
     return Number.isSafeInteger(value) ? value : undefined
@@ -131,15 +143,6 @@ function nullableString(value: unknown): string | null | undefined {
 function effectDescription(type: string, value: number | null): string {
   if (type === 'population_flat' && value !== null) {
     return `人口を${value}増やします`
-  }
-  if (type === 'step_coin_bonus_flat' && value !== null) {
-    return `歩数同期時のコインを${value}増やします`
-  }
-  if (type === 'residential_population_bonus' && value !== null) {
-    return `対象の住宅人口を${value}増やします`
-  }
-  if (type === 'enables_adjacent_construction') {
-    return '周辺への建築を可能にします'
   }
   return ''
 }
@@ -396,6 +399,32 @@ function mapUnlockLandResult(value: unknown): UnlockLandResult | null {
   return { unlockedArea, coinBalance, updatedAt: data.updated_at }
 }
 
+function mapRenameBuildingResult(value: unknown): RenameBuildingResult | null {
+  const data = unwrapRpcData(value)
+  if (!isRecord(data)) return null
+
+  const building = mapPlacedBuilding(data.building)
+  const updatedAt = data.updated_at ?? data.updatedAt
+  if (building === null || !isNonEmptyString(updatedAt)) return null
+
+  return { building, updatedAt }
+}
+
+function parseRpcResult<T>(
+  value: unknown,
+  mapper: (data: unknown) => T | null,
+  fallbackMessage: string,
+): ApiResult<T> {
+  const envelope = parseApiResultEnvelope(
+    value,
+    (data): data is unknown => mapper(data) !== null,
+    fallbackMessage,
+  )
+  if (!envelope.ok) return envelope
+
+  return { ok: true, data: mapper(envelope.data) as T }
+}
+
 function mapUnlockedArea(value: unknown): TownDetail['unlockedAreas'][number] | null {
   if (!isRecord(value)) return null
 
@@ -496,10 +525,6 @@ function failure<T>(code: ApiErrorCode, message: string): ApiResult<T> {
   return { ok: false, error: { code, message } }
 }
 
-function unavailableMutation<T>(): ApiResult<T> {
-  return failure('INTERNAL_ERROR', '街更新APIは現在準備中です。')
-}
-
 export function createSupabaseTownApi(
   supabase: SupabaseClient,
   options: SupabaseTownApiOptions = {},
@@ -508,7 +533,7 @@ export function createSupabaseTownApi(
   const rpcNames = { ...DEFAULT_RPC_NAMES, ...options.rpcNames }
 
   return {
-    supportsBuildingRename: false,
+    supportsBuildingRename: true,
     async getBuildingCatalog() {
       try {
         const { data, error } = await supabase
@@ -619,10 +644,11 @@ export function createSupabaseTownApi(
           })
         }
 
-        const result = mapTownMutationResult(data)
-        return result
-          ? { ok: true, data: result }
-          : failure('INTERNAL_ERROR', '建物を配置できませんでした。')
+        return parseRpcResult(
+          data,
+          mapTownMutationResult,
+          '建物を配置できませんでした。',
+        )
       } catch {
         return failure('INTERNAL_ERROR', '建物を配置できませんでした。')
       }
@@ -658,10 +684,11 @@ export function createSupabaseTownApi(
           })
         }
 
-        const result = mapPlaceRoadLineResult(data)
-        return result
-          ? { ok: true, data: result }
-          : failure('INTERNAL_ERROR', '道路を配置できませんでした。')
+        return parseRpcResult(
+          data,
+          mapPlaceRoadLineResult,
+          '道路を配置できませんでした。',
+        )
       } catch {
         return failure('INTERNAL_ERROR', '道路を配置できませんでした。')
       }
@@ -691,10 +718,11 @@ export function createSupabaseTownApi(
           })
         }
 
-        const result = mapTownMutationResult(data)
-        return result
-          ? { ok: true, data: result }
-          : failure('INTERNAL_ERROR', '建物を移動できませんでした。')
+        return parseRpcResult(
+          data,
+          mapTownMutationResult,
+          '建物を移動できませんでした。',
+        )
       } catch {
         return failure('INTERNAL_ERROR', '建物を移動できませんでした。')
       }
@@ -718,16 +746,45 @@ export function createSupabaseTownApi(
           })
         }
 
-        const result = mapDeleteRoadResult(data)
-        return result
-          ? { ok: true, data: result }
-          : failure('INTERNAL_ERROR', '道路を削除できませんでした。')
+        return parseRpcResult(
+          data,
+          mapDeleteRoadResult,
+          '道路を削除できませんでした。',
+        )
       } catch {
         return failure('INTERNAL_ERROR', '道路を削除できませんでした。')
       }
     },
-    async renameBuilding(): Promise<ApiResult<RenameBuildingResult>> {
-      return unavailableMutation()
+    async renameBuilding(input): Promise<ApiResult<RenameBuildingResult>> {
+      const normalizedName = input.customName?.trim() ?? null
+      if (
+        !UUID_PATTERN.test(input.buildingId) ||
+        (normalizedName !== null &&
+          (normalizedName.length < 1 || normalizedName.length > 30 ||
+            hasControlCharacter(normalizedName)))
+      ) {
+        return failure('INVALID_INPUT', '建物名を確認してください。')
+      }
+
+      try {
+        const { data, error } = await supabase.rpc(rpcNames.renameBuilding, {
+          p_building_id: input.buildingId,
+          p_custom_name: normalizedName,
+        })
+        if (error) {
+          return supabaseFailure(error, {
+            fallbackMessage: '建物名を変更できませんでした。',
+          })
+        }
+
+        return parseRpcResult(
+          data,
+          mapRenameBuildingResult,
+          '建物名を変更できませんでした。',
+        )
+      } catch {
+        return failure('INTERNAL_ERROR', '建物名を変更できませんでした。')
+      }
     },
     async unlockLand(input): Promise<ApiResult<UnlockLandResult>> {
       if (
@@ -752,10 +809,11 @@ export function createSupabaseTownApi(
           })
         }
 
-        const result = mapUnlockLandResult(data)
-        return result
-          ? { ok: true, data: result }
-          : failure('INTERNAL_ERROR', '土地を開放できませんでした。')
+        return parseRpcResult(
+          data,
+          mapUnlockLandResult,
+          '土地を開放できませんでした。',
+        )
       } catch {
         return failure('INTERNAL_ERROR', '土地を開放できませんでした。')
       }

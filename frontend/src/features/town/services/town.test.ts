@@ -286,7 +286,7 @@ describe('createSupabaseTownApi', () => {
 
   it('calls place_building with only trusted RPC inputs and maps the result', async () => {
     const mock = createSupabaseMock({}, {
-      place_building: { data: MUTATION_ROW, error: null },
+      place_building: { data: { ok: true, data: MUTATION_ROW }, error: null },
     })
     const api = createSupabaseTownApi(mock.client)
 
@@ -327,7 +327,7 @@ describe('createSupabaseTownApi', () => {
   it('moves a building without sending or deducting coins', async () => {
     const moveResult = { ...MUTATION_ROW, coin_balance: '1000' }
     const mock = createSupabaseMock({}, {
-      move_building: { data: moveResult, error: null },
+      move_building: { data: { ok: true, data: moveResult }, error: null },
     })
     const api = createSupabaseTownApi(mock.client)
 
@@ -373,7 +373,10 @@ describe('createSupabaseTownApi', () => {
       },
     })
     const malformed = createSupabaseMock({}, {
-      place_building: { data: { ...MUTATION_ROW, coin_balance: '-1' }, error: null },
+      place_building: {
+        data: { ok: true, data: { ...MUTATION_ROW, coin_balance: '-1' } },
+        error: null,
+      },
     })
 
     await expect(
@@ -409,7 +412,7 @@ describe('createSupabaseTownApi', () => {
       updated_at: '2026-08-29T02:00:00.000Z',
     }
     const mock = createSupabaseMock({}, {
-      place_road_line: { data: roadResult, error: null },
+      place_road_line: { data: { ok: true, data: roadResult }, error: null },
     })
     const api = createSupabaseTownApi(mock.client)
     const cells = [{ x: 43, y: 49 }, { x: 44, y: 49 }]
@@ -439,9 +442,12 @@ describe('createSupabaseTownApi', () => {
     const mock = createSupabaseMock({}, {
       unlock_land: {
         data: {
-          unlocked_area: { x: 20, y: 40, width: 20, height: 20 },
-          coin_balance: '0',
-          updated_at: '2026-08-29T03:00:00.000Z',
+          ok: true,
+          data: {
+            unlocked_area: { x: 20, y: 40, width: 20, height: 20 },
+            coin_balance: '0',
+            updated_at: '2026-08-29T03:00:00.000Z',
+          },
         },
         error: null,
       },
@@ -474,12 +480,15 @@ describe('createSupabaseTownApi', () => {
     const mock = createSupabaseMock({}, {
       delete_road: {
         data: {
-          deletionKind: 'bridge',
-          deletedBuildingIds,
-          deletedRoadStructureId: bridgeStructureId,
-          coinBalance: '900',
-          population: '20',
-          updatedAt: '2026-08-29T04:00:00.000Z',
+          ok: true,
+          data: {
+            deletionKind: 'bridge',
+            deletedBuildingIds,
+            deletedRoadStructureId: bridgeStructureId,
+            coinBalance: '900',
+            population: '20',
+            updatedAt: '2026-08-29T04:00:00.000Z',
+          },
         },
         error: null,
       },
@@ -531,15 +540,63 @@ describe('createSupabaseTownApi', () => {
     expect(mock.rpc).not.toHaveBeenCalled()
   })
 
-  it('advertises that building rename is unavailable in production', async () => {
-    const api = createSupabaseTownApi(createSupabaseMock({}).client)
+  it('renames a building through the production RPC', async () => {
+    const renamedBuilding = {
+      ...BUILDING_ROW,
+      custom_name: '新しい名前',
+      updated_at: '2026-08-29T05:00:00.000Z',
+    }
+    const mock = createSupabaseMock({}, {
+      rename_building: {
+        data: {
+          ok: true,
+          data: {
+            building: renamedBuilding,
+            updatedAt: renamedBuilding.updated_at,
+          },
+        },
+        error: null,
+      },
+    })
+    const api = createSupabaseTownApi(mock.client)
 
-    expect(api.supportsBuildingRename).toBe(false)
+    expect(api.supportsBuildingRename).toBe(true)
     await expect(
       api.renameBuilding({
         buildingId: BUILDING_ROW.id,
-        customName: '新しい名前',
+        customName: '  新しい名前  ',
       }),
-    ).resolves.toMatchObject({ ok: false, error: { code: 'INTERNAL_ERROR' } })
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { building: { customName: '新しい名前' } },
+    })
+    expect(mock.rpc).toHaveBeenCalledWith('rename_building', {
+      p_building_id: BUILDING_ROW.id,
+      p_custom_name: '新しい名前',
+    })
+  })
+
+  it('maps an RPC error envelope without exposing database errors', async () => {
+    const mock = createSupabaseMock({}, {
+      place_building: {
+        data: {
+          ok: false,
+          error: { code: 'RIVER_BLOCKED', message: '川の上には配置できません。' },
+        },
+        error: null,
+      },
+    })
+
+    await expect(
+      createSupabaseTownApi(mock.client).placeBuilding({
+        buildingTypeCode: 'small_house',
+        anchorX: 67,
+        anchorY: 55,
+        requestId: REQUEST_ID,
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      error: { code: 'RIVER_BLOCKED', message: '川の上には配置できません。' },
+    })
   })
 })
