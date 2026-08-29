@@ -1,4 +1,3 @@
-import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
 
 // Google Health API の dailyRollUp エンドポイント。
@@ -187,8 +186,8 @@ async function fetchStepsFromGoogleHealth(
   const endTime: TimeValue = isFutureDate
     ? { hours: 0, minutes: 0, seconds: 0, nanos: 0 }
     : isSameDate(dateValue, nowInTimezone.date)
-    ? nowInTimezone.time
-    : { hours: 23, minutes: 59, seconds: 59, nanos: 0 };
+      ? nowInTimezone.time
+      : { hours: 23, minutes: 59, seconds: 59, nanos: 0 };
 
   // Google Health API のリクエスト形式に合わせて 1日レンジを組み立てる。
   const body = {
@@ -292,11 +291,12 @@ export default {
         .select("refresh_token")
         .eq("user_id", userId)
         .eq("provider", "google_health")
-        .maybeSingle();
+        .maybeSingle<{ refresh_token: string | null }>();
       if (connectionError) {
         throw new Error(`Google Health連携情報の取得に失敗しました: ${connectionError.message}`);
       }
-      if (!connection?.refresh_token) {
+      const refreshToken = connection?.refresh_token ?? null;
+      if (!refreshToken) {
         return Response.json(
           {
             status: "error",
@@ -310,7 +310,7 @@ export default {
       }
 
       // ユーザー固有の refresh token から access token を取得して、歩数データを取得する。
-      const accessToken = await getGoogleAccessToken(connection.refresh_token);
+      const accessToken = await getGoogleAccessToken(refreshToken);
       const data = await fetchStepsFromGoogleHealth(accessToken, startDate, endDate, timezone);
 
       // 返す JSON はゲーム側で扱いやすいように、必要な情報だけを平坦化して返す。

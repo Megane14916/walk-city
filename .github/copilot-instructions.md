@@ -40,7 +40,7 @@
   - API計画書.md
   - architecture.md
   - バックエンド.md
-- frontend/ # ここは操作しないこと
+- frontend/
   - src/
     - components/ # Reactコンポーネントを格納するディレクトリ
     - pages/ # ページコンポーネントを格納するディレクトリ
