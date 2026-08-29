@@ -37,6 +37,13 @@ type SyncResult = {
   synced_at: string;
 };
 
+type SupabaseAdminClient = {
+  rpc: (
+    functionName: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
+};
+
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -80,38 +87,19 @@ function today(timezone: string): string {
 }
 
 async function syncStepRewards(
-  req: Request,
+  supabaseAdmin: SupabaseAdminClient,
   userId: string,
   records: Array<{ step_date: string; steps: number }>,
-  baseRate: number,
 ): Promise<SyncResult> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const publishableKey = Deno.env.get("SUPABASE_ANON_KEY") ??
-    Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
-  const authorization = req.headers.get("Authorization");
-  if (!supabaseUrl || !publishableKey || !authorization) {
-    throw new Error("Supabase RPCの実行に必要な設定がありません。");
-  }
-
-  const rpcResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/sync_step_rewards`, {
-    method: "POST",
-    headers: {
-      Authorization: authorization,
-      apikey: publishableKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      p_user_id: userId,
-      p_source: SOURCE,
-      p_records: records,
-      p_base_rate: baseRate,
-    }),
+  const { data, error } = await supabaseAdmin.rpc("sync_step_rewards", {
+    p_user_id: userId,
+    p_source: SOURCE,
+    p_records: records,
   });
-  if (!rpcResponse.ok) {
-    const errorText = await rpcResponse.text();
-    throw new Error(`歩数の保存に失敗しました: ${rpcResponse.status} ${errorText}`);
+  if (error || !data) {
+    throw new Error(`歩数の保存に失敗しました: ${error?.message ?? "unknown"}`);
   }
-  return await rpcResponse.json() as SyncResult;
+  return data as SyncResult;
 }
 
 export default {
@@ -209,11 +197,7 @@ export default {
         records.push({ step_date: stepDate, steps });
       }
 
-      const baseRate = Number(Deno.env.get("STEPS_TO_COINS_RATE") ?? "0");
-      if (!Number.isFinite(baseRate) || baseRate < 0) {
-        throw new Error("STEPS_TO_COINS_RATE の設定が不正です。");
-      }
-      const syncData = await syncStepRewards(req, userId, records, baseRate);
+      const syncData = await syncStepRewards(ctx.supabaseAdmin as SupabaseAdminClient, userId, records);
 
       return response({
         status: "ok",

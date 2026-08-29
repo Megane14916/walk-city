@@ -37,12 +37,12 @@ alter table "public"."building_types"
 
 create table if not exists "public"."coin_ledger" (
   "id"              uuid                     not null default gen_random_uuid(),
-  "town_id"         uuid                     not null default gen_random_uuid(),
+  "town_id"         uuid                     not null,
   "amount"          bigint                   not null,
   "reason"          text                     not null,
   "idempotency_key" text                     not null,
   "created_at"      timestamp with time zone not null default now(),
-  "metadata"        json                     not null,
+  "metadata"        jsonb                    not null default '{}'::jsonb,
   constraint "coin_ledger_idempotency_key_key" unique (idempotency_key),
   constraint "coin_ledger_pkey" primary key (id)
 );
@@ -90,6 +90,18 @@ create table if not exists "public"."profiles" (
 alter table "public"."profiles"
   enable row level security;
 
+create table if not exists "public"."health_connections" (
+  "user_id"       uuid                     not null,
+  "provider"      text                     not null default 'google_health'::text,
+  "refresh_token" text                     not null,
+  "created_at"    timestamp with time zone not null default now(),
+  "updated_at"    timestamp with time zone not null default now(),
+  constraint "health_connections_pkey" primary key (user_id, provider)
+);
+
+alter table "public"."health_connections"
+  enable row level security;
+
 create table if not exists "public"."towns" (
   "town_id"    uuid                     not null default gen_random_uuid(),
   "owner_id"   uuid                     not null,
@@ -111,7 +123,7 @@ create table if not exists "public"."unlocked_areas" (
   "town_id"       uuid     not null,
   "width"         smallint not null,
   "height"        smallint not null,
-  "unlocked_at"   text     not null,
+  "unlocked_at"   timestamp with time zone not null default now(),
   "unlock_method" text,
   constraint "unlocked_areas_pkey" primary key (town_id)
 );
@@ -130,6 +142,9 @@ alter table "public"."profiles"
 
 alter table "public"."daily_step_records"
   add constraint "daily_step_records_user_id_fkey" foreign key (user_id) references public.profiles(id);
+
+alter table "public"."health_connections"
+  add constraint "health_connections_user_id_fkey" foreign key (user_id) references public.profiles(id);
 
 alter table "public"."towns"
   add constraint "towns_owner_id_fkey" foreign key (owner_id) references public.profiles(id);
@@ -179,6 +194,12 @@ grant delete, insert, maintain, references, select, trigger, truncate, update on
 
 grant maintain, references, trigger, truncate on table "public"."profiles" to "service_role";
 
+grant maintain, references, trigger, truncate on table "public"."health_connections" to "anon", "authenticated";
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on table "public"."health_connections" to "postgres";
+
+grant maintain, references, trigger, truncate on table "public"."health_connections" to "service_role";
+
 grant maintain, references, trigger, truncate on table "public"."towns" to "anon", "authenticated";
 
 grant delete, insert, maintain, references, select, trigger, truncate, update on table "public"."towns" to "postgres";
@@ -190,4 +211,3 @@ grant maintain, references, trigger, truncate on table "public"."unlocked_areas"
 grant delete, insert, maintain, references, select, trigger, truncate, update on table "public"."unlocked_areas" to "postgres";
 
 grant maintain, references, trigger, truncate on table "public"."unlocked_areas" to "service_role";
-

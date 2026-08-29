@@ -42,41 +42,72 @@ type TimeValue = {
   nanos: number;
 };
 
-// 日付を `YYYY-MM-DD` 形式の文字列へ変換する。
-function formatDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+type ZonedDateTimeParts = {
+  date: DateValue;
+  time: TimeValue;
+};
 
-// 受け取った日付文字列を Date に変換する。
-// 変換できない場合は現時点のデータを安全に使えるようフォールバックする。
-function parseDate(value: string, fallback: Date): Date {
-  const parsed = new Date(`${value}T00:00:00+09:00`);
-  if (Number.isNaN(parsed.getTime())) {
-    return fallback;
+// `YYYY-MM-DD` を DateValue に変換する。
+function parseDateValue(value: string): DateValue | null {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return null;
   }
-  return parsed;
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() + 1 !== month ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return { year, month, day };
 }
 
-// Date を Google API の要求形式に合わせて `year/month/day` に変換する。
-function toDateValue(date: Date): DateValue {
+// 任意TZで現在時刻を分解し、日付と時刻を安全に得る。
+function getZonedDateTimeParts(date: Date, timezone: string): ZonedDateTimeParts {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const read = (type: Intl.DateTimeFormatPartTypes): number => {
+    const part = parts.find((item) => item.type === type)?.value;
+    return part ? Number(part) : Number.NaN;
+  };
+  const year = read("year");
+  const month = read("month");
+  const day = read("day");
+  const hours = read("hour");
+  const minutes = read("minute");
+  const seconds = read("second");
+  if ([year, month, day, hours, minutes, seconds].some((value) => !Number.isFinite(value))) {
+    throw new Error("タイムゾーンの時刻解決に失敗しました。");
+  }
   return {
-    year: date.getFullYear(),
-    month: date.getMonth() + 1,
-    day: date.getDate(),
+    date: { year, month, day },
+    time: { hours, minutes, seconds, nanos: 0 },
   };
 }
 
-// Date を Google API の range.time 形式へ変換する。
-function toTimeValue(date: Date): TimeValue {
-  return {
-    hours: date.getHours(),
-    minutes: date.getMinutes(),
-    seconds: date.getSeconds(),
-    nanos: 0,
-  };
+// 日付を `YYYY-MM-DD` 形式の文字列へ変換する。
+function formatDate(date: DateValue): string {
+  return `${date.year}-${`${date.month}`.padStart(2, "0")}-${`${date.day}`.padStart(2, "0")}`;
+}
+
+function isSameDate(left: DateValue, right: DateValue): boolean {
+  return left.year === right.year && left.month === right.month && left.day === right.day;
 }
 
 // Google Health API から返ってくる歩数は文字列または数値の可能性があるため、
@@ -96,46 +127,16 @@ function coerceStepCount(value: unknown): number {
   return 0;
 }
 
-// Authorization ヘッダーから JWT を取り出し、ユーザー ID (`sub`) を取り出す。
-// この ID を使って「どのユーザーの歩数か」を判定する。
-function extractUserIdFromJwt(req: Request): string | null {
-  const authorizationHeader = req.headers.get("Authorization") ?? "";
-  const token = authorizationHeader.startsWith("Bearer ")
-    ? authorizationHeader.slice(7)
-    : authorizationHeader;
-
-  if (!token) {
-    return null;
-  }
-
-  // JWT は header.payload.signature の形式なので payload 部分を取り出す。
-  const payloadPart = token.split(".")[1];
-  if (!payloadPart) {
-    return null;
-  }
-
-  try {
-    // JWT は Base64URL 形式のため、通常の Base64 に戻して JSON を読み込む。
-    const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-    const decoded = JSON.parse(atob(padded)) as { sub?: string };
-    return decoded.sub ?? null;
-  } catch {
-    return null;
-  }
-}
-
 // Google OAuth の refresh token を使って有効な access token を取得する。
 // これは Google Health API を呼ぶための「短時間有効な鍵」である。
-async function getGoogleAccessToken(): Promise<string> {
+async function getGoogleAccessToken(refreshToken: string): Promise<string> {
   // Supabase の Secrets から Google の認証情報を取得する。
   const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
   const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
-  const refreshToken = Deno.env.get("GOOGLE_REFRESH_TOKEN");
 
-  if (!clientId || !clientSecret || !refreshToken) {
+  if (!clientId || !clientSecret) {
     throw new Error(
-      "Google Health OAuthの情報が登録されていません。Supabase Secrets に GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN を設定してください。",
+      "Google Health OAuthの情報が登録されていません。Supabase Secrets に GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET を設定してください。",
     );
   }
 
@@ -172,35 +173,33 @@ async function fetchStepsFromGoogleHealth(
   accessToken: string,
   startDate: string,
   endDate: string,
+  timezone: string,
 ) {
-  // 1日分のみ取得するため、開始日を 0:00:00 に固定する。
-  const baseDate = parseDate(startDate || endDate, new Date());
-  const dayStart = new Date(baseDate);
-  dayStart.setHours(0, 0, 0, 0);
-
-  // 終了時刻は「取得開始時刻の1秒前」を基本にする。
-  // ただし日付境界を跨がないように同日の 23:59:59 を上限として丸める。
-  const fetchedAtMinusOneSecond = new Date(Date.now() - 1_000);
-  const dayEndLimit = new Date(dayStart);
-  dayEndLimit.setHours(23, 59, 59, 999);
-  const cappedEnd = new Date(Math.min(fetchedAtMinusOneSecond.getTime(), dayEndLimit.getTime()));
-  const effectiveEnd = cappedEnd.getTime() < dayStart.getTime() ? dayStart : cappedEnd;
+  // 1日分のみ取得するため、対象日は startDate を優先する。
+  const dateValue = parseDateValue(startDate || endDate);
+  if (!dateValue) {
+    throw new Error("日付形式が不正です。YYYY-MM-DD で指定してください。");
+  }
+  const nowInTimezone = getZonedDateTimeParts(new Date(Date.now() - 1_000), timezone);
+  const todayText = formatDate(nowInTimezone.date);
+  const targetText = formatDate(dateValue);
+  const isFutureDate = targetText > todayText;
+  const endTime: TimeValue = isFutureDate
+    ? { hours: 0, minutes: 0, seconds: 0, nanos: 0 }
+    : isSameDate(dateValue, nowInTimezone.date)
+    ? nowInTimezone.time
+    : { hours: 23, minutes: 59, seconds: 59, nanos: 0 };
 
   // Google Health API のリクエスト形式に合わせて 1日レンジを組み立てる。
   const body = {
     range: {
       start: {
-        date: toDateValue(dayStart),
-        time: {
-          hours: 0,
-          minutes: 0,
-          seconds: 0,
-          nanos: 0,
-        },
+        date: dateValue,
+        time: { hours: 0, minutes: 0, seconds: 0, nanos: 0 },
       },
       end: {
-        date: toDateValue(effectiveEnd),
-        time: toTimeValue(effectiveEnd),
+        date: dateValue,
+        time: endTime,
       },
     },
     windowSizeDays: 1,
@@ -243,10 +242,9 @@ async function fetchStepsFromGoogleHealth(
 // Edge Function のエントリーポイント。
 // Supabase の認証済みリクエストを受け取り、歩数取得処理を実行する。
 export default {
-  fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req) => {
-    // JWT からユーザー ID を抽出し、未認証なら即座に 401 を返す。
-    const userId = extractUserIdFromJwt(req);
-    if (!userId) {
+  fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, ctx) => {
+    const { data: userData, error: userError } = await ctx.supabase.auth.getUser();
+    if (userError || !userData.user) {
       return Response.json(
         {
           status: "error",
@@ -258,6 +256,7 @@ export default {
         },
       );
     }
+    const userId = userData.user.id;
 
     // リクエスト本文から期間とタイムゾーンを拾う。
     // JSON が不正でも失敗させずにデフォルト値を使う。
@@ -269,13 +268,50 @@ export default {
     }
 
     const timezone = payload.timezone ?? DEFAULT_TIMEZONE;
-    const startDate = payload.startDate ?? formatDate(new Date());
+    let currentDate: DateValue;
+    try {
+      currentDate = getZonedDateTimeParts(new Date(), timezone).date;
+    } catch (error) {
+      return Response.json(
+        {
+          status: "error",
+          code: "INVALID_INPUT",
+          message: error instanceof Error ? error.message : "timezone の指定が不正です。",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+    const startDate = payload.startDate ?? formatDate(currentDate);
     const endDate = payload.endDate ?? startDate;
 
     try {
-      // Google の refresh token から access token を取得して、歩数データを取得する。
-      const accessToken = await getGoogleAccessToken();
-      const data = await fetchStepsFromGoogleHealth(accessToken, startDate, endDate);
+      const { data: connection, error: connectionError } = await ctx.supabaseAdmin
+        .from("health_connections")
+        .select("refresh_token")
+        .eq("user_id", userId)
+        .eq("provider", "google_health")
+        .maybeSingle();
+      if (connectionError) {
+        throw new Error(`Google Health連携情報の取得に失敗しました: ${connectionError.message}`);
+      }
+      if (!connection?.refresh_token) {
+        return Response.json(
+          {
+            status: "error",
+            code: "GOOGLE_HEALTH_CONNECTION_REQUIRED",
+            message: "Google Healthの連携情報が見つかりません。",
+          },
+          {
+            status: 403,
+          },
+        );
+      }
+
+      // ユーザー固有の refresh token から access token を取得して、歩数データを取得する。
+      const accessToken = await getGoogleAccessToken(connection.refresh_token);
+      const data = await fetchStepsFromGoogleHealth(accessToken, startDate, endDate, timezone);
 
       // 返す JSON はゲーム側で扱いやすいように、必要な情報だけを平坦化して返す。
       return Response.json({
@@ -318,5 +354,5 @@ export default {
   なお、Supabase Secrets に次の環境変数を設定してください:
   - GOOGLE_CLIENT_ID
   - GOOGLE_CLIENT_SECRET
-  - GOOGLE_REFRESH_TOKEN
+  また、`health_connections` テーブルに `provider = google_health` の refresh token をユーザー単位で保存してください。
 */

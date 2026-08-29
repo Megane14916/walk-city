@@ -5,8 +5,7 @@ alter table public.daily_step_records
 create or replace function public.sync_step_rewards(
   p_user_id uuid,
   p_source text,
-  p_records jsonb,
-  p_base_rate numeric default 0
+  p_records jsonb
 )
 returns jsonb
 language plpgsql
@@ -19,15 +18,20 @@ declare
   previous_rewarded integer;
   step_delta integer;
   reward bigint;
+  base_rate numeric;
   total_reward bigint := 0;
   v_town_id uuid;
   balance bigint;
   result jsonb := '[]'::jsonb;
 begin
-  if auth.uid() is null or auth.uid() <> p_user_id then
-    raise exception 'UNAUTHENTICATED';
+  if p_user_id is null or p_source is null then
+    raise exception 'INVALID_INPUT';
   end if;
-  if p_base_rate < 0 or p_base_rate is null then
+  base_rate := coalesce(
+    nullif(current_setting('app.settings.steps_to_coins_rate', true), ''),
+    '0'
+  )::numeric;
+  if base_rate < 0 then
     raise exception 'INVALID_INPUT';
   end if;
 
@@ -62,7 +66,7 @@ begin
     for update;
 
     step_delta := greatest(item.steps - previous_rewarded, 0);
-    reward := floor(step_delta * p_base_rate)::bigint;
+    reward := floor(step_delta * base_rate)::bigint;
 
     update public.daily_step_records
     set rewarded_steps = previous_rewarded + step_delta, synced_at = now()
@@ -106,5 +110,5 @@ begin
 end;
 $$;
 
-revoke all on function public.sync_step_rewards(uuid, text, jsonb, numeric) from public;
-grant execute on function public.sync_step_rewards(uuid, text, jsonb, numeric) to authenticated;
+revoke all on function public.sync_step_rewards(uuid, text, jsonb) from public;
+grant execute on function public.sync_step_rewards(uuid, text, jsonb) to service_role;
