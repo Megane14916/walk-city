@@ -110,7 +110,7 @@ Google ログインと Google Health の歩数読み取り認可は分離する�
 - 競合時の街データ再取得
 - `editable: false` の街を閲覧専用で表示
 
-Map 座標は左上を原点 `(0, 0)` とし、`x` は右、`y` は下へ増加する。2×2 建物の座標は左上セルをアンカーとする。回転、建物削除、仕様確定前の土地開放操作は実装しない。
+Map 座標は左上を原点 `(0, 0)` とし、`x` は右、`y` は下へ増加する。2×2 建物の座標は左上セルをアンカーとする。回転と道路以外の建物削除は実装しない。土地開放は20×20・1000コインの確定ルールで実装する。
 
 初期描画は 1 万セルを個別 DOM 要素にせず、グリッドを CSS 背景、建物・開放領域・障害物・プレビューを要素として描画する。基準セルサイズは 32 px、ズーム範囲は 0.5〜2.0 とする。
 
@@ -206,6 +206,8 @@ PC では Map とショップを横並び、スマートフォンでは Map の�
 
 初回取得、空状態、追加取得中、追加取得失敗を別々に表示する。`nextCursor` が `null` の場合は追加取得を終了する。各項目は `/town/:userId` へ遷移でき、自分の項目は `isCurrentUser` を用いて視覚的・テキスト的に識別する。
 
+`isCurrentUser`はランキングViewから受け取らず、ランキングServiceがViewの`user_id`と取得済みAuthユーザーIDを比較して付加する。Componentから判定用ユーザーIDを渡さない。
+
 同率順位、1回の取得上限、カーソル形式は API 仕様確定まで画面側で仮定しない。
 
 ## 4. ルーティング設計
@@ -279,6 +281,8 @@ type TownPageMode =
 ### 4.5 OAuth コールバック
 
 Google 認証設計で使用する `/auth/callback` は、ユーザー向け画面ではなく OAuth 結果を処理する技術パスである。Supabase SDK と Auth Provider がセッションを復元し、`AuthCallbackPage` は認証済みなら `/health/connect`、未認証なら `/login` へ置換遷移する。
+
+認証済みセッションを復元した場合、`AuthCallbackPage`は`/health/connect`へ遷移する前に`initialize-user` Edge Functionを空bodyで呼ぶ。新規登録と再ログインはフロントで判定せず、冪等なEFの`created`結果に委ねる。導入前から存在するAuthユーザーも次回ログイン時に不足データを遅延作成する。初期化失敗時は遷移せず再試行UIを表示する。初期表示名・街名はUUID先頭8文字由来とし、MVPではプロフィール表示名・街名の変更UIを作らない。
 
 このパスではトークンや認可コードをログへ出さない。Google Health の Callback は Edge Function が担当し、React の画面ルートでは処理しない。
 
@@ -588,7 +592,7 @@ type ApiResult<T> =
 | Service | 主な関数 | 通信先 |
 |---|---|---|
 | `auth` | `getGoogleIntegrationState`, `signInWithGoogle`, `signOut`, `startGoogleHealthConnection`, `disconnectGoogleHealth` | Supabase Auth / Edge Function |
-| `health` | `getDailySteps`, `syncSteps` | View / Query、`sync-health-steps` Edge Function |
+| `health` | `syncSteps` | `sync-health-steps` Edge Function |
 | `town` | `getBuildingCatalog`, `getMyTown`, `getPublicTown`, `placeBuilding`, `moveBuilding` | Query / View / RPC |
 | `ranking` | `getPopulationRanking` | View / RPC |
 

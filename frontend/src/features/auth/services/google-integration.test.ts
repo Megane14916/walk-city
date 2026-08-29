@@ -54,6 +54,24 @@ describe('createSupabaseGoogleIntegrationApi', () => {
     })
   })
 
+  it('initializes the authenticated user with an empty request body', async () => {
+    const response = {
+      profileId: '10000000-0000-4000-8000-000000000001',
+      townId: '20000000-0000-4000-8000-000000000001',
+      created: true,
+    }
+    const { client, invoke } = createClientDouble({
+      functionData: { ok: true, data: response },
+    })
+    const api = createSupabaseGoogleIntegrationApi(client)
+
+    await expect(api.initializeUser()).resolves.toEqual({
+      ok: true,
+      data: response,
+    })
+    expect(invoke).toHaveBeenCalledWith('initialize-user', { body: {} })
+  })
+
   it('rejects an invalid Edge Function response', async () => {
     const { client } = createClientDouble({ functionData: { token: 'secret' } })
     const api = createSupabaseGoogleIntegrationApi(client)
@@ -87,7 +105,10 @@ describe('createSupabaseGoogleIntegrationApi', () => {
           date: '2026-08-30',
           timezone: 'Asia/Tokyo',
           steps: 1234,
-          source: 'google_health',
+          newlyRewardedSteps: 1234,
+          coinsAwarded: 123,
+          coinBalance: 1123,
+          appliedBonuses: [],
           syncedAt: '2026-08-30T00:00:00.000Z',
         },
         error: null,
@@ -103,10 +124,7 @@ describe('createSupabaseGoogleIntegrationApi', () => {
       ['get-google-integration-state', { body: {} }],
       ['begin-google-health-auth', { body: {} }],
       ['disconnect-google-health', { body: {} }],
-      [
-        'get-daily-steps',
-        { body: { date: '2026-08-30', timezone: 'Asia/Tokyo' } },
-      ],
+      ['sync-health-steps', { body: {} }],
     ])
   })
 

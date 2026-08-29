@@ -107,7 +107,7 @@ select set_config(
 );
 
 select throws_ok(
-  $$select public.place_road_line(
+  $$select private.place_road_line_impl(
     'road',
     '[{"x":64,"y":55},{"x":65,"y":55},{"x":66,"y":55},{"x":67,"y":55},{"x":68,"y":55},{"x":69,"y":55}]'::jsonb,
     '50000000-0000-4000-8000-000000000010'
@@ -117,7 +117,7 @@ select throws_ok(
   'an incomplete river crossing is rejected'
 );
 select throws_ok(
-  $$select public.place_road_line(
+  $$select private.place_road_line_impl(
     'road',
     '[{"x":67,"y":50},{"x":67,"y":51},{"x":67,"y":52},{"x":67,"y":53},{"x":67,"y":54},{"x":67,"y":55},{"x":67,"y":56}]'::jsonb,
     '50000000-0000-4000-8000-000000000011'
@@ -127,7 +127,7 @@ select throws_ok(
   'a line parallel to the river is rejected'
 );
 select throws_ok(
-  $$select public.place_road_line(
+  $$select private.place_road_line_impl(
     'road',
     '[{"x":64,"y":72},{"x":65,"y":72},{"x":66,"y":72},{"x":67,"y":72},{"x":68,"y":72},{"x":69,"y":72},{"x":70,"y":72}]'::jsonb,
     '50000000-0000-4000-8000-000000000012'
@@ -140,7 +140,7 @@ select is((select count(*) from public.road_structures), 0::bigint, 'invalid bri
 select is((select coins from public.towns where town_id = '40000000-0000-4000-8000-000000000001'), 2000::bigint, 'invalid bridge attempts deduct no coins');
 
 select lives_ok(
-  $$select public.place_road_line(
+  $$select private.place_road_line_impl(
     'road',
     '[{"x":64,"y":55},{"x":65,"y":55},{"x":66,"y":55},{"x":67,"y":55},{"x":68,"y":55},{"x":69,"y":55},{"x":70,"y":55}]'::jsonb,
     '50000000-0000-4000-8000-000000000001'
@@ -152,7 +152,7 @@ select is((select count(*) from public.placed_buildings where road_structure_id 
 select is((select coins from public.towns where town_id = '40000000-0000-4000-8000-000000000001'), 1000::bigint, 'bridge deducts five times 200 plus approach road prices');
 select is((select count(*) from public.coin_ledger where town_id = '40000000-0000-4000-8000-000000000001'), 1::bigint, 'bridge writes one coin ledger row');
 select is(
-  public.place_road_line(
+  private.place_road_line_impl(
     'road',
     '[{"x":64,"y":55},{"x":65,"y":55},{"x":66,"y":55},{"x":67,"y":55},{"x":68,"y":55},{"x":69,"y":55},{"x":70,"y":55}]'::jsonb,
     '50000000-0000-4000-8000-000000000001'
@@ -172,7 +172,7 @@ select set_config(
 );
 select throws_ok(
   format(
-    'select public.delete_road(%L::uuid, %L::uuid)',
+    'select private.delete_road_impl(%L::uuid, %L::uuid)',
     (select id from public.placed_buildings where road_structure_id is not null limit 1),
     '50000000-0000-4000-8000-000000000002'
   ),
@@ -189,7 +189,7 @@ select set_config(
 );
 select throws_ok(
   format(
-    'select public.move_building(%L::uuid, 64, 56, %L::uuid)',
+    'select private.move_building_impl(%L::uuid, 64, 56, %L::uuid)',
     (select id from public.placed_buildings where road_structure_id is not null limit 1),
     '50000000-0000-4000-8000-000000000003'
   ),
@@ -199,7 +199,7 @@ select throws_ok(
 );
 select lives_ok(
   format(
-    'select public.delete_road(%L::uuid, %L::uuid)',
+    'select private.delete_road_impl(%L::uuid, %L::uuid)',
     (select id from public.placed_buildings where road_structure_id is not null order by id limit 1),
     '50000000-0000-4000-8000-000000000004'
   ),
@@ -211,7 +211,7 @@ select is((select coins from public.towns where town_id = '40000000-0000-4000-80
 select is((select count(*) from public.coin_ledger where town_id = '40000000-0000-4000-8000-000000000001'), 1::bigint, 'bridge deletion writes no ledger row');
 select lives_ok(
   format(
-    'select public.delete_road(%L::uuid, %L::uuid)',
+    'select private.delete_road_impl(%L::uuid, %L::uuid)',
     ((select response->'deletedBuildingIds'->>0 from public.town_rpc_requests
       where operation = 'delete_road' and request_id = '50000000-0000-4000-8000-000000000004')),
     '50000000-0000-4000-8000-000000000004'
@@ -234,7 +234,7 @@ select '40000000-0000-4000-8000-000000000001', 'road', x, 56, 0,
 from pg_catalog.generate_series(64, 69) x;
 select throws_ok(
   format(
-    'select public.delete_road(%L::uuid, %L::uuid)',
+    'select private.delete_road_impl(%L::uuid, %L::uuid)',
     (select id from public.placed_buildings
      where road_structure_id = '60000000-0000-4000-8000-000000000001' limit 1),
     '50000000-0000-4000-8000-000000000013'
@@ -255,14 +255,14 @@ delete from public.road_structures
 where id = '60000000-0000-4000-8000-000000000001';
 
 select lives_ok(
-  $$select public.place_road_line(
+  $$select private.place_road_line_impl(
     'road', '[{"x":60,"y":45}]'::jsonb,
     '50000000-0000-4000-8000-000000000005'
   )$$,
   'owner can place a normal road cell'
 );
 select lives_ok(
-  $$select public.place_building(
+  $$select private.place_building_impl(
     'house-small', 60, 44,
     '50000000-0000-4000-8000-000000000006'
   )$$,
@@ -270,7 +270,7 @@ select lives_ok(
 );
 select throws_ok(
   format(
-    'select public.delete_road(%L::uuid, %L::uuid)',
+    'select private.delete_road_impl(%L::uuid, %L::uuid)',
     (select id from public.placed_buildings where anchor_x = 60 and anchor_y = 45),
     '50000000-0000-4000-8000-000000000007'
   ),

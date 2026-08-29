@@ -112,6 +112,9 @@ function createLazySupabaseServiceBundle(
     async signOut() {
       return (await loadService()).googleIntegrationApi.signOut()
     },
+    async initializeUser() {
+      return (await loadService()).googleIntegrationApi.initializeUser()
+    },
     async startGoogleHealthConnection() {
       return (await loadService()).googleIntegrationApi.startGoogleHealthConnection()
     },
@@ -136,7 +139,7 @@ function createLazySupabaseServiceBundle(
   }
 
   const townApi: TownApi = {
-    supportsBuildingRename: false,
+    supportsBuildingRename: true,
     async getBuildingCatalog() {
       return (await loadService()).townApi.getBuildingCatalog()
     },

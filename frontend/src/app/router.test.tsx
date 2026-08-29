@@ -132,6 +132,7 @@ describe('AppRoutes', () => {
       latencyMs: 0,
       initiallySignedIn: true,
     })
+    const initializeSpy = vi.spyOn(api, 'initializeUser')
     renderRoute(paths.authCallback, api)
 
     expect(
@@ -139,6 +140,34 @@ describe('AppRoutes', () => {
         name: /歩数を街の力に変えましょう。/,
       }),
     ).not.toBeNull()
+    expect(initializeSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps initialization failures retryable on the OAuth callback', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+    })
+    api.setFailure('initializeUser', 'INTERNAL_ERROR')
+    const initializeSpy = vi.spyOn(api, 'initializeUser')
+    renderRoute(paths.authCallback, api)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /街の準備を完了できませんでした。/,
+      }),
+    ).not.toBeNull()
+    expect(screen.getByTestId('current-path').textContent).toBe(paths.authCallback)
+
+    api.setFailure('initializeUser', null)
+    fireEvent.click(screen.getByRole('button', { name: 'もう一度試す' }))
+
+    expect(
+      await screen.findByRole('heading', {
+        name: /歩数を街の力に変えましょう。/,
+      }),
+    ).not.toBeNull()
+    expect(initializeSpy).toHaveBeenCalledTimes(2)
   })
 
   it('returns an unauthenticated OAuth callback to login', async () => {
@@ -188,6 +217,20 @@ describe('AppRoutes', () => {
     fireEvent.click(screen.getByRole('button', { name: '今は連携しない' }))
     expect(
       await screen.findByRole('heading', { name: 'グリーンタウン' }),
+    ).not.toBeNull()
+  })
+
+  it('shows a safe error returned by the Health OAuth callback', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+    })
+    renderRoute(`${paths.healthConnect}?health_error=OAUTH_STATE_MISMATCH`, api)
+
+    expect(
+      await screen.findByText(
+        '認証状態を確認できませんでした。もう一度お試しください。',
+      ),
     ).not.toBeNull()
   })
 

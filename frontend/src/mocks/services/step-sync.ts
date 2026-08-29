@@ -89,7 +89,11 @@ export function createMockStepSyncApi(
       const steps = store.getSteps(date)
       const rewardedSteps = store.getRewardedSteps(date)
       const newlyRewardedSteps = Math.max(0, steps - rewardedSteps)
-      const coinsAwarded = Math.floor(newlyRewardedSteps * coinsPerStep)
+      const coinsAwarded = Math.max(
+        0,
+        Math.floor(steps * coinsPerStep) -
+          Math.floor(rewardedSteps * coinsPerStep),
+      )
       const coinBalance = store.awardCoins(coinsAwarded)
       if (coinBalance === null) return failure('INTERNAL_ERROR')
 

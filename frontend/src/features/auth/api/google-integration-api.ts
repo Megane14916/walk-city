@@ -2,6 +2,7 @@ import type { ApiResult } from '../../../types/common'
 import type { DailySteps, GetDailyStepsInput } from '../../health/types'
 import type {
   GoogleIntegrationState,
+  InitializeUserResult,
   StartGoogleHealthConnectionResult,
 } from '../types'
 
@@ -17,6 +18,7 @@ export interface GoogleIntegrationApi {
   subscribeToAuthChanges(listener: () => void): () => void
   signInWithGoogle(): Promise<ApiResult<GoogleIntegrationState>>
   signOut(): Promise<ApiResult<GoogleIntegrationState>>
+  initializeUser(): Promise<ApiResult<InitializeUserResult>>
   startGoogleHealthConnection(): Promise<
     ApiResult<StartGoogleHealthConnectionResult>
   >

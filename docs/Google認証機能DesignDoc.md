@@ -400,22 +400,7 @@ type StartGoogleHealthConnectionResult =
 
 ### 8.3 日次歩数
 
-```ts
-type GetDailyStepsInput = {
-  date: string       // YYYY-MM-DD
-  timezone: string   // IANA timezone
-}
-
-type DailySteps = {
-  date: string
-  timezone: string
-  steps: number
-  source: 'google_health'
-  syncedAt: string
-}
-```
-
-ゲームでコインを付与するときは、フロントエンド用 `getDailySteps` の自己申告値を信用せず、既存の `syncSteps()` API がサーバー上で取得・精算する。
+表示専用`getDailySteps` / `get-daily-steps`は廃止する。日次歩数の取得、保存、コイン精算は`sync-health-steps`へ統合し、フロントエンドは空bodyで明示的に同期する。初期表示は未同期状態とし、成功レスポンスの`steps`と`coinBalance`を同時に反映する。
 
 ### 8.4 エラーコード
 
@@ -469,10 +454,6 @@ const signInResult = await api.signInWithGoogle()
 const connectionResult =
   await api.startGoogleHealthConnection()
 
-const stepsResult = await api.getDailySteps({
-  date: '2026-08-25',
-  timezone: 'Asia/Tokyo',
-})
 ```
 
 エラーケース:
@@ -537,7 +518,7 @@ api.setSteps('2026-08-25', 12345)
 
 - Google Cloud のテストユーザーがログインできる。
 - Health 同意を拒否してもアプリへ戻れる。
-- Health 同意後に今日の歩数を取得できる。
+- Health同意後に`sync-health-steps`で今日の歩数取得とコイン精算を実行できる。
 - ログアウトとHealth連携解除が別操作になっている。
 - ブラウザのStorage、URL、開発者ツールのレスポンスにHealthトークンが存在しない。
 
@@ -579,7 +560,6 @@ Google公式資料では、未確認の新規OAuthクライアントはテスト
 
 - Health 用トークンの暗号化方式と鍵ローテーション
 - OAuth state の有効期限
-- GoogleログインとHealth連携でOAuthクライアントを分ける運用の最終決定
 - 本番公開時のGoogle OAuth確認・第三者セキュリティレビュー計画
 - ユーザーがタイムゾーンを変更した場合の過去歩数再集計ルール
 

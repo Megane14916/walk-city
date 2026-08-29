@@ -5,6 +5,7 @@ import type { DailySteps, GetDailyStepsInput } from '../../health/types'
 import type { GoogleIntegrationApi } from '../api'
 import type {
   GoogleIntegrationState,
+  InitializeUserResult,
   StartGoogleHealthConnectionResult,
 } from '../types'
 
@@ -13,6 +14,7 @@ export type GoogleIntegrationFunctionNames = {
   startHealthConnection: string
   disconnectHealth: string
   getDailySteps: string
+  initializeUser: string
 }
 
 export type SupabaseGoogleIntegrationApiOptions = {
@@ -24,7 +26,8 @@ const DEFAULT_FUNCTION_NAMES: GoogleIntegrationFunctionNames = {
   getState: 'get-google-integration-state',
   startHealthConnection: 'begin-google-health-auth',
   disconnectHealth: 'disconnect-google-health',
-  getDailySteps: 'get-daily-steps',
+  getDailySteps: 'sync-health-steps',
+  initializeUser: 'initialize-user',
 }
 
 const API_ERROR_CODES = new Set<ApiErrorCode>([
@@ -129,16 +132,29 @@ function isStartGoogleHealthConnectionResult(
   return value.next === 'connected' && isGoogleIntegrationState(value.state)
 }
 
-function isDailySteps(value: unknown): value is DailySteps {
+type StepSyncDailyPayload = Pick<
+  DailySteps,
+  'date' | 'timezone' | 'steps' | 'syncedAt'
+>
+
+function isStepSyncDailyPayload(value: unknown): value is StepSyncDailyPayload {
   return (
     isRecord(value) &&
     typeof value.date === 'string' &&
-    typeof value.timezone === 'string' &&
+    value.timezone === 'Asia/Tokyo' &&
     typeof value.steps === 'number' &&
     Number.isSafeInteger(value.steps) &&
     value.steps >= 0 &&
-    value.source === 'google_health' &&
     typeof value.syncedAt === 'string'
+  )
+}
+
+function isInitializeUserResult(value: unknown): value is InitializeUserResult {
+  return (
+    isRecord(value) &&
+    typeof value.profileId === 'string' &&
+    typeof value.townId === 'string' &&
+    typeof value.created === 'boolean'
   )
 }
 
@@ -243,6 +259,14 @@ export function createSupabaseGoogleIntegrationApi(
       return success({ session: null, healthConnection: null })
     },
 
+    async initializeUser() {
+      return invoke(
+        functionNames.initializeUser,
+        isInitializeUserResult,
+        'INTERNAL_ERROR',
+      )
+    },
+
     async startGoogleHealthConnection() {
       return invoke(
         functionNames.startHealthConnection,
@@ -260,12 +284,15 @@ export function createSupabaseGoogleIntegrationApi(
     },
 
     async getDailySteps(input: GetDailyStepsInput) {
-      return invoke(
+      if (input.timezone !== 'Asia/Tokyo') return failure('INVALID_INPUT')
+      const result = await invoke(
         functionNames.getDailySteps,
-        isDailySteps,
+        isStepSyncDailyPayload,
         'HEALTH_PROVIDER_ERROR',
-        input,
       )
+      return result.ok
+        ? success({ ...result.data, source: 'google_health' })
+        : result
     },
   }
 }

@@ -32,16 +32,15 @@ Map 機能は、Walk City の 100×100 セルの街と全ユーザー共通の�
 
 ### 2.2 非目的
 
-次の項目は仕様が確定するまで Map 機能の初期リリースに含めない。
+次の項目はMap機能の初期リリースに含めない。
 
 - 建物の回転、道路以外の建物の削除・売却
-- 土地開放の実行
 - 川以外の障害物の生成・編集
 - 建物アニメーションや天候などの演出
 - オフライン編集、複数操作の一括送信
 - リアルタイム共同編集
 
-土地開放領域と障害物は API から受信・描画できる型だけを維持する。
+土地開放は20×20・1000コイン、20の倍数アンカー、上下左右の辺隣接、斜め不可で実行する。障害物はAPIから受信・描画できる型だけを維持する。
 
 ## 3. 用語
 
@@ -325,7 +324,7 @@ sequenceDiagram
 
 ## 6. ER 図
 
-Map 機能に関係する論理モデルを示す。土地開放をセルと矩形のどちらで保存するかは未確定だが、クライアントには矩形の `UnlockedArea` として返す。
+Map機能に関係する論理モデルを示す。土地開放は`unlocked_areas`へ20×20の矩形として保存し、クライアントにも矩形の`UnlockedArea`として返す。
 
 ```mermaid
 erDiagram
@@ -348,7 +347,7 @@ erDiagram
       bigint population
       smallint map_width
       smallint map_height
-      uuid map_layout_id FK
+      text map_layout_id FK
       timestamptz updated_at
     }
     BUILDING_TYPE {
@@ -387,13 +386,13 @@ erDiagram
       smallint height
     }
     MAP_LAYOUT {
-      uuid id PK
+      text id PK
       integer version
       bigint bridge_cell_cost_coins
     }
     MAP_TERRAIN_AREA {
       uuid id PK
-      uuid map_layout_id FK
+      text map_layout_id FK
       text terrain_type
       text segment_kind
       smallint x
@@ -741,7 +740,6 @@ type PreviewInvalidReason =
 
 未確定事項は Map 内に独自ルールをハードコードせず、決定時に本書、[API計画書.md](./API計画書.md)、バックエンド実装、テストを同時に更新する。
 
-- 土地開放の方式、単位、価格、UI
 - 川以外の障害物の種類と配置ルール
 - 道路以外の建物の削除・売却・返金ルール
 - 正式な建物画像とアセット解決方式

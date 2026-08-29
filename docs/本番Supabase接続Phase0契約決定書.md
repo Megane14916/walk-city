@@ -42,7 +42,7 @@
 | §4.1 | コイン、人口、価格、サイズ、効果、ユーザーIDをクライアント入力として信用しない |
 | §4.2 | 歩数精算、購入配置、移動、土地開放を原子的に実行する |
 | §5 | 正式なテーブル名、列、PostgreSQL型 |
-| §5.6、§7.5 | 初期開放は中央 `(40,40)` から20×20、土地開放方式は未確定 |
+| §5.6、§7.5 | 初期開放は中央 `(40,40)` から20×20。追加開放は本書§7.4で確定 |
 | §5.7 | 歩数の日付境界は `Asia/Tokyo` |
 | §6 | 正式な初期建物codeと確定済み効果 |
 | §7.1 | `sync-health-steps` の責務と差分精算 |
@@ -53,7 +53,7 @@
 | §8 | Auth、RLS、公開・非公開範囲、直接書込み禁止 |
 | §9 | EF / RPC / 通常Queryの分担 |
 | §10、§11 | エラーコードと `{ ok, data/error }` 形式 |
-| §12 | Google Health scope・endpoint、土地開放はコイン方式が有力、ランキング仕様は未確定 |
+| §12 | Google Health scope・endpoint。土地開放・歩数報酬は本書のユーザー決定で確定 |
 
 ### 2.2 互換性確認にだけ使用した箇所
 
@@ -81,8 +81,8 @@
 | `getPopulationRanking(input)` | 実装 | `BE確定` | 通常Query。詳細ページングは仮決定 |
 | `placeBuilding(input)` | 実装 | `BE確定` | `place_building` RPC |
 | `moveBuilding(input)` | 実装 | `BE確定` | `move_building` RPC |
-| `placeRoadLine(input)` | 実装 | `仮決定` | 原子的な`place_road_line` RPCを追加 |
-| `unlockLand(input)` | 実装 | `仮決定` | コイン消費の`unlock_land` RPCを追加 |
+| `placeRoadLine(input)` | 実装 | `ユーザー決定` | 道路・橋をマップルールとして扱う原子的な`place_road_line` RPC |
+| `unlockLand(input)` | 実装 | `ユーザー決定` | 20×20・1000コインの`unlock_land` RPCを追加 |
 | `renameBuilding(input)` | 実装 | `仮決定` | `rename_building` RPCを追加。`placed_buildings.custom_name`は追加済み |
 | `getDashboard()` | 実装しない | 本書作成時の指示 | 既存APIの組合せで表示する |
 
@@ -110,10 +110,10 @@
 | 人口ランキング | `population_ranking_view` | View | `仮決定` |
 | 建物購入配置 | `place_building` | RPC | `BE確定`（§7.2） |
 | 建物移動 | `move_building` | RPC | `BE確定`（§7.3） |
-| 道路一括配置 | `place_road_line` | RPC | `仮決定` |
-| 土地開放 | `unlock_land` | RPC | `仮決定` |
-| 歩数同期 | `sync-health-steps` | Edge Function | `BE確定`（§7.1） |
-| 初回profile/town作成 | `initialize-user` | Edge Function | `仮決定`。処理責務は§3、§5.1で確定 |
+| 道路一括配置 | `place_road_line` | RPC | `ユーザー決定`（§7.4） |
+| 土地開放 | `unlock_land` | RPC | `ユーザー決定`（§7.5） |
+| 歩数同期 | `sync-health-steps` | Edge Function | `ユーザー決定`（§7.1、§10.1） |
+| 初回profile/town作成 | `initialize-user` | Edge Function | `ユーザー決定`。起動契約は§5.4 |
 
 Viewは`security_invoker = true`を使用し、基礎テーブルのRLSを適用する（確定。[Supabaseバックエンド実装計画書.md](./Supabaseバックエンド実装計画書.md) §3.2）。公開用SECURITY DEFINER関数への切り替えは行わない。認証ユーザーが基礎テーブルの公開列を直接Queryできること自体は許容し、非公開列（coins、歩数、Health情報など）は列権限とRLSの両方で非公開にすることで秘匿性を担保する。公開Viewはcoins、歩数、Health情報を列として持たない。
 
@@ -156,6 +156,24 @@ type ApiResult<T> =
 
 認証ユーザーはJWTから、街・価格・サイズ・効果はDBから決定する。
 
+### 5.4 新規ユーザー初期化の起動契約
+
+新規登録時の初期データ作成は`initialize-user` Edge Functionを使用する（`ユーザー決定`）。現行フロントエンドの認証導線に合わせ、Google OAuth後の`/auth/callback`でセッションを復元した直後、`/health/connect`へ遷移する前に空bodyで呼び出す。
+
+```ts
+await supabase.functions.invoke('initialize-user', { body: {} })
+```
+
+- ユーザーIDはリクエスト本文から受け取らず、Supabase JWTから決定する。
+- profile、town、中央`(40,40)`からの20×20初期開放、初期1000コインと台帳をDB内の1トランザクションで作成する。
+- 初期表示名と街名には、認証ユーザーUUIDからハイフンを除いた先頭8文字を使い、`user-xxxxxxxx`、`Town-xxxxxxxx`を生成する（`ユーザー決定`）。
+- OAuthコールバックだけでは新規登録と再ログインを安全に区別できないため、フロントエンドは両方で同じEFを呼んでよい。
+- EFと内部DB Functionは冪等とし、既存ユーザーでは不足データを重複作成せず、既存残高へ初期コインを再付与しない。
+- レスポンスの`created`は今回不足していた初期データを作成した場合に`true`、すでに初期化済みで何も作成しなかった場合に`false`とする。
+- `initialize-user`導入前から存在するAuthユーザーも、次回ログイン時に不足データだけを遅延作成する。全件backfill migrationは行わない（`ユーザー決定`）。
+- 初期化成功後だけ`/health/connect`へ遷移する。失敗時はコールバック画面で再試行可能な安全なエラーを表示する。
+- `profiles.display_name`と`towns.name`は将来変更できるDB設計を維持するが、MVPでは変更APIとUIを実装しない（`ユーザー決定`）。建物表示名変更の`rename_building`は別機能として実装する。
+
 ## 6. 読み取り契約
 
 ### 6.1 `getBuildingCatalog()`
@@ -181,7 +199,7 @@ order by code asc
 | `assetKey` | `code`と同じ値 | `仮決定`。DB列は追加しない |
 | `catalogVersion` | `catalog_version` | `BE確定` |
 
-`building_effects`に表示用description列はないため、既知のeffect typeはServiceで説明文を生成し、未知のeffectは空文字列とする（`FE互換・仮決定`）。
+`building_effects`に表示用`description`列は置かない。既知のeffect typeはフロントエンドServiceで説明文を生成し、未知のeffectは空文字列とする（`ユーザー決定`）。Viewは効果の構造化データだけを返す。
 
 ### 6.2 `getMyTown()`
 
@@ -194,6 +212,7 @@ single
 - `auth.uid()`がownerの街だけを返す。
 - `towns.coins`を含む。
 - profiles、placed_buildings、unlocked_areasを集約する。
+- `map_layouts.id`と参照する`towns.map_layout_id`、`map_terrain_areas.map_layout_id`は`text`とし、MVPでは`walk-city-v1`を使用する（`ユーザー決定`）。
 - 障害物は仕様未確定のため`obstacles: []`とする（`BE確定`: §5.10）。
 - `editable: true`はServiceで付加する（`FE互換`）。
 - `catalogVersion`は有効な`building_types.catalog_version`の最大値とする（`仮決定`）。
@@ -231,9 +250,9 @@ range offset..offset+limit
 | 最大件数 | 100 | `仮決定` |
 | DBページング | offset / range | §12の案を採用 |
 | FE cursor | `offset:<次のoffset>` | `FE互換・仮決定` |
-| 自分判定 | `user_id === auth.uid()` | `仮決定` |
+| 自分判定 | Serviceが`user_id`と取得済みAuthユーザーIDを比較 | `ユーザー決定` |
 
-Serviceは`limit + 1`件を取得し、次行がある場合だけ`nextCursor`を返す。cursorはComponentから見て不透明な文字列として扱う。人口はフロントエンドで再計算しない。
+Serviceは`limit + 1`件を取得し、次行がある場合だけ`nextCursor`を返す。cursorはComponentから見て不透明な文字列として扱う。人口はフロントエンドで再計算しない。`population_ranking_view`は`is_current_user`列を持たず、Serviceが`RankingEntry.isCurrentUser`を付加する。Componentから判定用ユーザーIDは受け取らない。
 
 ## 7. 更新契約
 
@@ -288,7 +307,7 @@ requestIdの保存方式はバックエンド内部実装に委ねるが、RPC�
 
 ### 7.3 `placeRoadLine(input)` → `place_road_line`
 
-道路も`building_types.code = 'road'`の配置物として保存する（`BE確定`: §3、§6、§7.2）。現在の一括UIに合わせ、次を仮決定する。
+道路も`building_types.code = 'road'`の配置物として保存する（`BE確定`: §3、§6、§7.2）。道路・橋は建物効果ではなくマップの基本配置ルールとして正式に残す（`ユーザー決定`）。現在の一括UIに合わせ、次を採用する。
 
 ```ts
 {
@@ -306,12 +325,16 @@ requestIdの保存方式はバックエンド内部実装に委ねるが、RPC�
 - 道路同士の隣接条件は設けない。
 - 部分成功を禁止する。
 - 成功時は`PlaceRoadLineResult`を返す。
+- 固定川、7セル橋、橋価格、道路・橋削除は[川・橋機能DesignDoc.md](./川・橋機能DesignDoc.md)を正式なMVP仕様として採用する（`ユーザー決定`）。
+- 橋は川と直交する「陸1セル + 川5セル + 陸1セル」だけを許可し、曲がり角・平行横断・不完全な横断を拒否する。
+- 川セルは1セル200コイン、両岸セルは道路価格を使用する。
+- 通常道路と橋は移動不可。通常道路は1セル、橋は同じ構造IDの7セルを原子的に削除し、返金しない。
 
-すべて`仮決定`だが、原子性は§4.2に従う。
+原子性と冪等性は§4.2、§13に従う。
 
 ### 7.4 `unlockLand(input)` → `unlock_land`
 
-§7.5と§12を基に、ハッカソン版は次で仮固定する。
+§7.5と§12を基に、ハッカソン版は次で確定する（`ユーザー決定`）。
 
 ```ts
 {
@@ -334,7 +357,7 @@ requestIdの保存方式はバックエンド内部実装に委ねるが、RPC�
 - 残高減算と領域追加を一つのトランザクションで行う。
 - 同じrequestIdの再送で二重消費しない。
 
-20×20・1000コインは現行フロントエンドに合わせた`仮決定`であり、`バックエンド.md`で確定しているのは初期20×20と原子的更新までである。
+20×20・1000コイン、20の倍数アンカー、上下左右の辺隣接、斜め不可をMVPの正式仕様とする。
 
 ### 7.5 `renameBuilding(input)` → `rename_building`
 
@@ -378,17 +401,16 @@ type RenameBuildingResult = {
 | `apartment` | 住宅（大） | 2×2 | 200 | true | population_flat +50 | ユーザー決定、価格は`仮決定` |
 | `small_park` | 公園 | 1×1 | 150 | true | なし | 価格は`仮決定` |
 | `hospital` | 病院 | 2×2 | 600 | true | なし | 価格は`仮決定` |
-| `commercial` | 商業施設 | 1×1 | 300 | true | step_coin_bonus_flat +50 | 価格・効果量は`仮決定` |
+| `commercial` | 商業施設 | 1×1 | 300 | true | なし | 価格は`仮決定` |
 | `farm` | 農場 | 2×2 | 100 | true | なし | 効果は`BE確定`、価格は`仮決定` |
-| `road` | 道路 | 1×1 | 0 | true | enables_adjacent_construction | 隣接規則は確定、価格は`仮決定` |
+| `road` | 道路 | 1×1 | 0 | true | 建物効果なし | 道路隣接・橋変換はマップルール、価格は`仮決定` |
 | `town_hall` | 役所 | 2×2 | 3000 | true | なし | 価格は`仮決定` |
 | `factory` | 工場 | 2×2 | 700 | true | なし | ユーザー決定、価格は`仮決定` |
 
-道路隣接は上下左右の4方向とし、斜めは含めないことを確定する（`BE確定`。[API計画書.md](./API計画書.md) §7を参照）。
+`building_effects`へ登録するのは`small_house`の`population_flat +10`と`apartment`の`population_flat +50`だけとする（`ユーザー決定`）。商業施設、公園、病院、農場、道路、役所、工場は建物効果を持たない。道路隣接と橋変換は`building_effects`ではなくマップルールとして扱う。道路隣接は上下左右の4方向とし、斜めは含めない。
 
 追加仮決定:
 
-- 商業施設の+50は、新規精算歩数が1歩以上ある日の同期で建物1つにつき1日1回だけ付与する。日付・建物IDを冪等性キーへ含める。
 - 初期ユーザーには1000コインを付与する。§12のデモ案を採用した`仮決定`。
 - `apartment`を本番カタログへ含める。
 
@@ -428,12 +450,28 @@ POST https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyR
 
 現在のフロントエンド（ログインとHealth連携を別操作として分離する実装。ステータス「実装完了」）を正とする。バックエンド側もログイン用とHealth用のOAuthクライアントを分離し（[Google認証機能DesignDoc.md](./Google認証機能DesignDoc.md) §3.4）、`begin-google-health-auth` / `google-health-callback` Edge Functionを歩数連携の追加認可専用として実装する。
 
+### 10.1 歩数報酬とEdge Function統合
+
+歩数取得とコイン精算の公開Edge Functionは`sync-health-steps`へ統合する（`ユーザー決定`）。`google_health_fetch`、`health_steps_fetch`、表示専用`get-daily-steps`は公開・deploy対象から外し、それらのGoogle取得処理を`sync-health-steps`内の非公開モジュールへ移す。OAuth開始、callback、接続状態取得、切断は責務が異なるため、それぞれのEdge Functionを維持する。
+
+- 公開bodyは空オブジェクト`{}`だけ。
+- 対象日はサーバーが`Asia/Tokyo`の当日として決定する。
+- Google Healthの取得、歩数保存、差分報酬、コイン台帳、残高更新を一つの同期処理として返す。
+- 基本報酬は「10歩につき1コイン」、端数切り捨て、日次上限なしとする（`ユーザー決定`）。
+- 同日の追加同期で端数を失わないよう、今回付与額は`max(0, floor(total_steps / 10) - floor(previous_rewarded_steps / 10))`で計算する。
+- 住宅以外の建物によるコインボーナスは付与しない。
+- API後方互換と将来拡張のため`appliedBonuses`フィールドは維持し、MVPでは常に空配列`[]`を返す（`ユーザー決定`）。
+
 ## 11. エラー契約
 
-### 11.1 `バックエンド.md`で確定しているコード
+### 11.1 外部公開する共通`ApiErrorCode`
+
+RPC、Edge Function、通常QueryのService変換は、次の共通集合だけをフロントエンドへ公開する（`ユーザー決定`）。SQL例外名、Google APIの内部エラー分類、外部API本文、stackは公開しない。
 
 ```text
 UNAUTHENTICATED
+OAUTH_CANCELLED
+OAUTH_STATE_MISMATCH
 HEALTH_NOT_CONNECTED
 HEALTH_PERMISSION_REQUIRED
 HEALTH_PROVIDER_ERROR
@@ -445,18 +483,23 @@ OUT_OF_MAP
 LAND_LOCKED
 CELL_OCCUPIED
 ROAD_REQUIRED
+RIVER_BLOCKED
+BRIDGE_SPAN_REQUIRED
+BRIDGE_DIRECTION_INVALID
+BRIDGE_CORNER_FORBIDDEN
+PLACEMENT_IMMOVABLE
+DELETE_NOT_ALLOWED
+ROAD_IN_USE
+BRIDGE_GROUP_INVALID
+AREA_ALREADY_UNLOCKED
+AREA_NOT_ADJACENT
 NOT_OWNER
 NOT_FOUND
 CONFLICT
+INTERNAL_ERROR
 ```
 
-### 11.2 本書で仮追加するコード
-
-| code | 用途 | 区分 |
-|---|---|---|
-| `AREA_ALREADY_UNLOCKED` | 土地が既に開放済み | `仮決定` |
-| `AREA_NOT_ADJACENT` | 開放領域が既存領域に隣接しない | `仮決定` |
-| `INTERNAL_ERROR` | 詳細を公開できない予期しない失敗 | `仮決定`。§10の秘匿方針に基づく |
+### 11.2 正規化規則
 
 道路一括配置の空配列、非直線、重複セルは`INVALID_INPUT`を使用し、新しいコードを増やさない。
 
@@ -510,7 +553,7 @@ PostgRESTのDB RPCは、期待されるゲームエラーをJSON envelopeとし�
 | 建物購入 | requestId | 同じ入力は同じ結果、異なる入力は`CONFLICT` | `仮決定` |
 | 道路一括配置 | requestId | 全体を一回だけ処理 | `仮決定` |
 | 建物移動 | requestId | 同じ入力は同じ結果、異なる入力は`CONFLICT` | `仮決定` |
-| 土地開放 | requestId | 二重消費・二重開放しない | `仮決定` |
+| 土地開放 | requestId | 二重消費・二重開放しない | `ユーザー決定` |
 
 requestIdはUUIDとし、クライアントが生成する。タイムアウト後に同じ操作を再送するときは同じrequestIdを使う。
 
@@ -524,7 +567,7 @@ requestIdはUUIDとし、クライアントが生成する。タイムアウト�
 - request、response、認証、公開範囲が決まっている。
 - 正式な建物codeと暫定価格が決まっている。
 - ランキングの順序、同率、ページサイズ、cursor変換が決まっている。
-- 道路一括配置と土地開放の暫定ルールが決まっている。
+- 道路・橋と土地開放の正式なMVPルールが決まっている。
 - 建物名変更(`renameBuilding`)を実装し、`getDashboard()`は実装しないことが決まっている。
 - 確定事項と仮決定の根拠が区別されている。
 

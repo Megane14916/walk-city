@@ -70,6 +70,26 @@ describe('createMockStepSyncApi', () => {
     })
   })
 
+  it('carries sub-10-step remainders across synchronizations', async () => {
+    const store = createMockWalkCityStore({ stepsByDate: { [DATE]: 9 } })
+    const api = createMockStepSyncApi({
+      latencyMs: 0,
+      now: () => FIXED_NOW,
+      store,
+      coinsPerStep: 0.1,
+    })
+
+    await expect(api.syncSteps()).resolves.toMatchObject({
+      ok: true,
+      data: { steps: 9, coinsAwarded: 0 },
+    })
+    api.setSteps(DATE, 10)
+    await expect(api.syncSteps()).resolves.toMatchObject({
+      ok: true,
+      data: { newlyRewardedSteps: 1, coinsAwarded: 1 },
+    })
+  })
+
   it('supports error injection without changing the balance', async () => {
     const store = createMockWalkCityStore({ stepsByDate: { [DATE]: 1_000 } })
     const townApi = createMockTownApi({ latencyMs: 0, store })

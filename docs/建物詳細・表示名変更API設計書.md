@@ -32,7 +32,6 @@
 - `getBuildingDetail()` のような専用詳細API
 - 公園、病院、役所などの現在の実効人口計算
 - `populationDeltaIfRemoved`
-- 商業施設・工場の現在の実効コイン増加率
 - 建物効果の重複上限判定
 - 建物の移動、削除、売却
 - 表示名変更時の楽観的ロックと専用冪等性台帳
@@ -307,7 +306,6 @@ SupabaseモードのTown APIは現時点で準備中のため、`renameBuilding(
 - 現在有効な効果と無効理由
 - `populationDeltaIfRemoved`
 - 公園の隣接住宅数
-- 商業施設・工場の実効コイン増加率
 - 名前変更の `expectedUpdatedAt` による楽観的ロック
 - 名前変更の `requestId` と冪等性台帳
 - リアルタイム名前更新

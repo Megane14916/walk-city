@@ -869,19 +869,10 @@ begin
     from jsonb_array_elements(v_cells) c(value)
     where private.cell_is_occupied(
       v_town.town_id, (c.value->>'x')::integer, (c.value->>'y')::integer
-    ) and (
-      v_is_bridge or not private.cell_has_road(
-        v_town.town_id, (c.value->>'x')::integer, (c.value->>'y')::integer
-      )
     )
   ) then perform private.raise_api_error('CELL_OCCUPIED'); end if;
 
-  select count(*) into v_new_cell_count
-  from jsonb_array_elements(v_cells) c(value)
-  where v_is_bridge or not private.cell_has_road(
-    v_town.town_id, (c.value->>'x')::integer, (c.value->>'y')::integer
-  );
-  if v_new_cell_count = 0 then perform private.raise_api_error('CELL_OCCUPIED'); end if;
+  v_new_cell_count := jsonb_array_length(v_cells);
 
   if v_is_bridge then
     select bridge_cell_cost_coins * 5 + v_item.cost_coins * 2

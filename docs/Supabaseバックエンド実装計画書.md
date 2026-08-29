@@ -16,16 +16,16 @@
 
 | 区分 | 物理名 | 現状 | 対応 |
 |---|---|---|---|
-| Edge Function | `initialize-user` | 未実装 | 新規実装 |
-| Edge Function | `sync-health-steps` | 未実装。類似の `health_steps_fetch` が存在 | 契約に合わせて新規実装し、既存処理を統合 |
+| Edge Function | `initialize-user` | 試作実装済み | RPC呼出名、Auth callback導線、原子性を契約へ合わせる |
+| Edge Function | `sync-health-steps` | 試作実装済み | token保管、dailyRollUp parser、RPC呼出、報酬式を改修し既存処理を統合 |
 | 公開 RPC | `place_building` | 実装済み | Phase 0 の envelope、エラー、人口再計算へ改修 |
 | 公開 RPC | `move_building` | 実装済み | Phase 0 の envelope、エラー、人口再計算へ改修 |
 | 公開 RPC | `place_road_line` | 実装済み | Phase 0 の envelopeと通常道路の原子性へ改修。橋拡張は維持 |
 | 公開 RPC | `unlock_land` | 未実装 | 新規実装 |
 | 公開 RPC | `delete_road` | 実装済み | 現行フロント・川橋仕様の追加契約として維持し、envelopeを統一 |
 | 公開 RPC | `rename_building` | 未実装 | [建物詳細・表示名変更API設計書.md](./建物詳細・表示名変更API設計書.md)の契約で新規実装 |
-| 内部 DB Function | `private.initialize_user` | 未実装 | `initialize-user` からのみ呼ぶ原子的初期化処理として新規実装 |
-| 内部 DB Function | `public.sync_step_rewards` | 実装済み | 商業施設ボーナス、設定、戻り値、冪等性を改修。`service_role` のみ実行可 |
+| 内部 DB Function | `private.initialize_user` | 試作実装済み | 初期残高・台帳の一貫性と到達可能な安全な呼出経路を改修 |
+| 内部 DB Function | `public.sync_step_rewards` | 実装済み | 10歩1コインの式、戻り値、冪等性を改修。`service_role` のみ実行可 |
 | 内部 DB Function | `private.recalculate_town_population` | 未実装 | 人口計算を一か所へ集約して新規実装 |
 
 また、RPC/EFを接続する前提として、次の4 View、カタログデータ、RLSの実装が必須である。
@@ -35,7 +35,7 @@
 - `public_town_details_view`
 - `population_ranking_view`
 
-`rename_building` は Phase 0 契約の改訂により実装対象へ変更された。`getDashboard()` は Phase 0 契約どおり実装しない。
+`rename_building` は Phase 0 契約の改訂により実装対象へ変更された。プロフィール表示名・街名の変更API/UIはMVP対象外である。`getDashboard()` は Phase 0 契約どおり実装しない。
 
 ## 2. 現在のコード調査結果
 
@@ -46,6 +46,7 @@
 | 基本9テーブル | `20260828102117_remote_schema.sql` | 存在するが、初期化処理、View、実用RLS Policyが不足 |
 | 歩数差分精算 | `20260828220500_health_steps_fetch.sql` | 基本差分は実装済み。ボーナスと設定契約が不足 |
 | 建物配置・移動・道路/橋配置・道路/橋削除 | `20260829000000_phase4_river_bridges.sql` | 主処理と冪等性テーブルは存在。戻り値と一部ルールが Phase 0 不一致 |
+| ユーザー初期化 | `20260829010000_initialize_user.sql` | 試作実装あり。既存town補完時の残高・台帳整合とEFからの呼出経路が不足 |
 | 土地開放 | なし | 未実装 |
 | 読み取り View | `public_towns` のみ | フロントが使用する4 Viewはすべて未実装 |
 | DBテスト | `river_bridges.test.sql` | 川・橋中心の47件のみ。Phase 0 全体のテストが不足 |
@@ -56,8 +57,9 @@
 |---|---|---|
 | `google_health_fetch` | 試作あり | ブラウザから呼べる構成、生データと`userId`を返す、内部エラーをmessageへ露出、契約外エラーコードを使用 |
 | `health_steps_fetch` | 試作あり | 正式名が違う、期間とtimezoneを入力として受ける、`{ status }`形式、Phase 0 の `StepSyncStatus` を返さない |
+| `sync-health-steps` | 試作あり | 平文token依存、dailyRollUpレスポンス解析、RPC呼出名、同時実行時の戻り値が契約不一致 |
 | `test_function` | テンプレート | 本番不要。`verify_jwt = false` のためデプロイ対象から除外する |
-| `initialize-user` | なし | profile、town、初期開放領域、初期コインが自動作成されない |
+| `initialize-user` | 試作あり | Auth callbackからの呼出導線がなく、schema付きRPC名も到達できない |
 
 ### 2.3 フロントエンドが現在要求している物理API
 
@@ -68,9 +70,8 @@
 - `get-google-integration-state`
 - `begin-google-health-auth`
 - `disconnect-google-health`
-- `get-daily-steps`
 
-Phase 0 は「Googleログイン時にログイン用scopeと歩数scopeを同時に要求する」を優先しているため、この4関数は本計画の必須実装には含めない。フロント側を同意一体型フローへ合わせる。ただし、OAuthトークンをサーバーへ安全に受け渡す具体フローは、後述の決定ゲートを解消してから着手する。
+GoogleログインとHealth追加認可は分離する。上記3関数に`google-health-callback`を加えたOAuth・接続管理EFは維持し、表示専用`get-daily-steps`は実装しない。歩数取得と報酬精算は`sync-health-steps`へ統合する。
 
 ## 3. 発見した矛盾と採用方針
 
@@ -153,14 +154,20 @@ PostgRESTのDB RPCは、期待されるゲームエラーをJSON envelopeとし�
 3. profile、town、初期開放、初期台帳の作成結果をenvelopeで返す。
 4. 同じユーザーから何度呼ばれても二重作成・二重付与しない。
 
+#### 起動契約
+
+現行フロントのGoogle OAuth導線に合わせ、`/auth/callback`でセッション復元後、`/health/connect`へ遷移する前に空bodyで呼ぶ。新規登録と再ログインの判定はフロントで行わず、既存ユーザーへの呼び出しを冪等に処理する。初期化失敗時は遷移せず、コールバック画面から再試行できるようにする。
+
 #### DB内の原子的処理
 
-- `profiles`: `user-xxxxxx`
-- `towns`: `Town-xxxxxx`、100×100、初期1000コイン
+- `profiles`: 認証ユーザーUUIDからハイフンを除いた先頭8文字による`user-xxxxxxxx`
+- `towns`: 同じUUID先頭8文字による`Town-xxxxxxxx`、100×100、初期1000コイン
 - `unlocked_areas`: `(40,40,20,20)`、`unlock_method = 'initial'`
 - `coin_ledger`: `amount = 1000`、`reason = 'initial_grant'`、`idempotency_key = 'initial_grant:<userId>'`
 
 EFから4テーブルへ順にinsertしてはいけない。途中失敗を残さないため、DB Function内の1トランザクションで実行する。
+
+新規登録と再ログインの両方で同じ処理を呼び、`initialize-user`導入前から存在するAuthユーザーは次回ログイン時に不足データだけを遅延作成する。全件backfill migrationは作成せず、既存行・残高・初期付与台帳を上書きまたは二重作成しない。
 
 #### 出力
 
@@ -175,7 +182,7 @@ EFから4テーブルへ順にinsertしてはいけない。途中失敗を残�
 }
 ```
 
-既存ユーザーへの再送は同じIDと`created: false`を返す。
+`created`は今回不足データを作成した場合に`true`、すでに初期化済みで何も作成しなかった場合に`false`とする。初期化済みユーザーへの再送は同じIDと`created: false`を返す。
 
 ### 4.2 `sync-health-steps`
 
@@ -229,9 +236,12 @@ Googleの生レスポンス、token、SQLエラー、stackはクライアント�
 
 ### 4.3 既存Edge Functionの扱い
 
-- `google_health_fetch`: ロジックを`sync-health-steps`内の非公開モジュールへ移すか、secret認証だけの内部関数にする。公開deployしない。
+- `google_health_fetch`: ロジックを`sync-health-steps`内の非公開モジュールへ移し、削除または非deploy化する。
 - `health_steps_fetch`: `sync-health-steps`へ置換後に削除する。
+- `get-daily-steps`: 表示専用EFを廃止し、当日歩数は`sync-health-steps`の成功レスポンスを使用する。
 - `test_function`: 本番deploy対象から削除する。少なくとも`verify_jwt = false`のまま残さない。
+
+OAuth開始、callback、接続状態取得、切断は歩数精算と責務が異なるため、`begin-google-health-auth`、`google-health-callback`、`get-google-integration-state`、`disconnect-google-health`として維持する。
 
 ## 5. RPC / DB Function 実装仕様
 
@@ -329,13 +339,12 @@ Phase 0当初の一覧にはないが、現行フロントと最新バックエ�
 
 改修点:
 
-- 基本変換率をバージョン付きサーバー設定から取得する。`current_setting`未設定時に0コインで成功させない。
+- 基本報酬は10歩につき1コイン、端数切り捨て、日次上限なしとする。
 - `daily_step_records`の`(user_id, step_date, source)`一意制約を使う。
-- `steps - rewarded_steps`の正の差分だけを精算する。
-- 新規精算歩数が1以上の日は、配置済み`commercial`1個につき+50を1日1回付与する。
-- ボーナス台帳キーには日付と建物IDを含める。
-- 基本報酬、各ボーナス、town残高を同一トランザクションで更新する。
-- 結果に`newlyRewardedSteps`と`appliedBonuses`を含める。
+- 今回付与額は`max(0, floor(total_steps / 10) - floor(previous_rewarded_steps / 10))`とし、同日の分割同期で10歩未満の端数を失わない。
+- 建物によるコインボーナスは付与しない。
+- 基本報酬とtown残高を同一トランザクションで更新する。
+- 結果に`newlyRewardedSteps`と`appliedBonuses`を含める。後者は互換性のため残すが、MVPでは常に空配列を返す。
 
 ### 5.9 `rename_building`
 
@@ -367,6 +376,7 @@ rename_building(p_building_id uuid, p_custom_name text)
 
 - `building_types`と`building_effects`を結合する。
 - effectsは常にJSON配列。0件は`[]`。
+- `building_effects`に表示用`description`列を置かず、Viewは効果の構造化データだけを返す。既知の説明文はフロントエンドServiceで生成する。
 - code昇順で安定取得できる。
 
 #### `my_town_details_view`
@@ -387,6 +397,7 @@ rename_building(p_building_id uuid, p_custom_name text)
 
 - 順位は人口だけで`rank()`を計算する。
 - 同率内の表示順はdisplay_name、user_id。
+- `is_current_user`は返さない。フロントエンドServiceが`user_id`と取得済みAuthユーザーIDを比較して`isCurrentUser`を付加する。
 - coins等の非公開列を含めない。
 
 ### 6.2 RLS / GRANT
@@ -410,9 +421,9 @@ Phase 0の9商品へseedを修正する。
 | `apartment` | 200 | `population_flat +50` |
 | `small_park` | 150 | なし |
 | `hospital` | 600 | なし |
-| `commercial` | 300 | `step_coin_bonus_flat +50` |
+| `commercial` | 300 | なし |
 | `farm` | 100 | なし |
-| `road` | 0 | `enables_adjacent_construction` |
+| `road` | 0 | 建物効果なし（道路隣接・橋はマップルール） |
 | `town_hall` | 3000 | なし |
 | `factory` | 700 | なし |
 
@@ -421,7 +432,7 @@ Phase 0の9商品へseedを修正する。
 ### Phase A: 契約補正とDB土台（最優先）
 
 1. Phase 0のGoogle endpoint、token保管方式、RPC error transportを追記する。
-2. 正式codeへのデータmigrationとseed修正を行う。
+2. 正式codeへのデータmigrationとseed修正を行う。`map_layouts.id`と参照列は`text`・初期値`walk-city-v1`へ統一し、`building_effects.description`は廃止する。
 3. 初期化・人口再計算のprivate functionを追加する。
 4. 4 View、RLS、GRANTを追加する。
 5. DB resetがseedまで通ることを確認する。
@@ -456,7 +467,7 @@ Phase 0の9商品へseedを修正する。
 4. `sync-health-steps`を実装する。
 5. 既存試作EFを内部化・削除する。
 
-完了条件: 当日歩数の増分だけが精算され、同じ歩数の再同期は0、新たな増分と商業施設ボーナスだけが追加される。
+完了条件: 10歩につき1コインが端数切り捨て・上限なしで付与され、同じ歩数の再同期は0、分割同期でも端数を失わない。
 
 ### Phase E: 統合・デプロイ
 
@@ -501,11 +512,10 @@ Phase 0の9商品へseedを修正する。
 
 ## 9. 決定ゲート
 
-次の2点だけは、該当Phase開始前に明文化が必要である。
+次の1点だけは、該当Phase開始前に明文化が必要である。
 
 | 決定 | 期限 | 未決定時の影響 |
 |---|---|---|
-| 歩数の基本変換率、端数、日次上限 | Phase D前 | 現行SQLは未設定時rate=0で、歩いても基本報酬が付かない |
 | Google OAuth code/refresh tokenをEFへ渡す具体フロー | Phase D前 | 一体型ログインだけではサーバー側token保管を完了できない |
 
 `security_invoker` Viewの継続は確定済み（§3.2）。公開用SECURITY DEFINER関数への切り替えは行わない。

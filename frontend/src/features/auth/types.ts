@@ -35,6 +35,12 @@ export type GoogleIntegrationState = {
   healthConnection: GoogleHealthConnection | null
 }
 
+export type InitializeUserResult = {
+  profileId: string
+  townId: string
+  created: boolean
+}
+
 export type AuthState =
   | { status: 'initializing' }
   | { status: 'authenticated'; session: AuthSession }
