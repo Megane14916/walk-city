@@ -139,7 +139,7 @@ export type StepSyncStatus = {
 }
 ```
 
-フロントエンドは各数値を 0 以上の `Number.isSafeInteger` として検証する。`date` は `YYYY-MM-DD`、`timezone` は空でない文字列、`syncedAt` は解釈可能な ISO 8601 文字列として検証する。`appliedBonuses`はAPI後方互換と将来拡張のため維持するが、MVPでは空配列だけを許可し、要素が含まれる場合はレスポンス全体を`INTERNAL_ERROR`とする。
+フロントエンドは各数値を 0 以上の `Number.isSafeInteger` として検証する。`date` は `YYYY-MM-DD`、`timezone` は空でない文字列、`syncedAt` は解釈可能な ISO 8601 文字列として検証する。`appliedBonuses`は空配列または商業施設・工場の適用内訳とし、各要素の`sourceBuildingType`、`sourceCount`、`effectType`、`amount`を検証する。`amount`は合算上限適用後のパーセントポイントとする。
 
 `coinsAwarded` が `0` でも成功である。再同期時に新しい歩数がなければ、成功状態を保ったまま「新しく反映された歩数はありません」と表示する。
 
@@ -171,7 +171,7 @@ Edge Function が 4xx / 5xx を返し `supabase.functions.invoke()` が `Functio
 | 成功 envelope | `{ ok: true, data: StepSyncStatus }` |
 | エラー envelope | `{ ok: false, error: { code, message } }` |
 | 日付境界 | 初期リリースは `Asia/Tokyo` 固定 |
-| `appliedBonuses` | 後方互換のためフィールドを維持し、MVPでは常に`[]` |
+| `appliedBonuses` | ボーナスなしは`[]`、ある場合は商業施設・工場の適用内訳 |
 | 初期残高の取得 | 実 `getMyTown()` が Supabase に保存された最新の `towns.coins` を返す |
 
 `health_steps_fetch`、`get-daily-steps`、`{ status: "ok" }` など既存文書・移行中コードに残る別名や旧 envelope は、新しい歩数精算 API の契約として使用しない。実装時に関連文書も上表へ統一する。
@@ -385,7 +385,7 @@ idle
 - `newlyRewardedSteps > 0 && coinsAwarded === 0`: `1,500歩を新しく同期しました。今回の獲得コインは0です。`
 - 両方 0: `歩数は最新です。新しく付与されたコインはありません。`
 
-`appliedBonuses`はMVPでは常に空配列であり、詳細一覧を表示しない。
+`appliedBonuses`は同期結果の内訳として保持する。初期UIで詳細一覧を表示しなくても、Serviceは値を破棄しない。
 
 ### 10.4 公開街
 
@@ -478,7 +478,7 @@ mock モードでは `MockStepSyncApi` と `MockTownApi` が同じ `MockWalkCity
 - `userId`、歩数、コイン、タイムゾーンを送らない。
 - 正常 envelope を `ApiResult<StepSyncStatus>` へ変換する。
 - 数値が負、小数、`NaN`、safe integer 外の場合は拒否する。
-- `date`、`timezone`、`syncedAt`が不正、または`appliedBonuses`が空配列でない場合は拒否する。
+- `date`、`timezone`、`syncedAt`または`appliedBonuses`の要素形式が不正な場合は拒否する。
 - 既知の 4xx エラー本文を対応する `ApiErrorCode` へ変換する。
 - 解析不能な HTTP エラーとネットワーク例外を一般エラーへ変換する。
 - エラー詳細、トークン、外部レスポンスを返却・出力しない。
@@ -531,7 +531,7 @@ mock モードでは `MockStepSyncApi` と `MockTownApi` が同じ `MockWalkCity
 3. 成功を `{ ok: true, data: StepSyncStatus }`、失敗を `{ ok: false, error }` として確定した。
 4. `StepSyncStatus` のフィールドを非 null とし、0 以上の整数と日時文字列で構成する契約を確定した。
 5. 日付境界とレスポンスの `timezone` を `Asia/Tokyo` として確定した。
-6. `appliedBonuses`は後方互換と将来拡張のため残し、MVPでは常に空配列とすることを確定した。
+6. `appliedBonuses`は商業施設・工場のボーナス内訳を返し、ボーナスなしの場合だけ空配列とする。
 7. 実 `getMyTown()` が Supabase に保存された街データと最新残高を返す方針を確定した。
 8. 基本報酬を10歩につき1コイン、端数切り捨て、日次上限なしとして確定した。
 9. 表示専用`get-daily-steps`を廃止し、歩数取得を`sync-health-steps`へ統合した。
@@ -679,7 +679,7 @@ Phase 5 最終検証結果:
 - [x] 失敗 envelope は `{ ok: false, error: { code, message } }` である。
 - [x] `StepSyncStatus` は本書記載のフィールドを返し、各フィールドは非 null である。
 - [x] `coinsAwarded` と `coinBalance` は 0 以上の整数である。
-- [x] `appliedBonuses`はレスポンスに存在し、MVPでは空配列である。
+- [x] `appliedBonuses`はレスポンスに存在し、適用されたコインボーナスの内訳を返す。
 - [x] 日付境界と返却 `timezone` は `Asia/Tokyo` である。
 - [x] 基本報酬は10歩につき1コイン、端数切り捨て、日次上限なしである。
 - [x] `getMyTown()` は Supabase に保存された実際の街データと最新コイン残高を返す。
