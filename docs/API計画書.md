@@ -127,7 +127,6 @@ type BuildingEffect = {
   type:
     | "population_flat"
     | "step_coin_bonus_flat"
-    | "residential_population_bonus"
     | "enables_adjacent_construction"
     | string;
   value: number | null;
@@ -324,19 +323,15 @@ type StartGoogleHealthConnectionResult =
 
 ## 7. 読み取り API
 
-### `getDashboard()`
+### ホーム初期表示（`getDashboard()` は実装しない）
 
-用途: ホーム初期表示。
+専用の `getDashboard()` は追加しない。ホーム画面は次の既存 API の組み合わせで表示する（[本番Supabase接続実装計画書.md](./本番Supabase接続実装計画書.md) §2.1、[本番Supabase接続Phase0契約決定書.md](./本番Supabase接続Phase0契約決定書.md) §3.1）。
 
-```ts
-type Dashboard = {
-  user: UserSummary;
-  town: TownSummary;
-  todaySteps: number | null;
-  lastStepSyncAt: string | null;
-  healthConnectionStatus: "connected" | "not_connected" | "permission_required";
-};
-```
+| 表示値 | 取得元 |
+| --- | --- |
+| ユーザー、街名、コイン、人口 | `getMyTown()` |
+| 今日の歩数 | `getDailySteps()`。歩数精算後は `syncSteps()` の成功レスポンス |
+| Health 接続状態、最終同期日時 | `getGoogleIntegrationState()` |
 
 ### `getBuildingCatalog()`
 
@@ -344,19 +339,19 @@ type Dashboard = {
 
 初期カタログ:
 
-| code          | 名前       | サイズ | 効果                                        |
-| ------------- | ---------- | -----: | ------------------------------------------- |
-| `small_house` | 住宅（小） |    1×1 | 人口 +10                                    |
-| `apartment`   | 住宅（大） |    2×2 | 人口 +50                                    |
-| `small_park`  | 公園       |    1×1 | なし                                        |
-| `hospital`    | 病院       |    2×2 | なし                                        |
-| `commercial`  | 商業施設   |    1×1 | コイン増加、値 TBD                          |
-| `farm`        | 農場       |    2×2 | 人口 +5                                     |
-| `road`        | 道路       |    1×1 | 周辺建築許可、範囲 TBD                      |
-| `town_hall`   | 役所       |    2×2 | 住宅（小）1軒あたり人口 +20、範囲・重複 TBD |
-| `factory`     | 工場       |    2×2 | なし                                        |
+| code          | 名前       | サイズ | costCoins | enabled | 効果                                        |
+| ------------- | ---------- | -----: | --------: | :-----: | ------------------------------------------- |
+| `small_house` | 住宅（小） |    1×1 |        50 |  true   | 人口 +10                                    |
+| `apartment`   | 住宅（大） |    2×2 |       200 |  true   | 人口 +50                                    |
+| `small_park`  | 公園       |    1×1 |       150 |  true   | なし                                        |
+| `hospital`    | 病院       |    2×2 |       600 |  true   | なし                                        |
+| `commercial`  | 商業施設   |    1×1 |       300 |  true   | コイン増加、値 TBD                          |
+| `farm`        | 農場       |    2×2 |       100 |  true   | なし                                        |
+| `road`        | 道路       |    1×1 |         0 |  true   | 周辺建築許可（上下左右4方向、斜め不可）      |
+| `town_hall`   | 役所       |    2×2 |     3,000 |  true   | なし                                        |
+| `factory`     | 工場       |    2×2 |       700 |  true   | なし                                        |
 
-価格 TBD の間は全項目を `costCoins: null`、`enabled: false` とする。
+上記の価格は仮決定であり、正式な確定額ではない（[本番Supabase接続Phase0契約決定書.md](./本番Supabase接続Phase0契約決定書.md) §8）。価格が未設定の新規カタログ項目を追加する場合だけ `costCoins: null`、`enabled: false` とする。
 
 ### `getMyTown()`
 
@@ -525,12 +520,13 @@ type DeleteRoadResult = {
 
 ```ts
 type UnlockLandInput = {
-  areaId: string;
+  x: number;
+  y: number;
   requestId: string;
 };
 ```
 
-クライアントがコイン・アイテム・必要歩数を指定しない。`areaId` に対応するサーバー設定から条件を検証する。
+`x`、`y` は開放する 20×20 ブロックの左上アンカー座標とし、20 の倍数とする。クライアントがコイン・アイテム・必要歩数を指定しない。`x`、`y` に対応するサーバー設定から条件を検証する。詳細は [本番Supabase接続Phase0契約決定書.md](./本番Supabase接続Phase0契約決定書.md) §7.4 を正本とする。
 
 ### 道路以外の建物削除
 
@@ -550,7 +546,7 @@ type UnlockLandInput = {
   AND コインが十分
 ```
 
-道路の周辺定義は TBD。確定前はクライアントとサーバーへ別々の仮定を実装しない。
+道路の周辺定義は上下左右の4方向とし、斜めは含めない。
 
 ## 11. API 契約テスト
 
@@ -586,8 +582,6 @@ type UnlockLandInput = {
 - 歩数からコインへの変換式
 - 商業施設のボーナス式
 - 全建物のコスト
-- 役所効果の範囲と重複ルール
-- 道路の隣接ルール
 - 土地開放ルール
 - 川以外の障害物、道路以外の建物削除
 - ランキングの同率・ページング仕様

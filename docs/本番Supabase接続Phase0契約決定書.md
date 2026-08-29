@@ -48,7 +48,7 @@
 | §7.1 | `sync-health-steps` の責務と差分精算 |
 | §7.2 | `place_building` の検証・更新内容 |
 | §7.3 | `move_building` の検証、移動時コイン消費なし |
-| §7.4 | 人口はバックエンド計算、住宅+10、農場+5、役所効果は仕様確定まで無効 |
+| §7.4 | 人口はバックエンド計算、住宅（小）+10、住宅（大）+50。農場・役所に人口効果はない |
 | §7.6 | ランキングは `towns.population` 降順 |
 | §8 | Auth、RLS、公開・非公開範囲、直接書込み禁止 |
 | §9 | EF / RPC / 通常Queryの分担 |
@@ -67,7 +67,7 @@
 | `frontend/src/types/common.ts` | 現在UIが処理できるエラーコード |
 | `frontend/src/features/town/utils/land-unlock.ts` | 20×20・1000コインの現行暫定UI |
 
-`建物詳細・表示名変更API設計書.md`の`custom_name`は、`バックエンド.md`の`placed_buildings`に存在しないため、本番契約の根拠として採用しない。
+`建物詳細・表示名変更API設計書.md`の`renameBuilding()`契約を採用する。`custom_name`列は[Supabaseバックエンド実装計画書.md](./Supabaseバックエンド実装計画書.md) §3.1で確認済みのとおり後続migrationで`placed_buildings`へ追加済みのため、本番契約の根拠として利用する。
 
 ## 3. Phase 0 の結論
 
@@ -83,10 +83,10 @@
 | `moveBuilding(input)` | 実装 | `BE確定` | `move_building` RPC |
 | `placeRoadLine(input)` | 実装 | `仮決定` | 原子的な`place_road_line` RPCを追加 |
 | `unlockLand(input)` | 実装 | `仮決定` | コイン消費の`unlock_land` RPCを追加 |
-| `renameBuilding(input)` | 実装しない | `BE確定` | `placed_buildings`に`custom_name`がない |
+| `renameBuilding(input)` | 実装 | `仮決定` | `rename_building` RPCを追加。`placed_buildings.custom_name`は追加済み |
 | `getDashboard()` | 実装しない | 本書作成時の指示 | 既存APIの組合せで表示する |
 
-本番モードでは建物名変更UIを非表示にする。読み取り互換のため、フロントエンドへ渡す`PlacedBuilding.customName`は常に`null`とする（`FE互換`）。
+本番モードでも建物名変更UIを有効にする。`PlacedBuilding.customName`は`rename_building`で更新した実値を返す（`BE確定`: [建物詳細・表示名変更API設計書.md](./建物詳細・表示名変更API設計書.md)）。
 
 ### 3.2 通信方式
 
@@ -115,7 +115,7 @@
 | 歩数同期 | `sync-health-steps` | Edge Function | `BE確定`（§7.1） |
 | 初回profile/town作成 | `initialize-user` | Edge Function | `仮決定`。処理責務は§3、§5.1で確定 |
 
-Viewは`security_invoker = true`を使用し、基礎テーブルのRLSを適用する（`仮決定`）。公開Viewはcoins、歩数、Health情報を列として持たない。
+Viewは`security_invoker = true`を使用し、基礎テーブルのRLSを適用する（確定。[Supabaseバックエンド実装計画書.md](./Supabaseバックエンド実装計画書.md) §3.2）。公開用SECURITY DEFINER関数への切り替えは行わない。認証ユーザーが基礎テーブルの公開列を直接Queryできること自体は許容し、非公開列（coins、歩数、Health情報など）は列権限とRLSの両方で非公開にすることで秘匿性を担保する。公開Viewはcoins、歩数、Health情報を列として持たない。
 
 ## 5. 共通契約
 
@@ -336,17 +336,35 @@ requestIdの保存方式はバックエンド内部実装に委ねるが、RPC�
 
 20×20・1000コインは現行フロントエンドに合わせた`仮決定`であり、`バックエンド.md`で確定しているのは初期20×20と原子的更新までである。
 
-### 7.5 建物名変更
+### 7.5 `renameBuilding(input)` → `rename_building`
 
-本番では実装しない。
+本番でも実装する。`placed_buildings.custom_name`列は既に追加済みのため（[Supabaseバックエンド実装計画書.md](./Supabaseバックエンド実装計画書.md) §3.1）、[建物詳細・表示名変更API設計書.md](./建物詳細・表示名変更API設計書.md)の契約をそのまま採用する。
 
-理由:
+物理引数:
 
-- `バックエンド.md` §5.5の`placed_buildings`に`custom_name`がない。
-- §3のバックエンド責務に建物名変更がない。
-- `バックエンド.md`優先という決定ルールに従う。
+```ts
+{
+  p_building_id: string // UUID
+  p_custom_name: string | null
+}
+```
 
-モックで機能を残してもよいが、Supabaseモードでは編集UIを表示しない。別途`バックエンド.md`が更新されるまで`rename_building` RPCを作らない。
+- JWTから認証ユーザーを特定し、対象建物の所属する街の所有者であることを検証する（`NOT_OWNER`）。
+- `p_custom_name`が文字列の場合、前後空白を除去し1〜30 Unicodeコードポイント、制御文字なしを検証する（`INVALID_INPUT`）。
+- カタログ初期名と同じ場合、または`p_custom_name`が`null`の場合は`custom_name = NULL`にする。
+- `custom_name`と`placed_buildings.updated_at`だけを更新し、コイン・人口・建物効果・作成日時は変更しない。
+- `requestId`と冪等性台帳は追加しない（同じ値を設定する操作のため、再送しても副作用が累積しない）。
+
+成功data:
+
+```ts
+type RenameBuildingResult = {
+  building: PlacedBuilding
+  updatedAt: string
+}
+```
+
+`my_town_details_view` / `public_town_details_view`が返す`PlacedBuilding.customName`は`custom_name`の実値を返す（[Supabaseバックエンド実装計画書.md](./Supabaseバックエンド実装計画書.md) §6.1の「`custom_name`は`null`」という記述はこの変更に合わせて更新する）。
 
 ## 8. 暫定カタログ設定
 
@@ -361,15 +379,15 @@ requestIdの保存方式はバックエンド内部実装に委ねるが、RPC�
 | `small_park` | 公園 | 1×1 | 150 | true | なし | 価格は`仮決定` |
 | `hospital` | 病院 | 2×2 | 600 | true | なし | 価格は`仮決定` |
 | `commercial` | 商業施設 | 1×1 | 300 | true | step_coin_bonus_flat +50 | 価格・効果量は`仮決定` |
-| `farm` | 農場 | 2×2 | 100 | true | population_flat +5 | 効果は`BE確定`、価格は`仮決定` |
-| `road` | 道路 | 1×1 | 0 | true | enables_adjacent_construction | 価格と隣接規則は`仮決定` |
-| `town_hall` | 役所 | 2×2 | 3000 | true | 効果は保存するが人口計算では無効 | 無効化は`BE確定`、価格は`仮決定` |
+| `farm` | 農場 | 2×2 | 100 | true | なし | 効果は`BE確定`、価格は`仮決定` |
+| `road` | 道路 | 1×1 | 0 | true | enables_adjacent_construction | 隣接規則は確定、価格は`仮決定` |
+| `town_hall` | 役所 | 2×2 | 3000 | true | なし | 価格は`仮決定` |
 | `factory` | 工場 | 2×2 | 700 | true | なし | ユーザー決定、価格は`仮決定` |
+
+道路隣接は上下左右の4方向とし、斜めは含めないことを確定する（`BE確定`。[API計画書.md](./API計画書.md) §7を参照）。
 
 追加仮決定:
 
-- 道路隣接は上下左右の4方向。斜めは含めない。
-- `town_hall`は`residential_population_bonus = 20`を設定データとして保持するが、範囲・重複が正式決定するまで計算しない。
 - 商業施設の+50は、新規精算歩数が1歩以上ある日の同期で建物1つにつき1日1回だけ付与する。日付・建物IDを冪等性キーへ含める。
 - 初期ユーザーには1000コインを付与する。§12のデモ案を採用した`仮決定`。
 - `apartment`を本番カタログへ含める。
@@ -377,8 +395,7 @@ requestIdの保存方式はバックエンド内部実装に委ねるが、RPC�
 ## 9. 人口・ランキングの整合性
 
 - 人口は配置済み建物と`building_effects`からバックエンドで計算する（`BE確定`: §7.4）。
-- 住宅（小）+10、農場+5。
-- 役所効果は無効。
+- 住宅（小）+10、住宅（大）+50。農場に人口効果はない。
 - `place_building`、`place_road_line`、`move_building`のトランザクション内で必要に応じて`towns.population`を更新する。
 - `population_ranking_view`は保存済みの`towns.population`だけを参照する。
 - フロントエンドは順位・人口を計算しない。
@@ -387,7 +404,7 @@ requestIdの保存方式はバックエンド内部実装に委ねるが、RPC�
 
 ## 10. Auth・Google Health契約
 
-`バックエンド.md` §8、§12を優先し、Googleログイン時にログイン用scopeと歩数読み取りscopeを同時に要求する。
+Googleログインと歩数読み取りscopeの要求を分離する（[Google認証機能DesignDoc.md](./Google認証機能DesignDoc.md) §3.1、`バックエンド.md` §8 改訂後の記述を優先）。ログイン用scopeとHealth用scopeを同時に要求しない。
 
 追加scope:
 
@@ -398,16 +415,18 @@ https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly
 歩数endpoint:
 
 ```text
-https://health.googleapis.com/v1/steps
+POST https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp
 ```
+
+（v1は現在のGoogle公式仕様に存在しないため、v4の`dailyRollUp`を正とする。[Supabaseバックエンド実装計画書.md](./Supabaseバックエンド実装計画書.md) §3.2の調査結果を反映）
 
 - 認可方式はOAuth 2.0。
 - ブラウザからGoogle Health APIを直接呼ばない。
-- 認可コード、access token、refresh tokenはEF Secretsで扱い、通常テーブルへ保存しない。
+- 認可コード、access tokenはEdge Function内だけで扱い、DBやレスポンスへ保存・返却しない。refresh tokenは暗号化した上でユーザーごとに`private.health_tokens`（`anon`/`authenticated`からアクセス不可）へ保存し、暗号鍵だけをEF Secretsに保存する。詳細は[バックエンド.md](./バックエンド.md) §5.13、[Supabaseバックエンド実装計画書.md](./Supabaseバックエンド実装計画書.md) §3.2を参照。
 - 日付境界は`Asia/Tokyo`。
 - 歩数値、ユーザーID、付与コインをフロントエンドから`sync-health-steps`へ送らない。
 
-現在のフロントエンドはログインとHealth連携を分けているため、この箇所は実装変更が必要である。分離を指示する他文書より`バックエンド.md`を優先する。
+現在のフロントエンド（ログインとHealth連携を別操作として分離する実装。ステータス「実装完了」）を正とする。バックエンド側もログイン用とHealth用のOAuthクライアントを分離し（[Google認証機能DesignDoc.md](./Google認証機能DesignDoc.md) §3.4）、`begin-google-health-auth` / `google-health-callback` Edge Functionを歩数連携の追加認可専用として実装する。
 
 ## 11. エラー契約
 
@@ -441,16 +460,16 @@ CONFLICT
 
 道路一括配置の空配列、非直線、重複セルは`INVALID_INPUT`を使用し、新しいコードを増やさない。
 
-HTTP statusの仮対応:
+HTTP statusの仮対応（[Supabaseバックエンド実装計画書.md](./Supabaseバックエンド実装計画書.md) §3.2を正とする）:
 
-| status | code |
-|---:|---|
-| 400 | `INVALID_INPUT`ほか入力・ゲームルール系コード |
-| 401 | `UNAUTHENTICATED` |
-| 403 | `NOT_OWNER` |
-| 404 | `NOT_FOUND` |
-| 409 | `CONFLICT`、占有・残高など競合系コード |
-| 500 | `INTERNAL_ERROR` |
+PostgRESTのDB RPCは、期待されるゲームエラーをJSON envelopeとして返す場合、通常はHTTP 200になる。SQL exceptionでHTTPエラーにすると、レスポンスがこの文書の独自envelopeにならないため、より強い共通契約であるJSON envelopeを優先する。
+
+| ケース | HTTP status | 例 |
+|---|---:|---|
+| 認証済みの期待可能なドメインエラー | 200（`{ ok: false, error }`） | `INVALID_INPUT`、`NOT_OWNER`、`NOT_FOUND`、`CONFLICT`、`INSUFFICIENT_COINS`、`CELL_OCCUPIED`、`AREA_ALREADY_UNLOCKED`など全ゲームルール系コード |
+| JWT不正・権限不足・DB障害などRPC外側の失敗 | 非2xx | `UNAUTHENTICATED`、`INTERNAL_ERROR` |
+
+フロントエンドのServiceは、RPC呼び出しが例外的な非2xxを返した場合も`ApiResult`へ正規化する。HTTP statusも厳密に統一する必要が生じた場合は、更新APIをEdge Functionで包む別Phaseとする。
 
 内部SQL、token、外部APIの生レスポンス、stackを`message`や`details`に含めない（`BE確定`: §10）。
 
@@ -506,7 +525,7 @@ requestIdはUUIDとし、クライアントが生成する。タイムアウト�
 - 正式な建物codeと暫定価格が決まっている。
 - ランキングの順序、同率、ページサイズ、cursor変換が決まっている。
 - 道路一括配置と土地開放の暫定ルールが決まっている。
-- 建物名変更と`getDashboard()`を実装しないことが決まっている。
+- 建物名変更(`renameBuilding`)を実装し、`getDashboard()`は実装しないことが決まっている。
 - 確定事項と仮決定の根拠が区別されている。
 
 次の実装フェーズでは、本書を契約としてSupabase Serviceを作成する。実DBに既に異なる物理名が存在する場合は、コードだけで吸収せず、本書の仮決定を更新してから実装する。

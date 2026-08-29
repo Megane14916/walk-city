@@ -23,6 +23,7 @@
 | 公開 RPC | `place_road_line` | 実装済み | Phase 0 の envelopeと通常道路の原子性へ改修。橋拡張は維持 |
 | 公開 RPC | `unlock_land` | 未実装 | 新規実装 |
 | 公開 RPC | `delete_road` | 実装済み | 現行フロント・川橋仕様の追加契約として維持し、envelopeを統一 |
+| 公開 RPC | `rename_building` | 未実装 | [建物詳細・表示名変更API設計書.md](./建物詳細・表示名変更API設計書.md)の契約で新規実装 |
 | 内部 DB Function | `private.initialize_user` | 未実装 | `initialize-user` からのみ呼ぶ原子的初期化処理として新規実装 |
 | 内部 DB Function | `public.sync_step_rewards` | 実装済み | 商業施設ボーナス、設定、戻り値、冪等性を改修。`service_role` のみ実行可 |
 | 内部 DB Function | `private.recalculate_town_population` | 未実装 | 人口計算を一か所へ集約して新規実装 |
@@ -34,7 +35,7 @@
 - `public_town_details_view`
 - `population_ranking_view`
 
-`rename_building` と `getDashboard()` は Phase 0 契約どおり実装しない。
+`rename_building` は Phase 0 契約の改訂により実装対象へ変更された。`getDashboard()` は Phase 0 契約どおり実装しない。
 
 ## 2. 現在のコード調査結果
 
@@ -78,7 +79,7 @@ Phase 0 は「Googleログイン時にログイン用scopeと歩数scopeを同�
 | 矛盾 | 現行コード | 採用方針 |
 |---|---|---|
 | 建物code | seed/testは`house-small`等 | `small_house`、`small_park`、`commercial`、`town_hall`へ移行 |
-| 建物名変更 | `custom_name`列が後続migrationで追加済み | APIは実装せず、View/RPCの`customName`は常に`null`。列の物理削除は別cleanup |
+| 建物名変更 | `custom_name`列が後続migrationで追加済み | APIを実装する。`rename_building` RPCを追加し、View/RPCの`customName`は実値を返す |
 | RPCレスポンス | 裸のJSONを返す | `{ ok: true, data }` / `{ ok: false, error }`へ統一 |
 | 歩数同期名 | `health_steps_fetch` | 公開名を`sync-health-steps`に統一 |
 | 歩数同期入力 | 日付範囲・timezoneを受ける | 公開入力は空オブジェクト。本人、対象日、`Asia/Tokyo`をサーバーで決定 |
@@ -130,16 +131,16 @@ PostgRESTのDB RPCは、期待されるゲームエラーをJSON envelopeとし�
 - JWT不正、権限不足、DB障害などRPC外側の失敗:非2xx。フロントServiceが`ApiResult`へ正規化
 - HTTP statusも厳密に統一する必要が生じた場合は、更新APIをEdge Functionで包む別Phaseとする
 
-#### `security_invoker` View と「公開Viewだけ」の両立
+#### `security_invoker` View と「公開Viewだけ」の両立（確定）
 
 `security_invoker = true` のViewは呼出ユーザーの基礎テーブル権限とRLSを使う。公開街を読ませるために基礎行の公開列へ権限を与えると、その公開列は直接Queryも可能になる。
 
-Phase 0 の情報秘匿を優先し、初期実装では次を採用する。
+`security_invoker = true` を継続することを確定する。公開用SECURITY DEFINER関数への切り替えは行わない。
 
 - `coins`、歩数、Health、台帳は列権限とRLSの両方で非公開にする。
 - 公開街用の列だけを認証ユーザーへ読取可能にする。
-- フロントの正式経路は`public_town_details_view`に限定する。
-- 「物理的にもView以外の直接Queryを禁止」が必須なら、`security_invoker`仮決定を更新し、公開用SECURITY DEFINER関数へ変更する。
+- フロントの正式経路は`public_town_details_view`に限定するが、認証ユーザーが基礎テーブルの公開列を直接Queryできてしまうこと自体は許容する（非公開列は列権限とRLSで到達できないため、情報漏えいは発生しない）。
+- コンポーネント・モックはViewだけを経由し、直接Queryへの依存を作らない運用で秘匿性を担保する。
 
 ## 4. Edge Function 実装仕様
 
@@ -318,8 +319,7 @@ Phase 0当初の一覧にはないが、現行フロントと最新バックエ�
 `private.recalculate_town_population(p_town_id uuid)`へ集約する。
 
 - `population_flat`だけを対象に配置数×効果値を集計する。
-- `small_house +10`、`apartment +50`、`farm +5`を設定データから計算する。
-- `town_hall`の`residential_population_bonus`は保存しても、仕様確定まで計算しない。
+- `small_house +10`、`apartment +50`を設定データから計算する。`farm`、`town_hall`に人口効果はない。
 - 未知のeffect typeを暗黙実行しない。
 - `place_building`、`move_building`、`place_road_line`から呼ぶ。
 
@@ -337,6 +337,28 @@ Phase 0当初の一覧にはないが、現行フロントと最新バックエ�
 - 基本報酬、各ボーナス、town残高を同一トランザクションで更新する。
 - 結果に`newlyRewardedSteps`と`appliedBonuses`を含める。
 
+### 5.9 `rename_building`
+
+[建物詳細・表示名変更API設計書.md](./建物詳細・表示名変更API設計書.md) §5の契約をそのまま採用する新規RPC。
+
+引数:
+
+```sql
+rename_building(p_building_id uuid, p_custom_name text)
+```
+
+処理:
+
+1. JWTから認証ユーザーを特定する。
+2. `building_id`を検証し、対象建物と所属する街をロックして取得する。
+3. 認証ユーザーが街の所有者であることを確認する（`NOT_OWNER`）。
+4. `p_custom_name`が文字列の場合、前後空白を除去し1〜30 Unicodeコードポイント・制御文字なしを検証する（`INVALID_INPUT`）。
+5. カタログ初期名と同じ、または`p_custom_name`が`null`の場合は`custom_name = NULL`にする。
+6. `custom_name`と`placed_buildings.updated_at`だけを更新する。
+7. 更新後の`PlacedBuilding`を返す。
+
+コイン残高、人口、コイン台帳、建物種類、配置座標、建物効果、作成日時は変更しない。同じ値を設定する操作のため、専用の`requestId`と冪等性台帳は追加しない。
+
 ## 6. View、RLS、カタログの前提実装
 
 ### 6.1 View
@@ -352,14 +374,14 @@ Phase 0当初の一覧にはないが、現行フロントと最新バックエ�
 - `owner_id = auth.uid()`の1行だけ。
 - coinsを含む。
 - buildings、unlocked_areasをJSON集約する。
-- `custom_name`は物理列の値に関係なく`null`を返す。
+- `custom_name`の実値を`customName`として返す。
 - 有効カタログの最大`catalog_version`を返す。
 
 #### `public_town_details_view`
 
 - userId、displayName、town公開項目、buildings、unlockedAreasだけを返す。
 - coins、email、歩数、Health、台帳を列定義に含めない。
-- `custom_name`は`null`。
+- `custom_name`の実値を`customName`として返す（公開情報として扱う。[建物詳細・表示名変更API設計書.md](./建物詳細・表示名変更API設計書.md) §3.3）。
 
 #### `population_ranking_view`
 
@@ -389,9 +411,9 @@ Phase 0の9商品へseedを修正する。
 | `small_park` | 150 | なし |
 | `hospital` | 600 | なし |
 | `commercial` | 300 | `step_coin_bonus_flat +50` |
-| `farm` | 100 | `population_flat +5` |
+| `farm` | 100 | なし |
 | `road` | 0 | `enables_adjacent_construction` |
-| `town_hall` | 3000 | 効果データは保持、計算無効 |
+| `town_hall` | 3000 | なし |
 | `factory` | 700 | なし |
 
 ## 7. 実装フェーズと順序
@@ -414,6 +436,7 @@ Phase 0の9商品へseedを修正する。
 4. `place_road_line`を改修する。
 5. `unlock_land`を新規実装する。
 6. `delete_road`を共通契約へ合わせる。
+7. `rename_building`を新規実装する。
 
 完了条件: 各操作の成功、失敗、再送、同時実行で部分更新と二重消費がない。
 
@@ -478,13 +501,14 @@ Phase 0の9商品へseedを修正する。
 
 ## 9. 決定ゲート
 
-次の3点だけは、該当Phase開始前に明文化が必要である。
+次の2点だけは、該当Phase開始前に明文化が必要である。
 
 | 決定 | 期限 | 未決定時の影響 |
 |---|---|---|
 | 歩数の基本変換率、端数、日次上限 | Phase D前 | 現行SQLは未設定時rate=0で、歩いても基本報酬が付かない |
 | Google OAuth code/refresh tokenをEFへ渡す具体フロー | Phase D前 | 一体型ログインだけではサーバー側token保管を完了できない |
-| 公開View以外の公開列直接Queryも禁止するか | Phase A前 | `security_invoker`継続か公開用関数へ変更するかが変わる |
+
+`security_invoker` Viewの継続は確定済み（§3.2）。公開用SECURITY DEFINER関数への切り替えは行わない。
 
 その他は Phase 0 の仮決定を使って実装を開始できる。
 
@@ -524,7 +548,7 @@ supabase/
 ## 11. 完了条件
 
 - `supabase db reset`が成功し、seedを含めて再現可能。
-- 必須4 View、Phase 0の公開4 RPC、追加契約の`delete_road`、公開2 EFが物理名どおり存在する。
+- 必須4 View、Phase 0の公開4 RPC、追加契約の`delete_road`と`rename_building`、公開2 EFが物理名どおり存在する。
 - 全RPC/EFが共通envelopeを返す。
 - JWTとRLSにより他人の非公開データへ到達できない。
 - 初期1000コイン、購入、土地開放、歩数報酬が必ず台帳と残高で一致する。

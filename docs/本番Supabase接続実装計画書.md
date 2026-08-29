@@ -10,7 +10,7 @@
 
 ## 1. 目的
 
-モックで完成している街表示・街編集・ランキング・ユーザーページを本番 Supabase へ接続し、`VITE_API_MODE=supabase` で主要機能を一貫して動作させる。
+モックで完成している街表示・街編集・ランキングを本番 Supabase へ接続し、`VITE_API_MODE=supabase` で主要機能を一貫して動作させる。（`/users/:userId` ユーザーページは[ユーザーページDesignDoc.md](./ユーザーページDesignDoc.md)の決定により実装しない）
 
 本計画では、フロントエンドに不足している Town / Ranking の Supabase Service、Provider への接続、レスポンス検証、エラー変換、デプロイ設定、契約テストを実装対象とする。
 
@@ -113,12 +113,12 @@ Providerへの統合は完了しているが、`createUnavailableSupabaseRanking
 
 ### 4.4 正式 API 契約と現行 UI に差がある
 
-- `placeRoadLine()` は現行 UI とモックにあるが、`API計画書.md` の正式な街編集 API にない。
+- `placeRoadLine()` は現行 UI とモックにあり、`API計画書.md` §9 の正式な街編集 API として実装対象に確定済みである（[本番Supabase接続Phase0契約決定書.md](./本番Supabase接続Phase0契約決定書.md) §3.1）。
 - `unlockLand()` は現行 UI とモックにあるが、`API計画書.md` では予約扱いである。
-- `unlockLand()` の入力も、文書の `areaId` と実装の `{ x, y, requestId }` で一致しない。
-- `renameBuilding()` は追加設計書にあるが、バックエンドの `custom_name` 列と更新 RPC が必要である。
+- `unlockLand()` の入力は `{ x, y, requestId }`（座標ベース）に統一した（[API計画書.md](./API計画書.md) §9、[本番Supabase接続Phase0契約決定書.md](./本番Supabase接続Phase0契約決定書.md) §7.4）。
+- `renameBuilding()` は追加設計書にあり、`custom_name` 列は既に追加済みである。更新用の `rename_building` RPC の実装を待つ（[Supabaseバックエンド実装計画書.md](./Supabaseバックエンド実装計画書.md) §5.9）。
 
-道路一括配置を複数回の `placeBuilding()` に分解すると原子性と冪等性を失うため行わない。正式な原子 RPC がない操作は、本番では非表示または無効にする。
+道路一括配置を複数回の `placeBuilding()` に分解すると原子性と冪等性を失うため行わない。`placeRoadLine()` は実装対象として確定しているため本番へ接続する。`unlockLand()` など、正式な原子 RPC がまだ確定していない操作は、本番では非表示または無効にする。
 
 ### 4.5 日次歩数のタイムゾーンが暫定値のまま
 
@@ -151,7 +151,8 @@ Providerへの統合は完了しているが、`createUnavailableSupabaseRanking
 3. 更新 API
    - `placeBuilding(input)`
    - `moveBuilding(input)`
-   - 採用する場合のみ `placeRoadLine(input)`、`renameBuilding(input)`、`unlockLand(input)`
+   - `placeRoadLine(input)`、`renameBuilding(input)`（採用確定）
+   - 採用する場合のみ `unlockLand(input)`
 4. レスポンス
    - `ApiResult<T>` envelope の有無
    - DB の `snake_case` をどの層で `camelCase` にするか
@@ -212,7 +213,7 @@ type ApiServices = {
 1. 第5章の契約をバックエンド担当とレビューする。
 2. 実 API の成功・主要エラーの request / response fixture を受け取る。
 3. 正式な building type code を確定する。
-4. `placeRoadLine()`、`renameBuilding()`、`unlockLand()` の今回スコープを決める。
+4. `placeRoadLine()`、`renameBuilding()` は実装対象として確定済み。`unlockLand()` の今回スコープを決める。
 5. スコープ外の操作はSupabaseモードのUIで非表示または無効にする方法を決める。
 6. `getDashboard()` を使用しない方針を関連文書へ反映する。
 
@@ -252,7 +253,7 @@ type ApiServices = {
 - `frontend/src/features/town/services/index.ts`（新規）
 - `frontend/src/app/providers/create-api-services.ts`
 
-完了条件: Supabaseモードで `/`、`/town/:userId`、`/users/:userId` が実データを表示する。
+完了条件: Supabaseモードで `/`、`/town/:userId` が実データを表示する。
 
 ### Phase 3: 固定10商品UIと本番カタログの接続
 
@@ -299,11 +300,11 @@ type ApiServices = {
 
 ### Phase 6: 追加の街更新 API
 
-Phase 0 で採用された操作だけを実装する。
+`renameBuilding()`、`placeRoadLine()` は実装対象として確定済み。`unlockLand()` はPhase 0で採用が決まった場合だけ実装する。
 
-1. `renameBuilding()` を採用する場合、`custom_name` と所有権検証を持つ RPC へ接続する。
-2. `placeRoadLine()` を採用する場合、全道路セルを単一トランザクション・単一 `requestId` で処理する RPC へ接続する。
-3. `unlockLand()` を採用する場合、`areaId` または座標のどちらかに契約を統一してから接続する。
+1. `renameBuilding()` の `custom_name` と所有権検証を持つ RPC へ接続する。
+2. `placeRoadLine()` の全道路セルを単一トランザクション・単一 `requestId` で処理する RPC へ接続する。
+3. `unlockLand()` を採用する場合、`{ x, y, requestId }` の座標ベース契約で接続する。
 4. 未採用の操作はSupabaseモードで表示しない。
 5. モックと本番の公開 interface を一致させる。
 
@@ -343,7 +344,7 @@ Phase 0 で採用された操作だけを実装する。
 1. 新規ログインで profile と town が一度だけ作成される。
 2. リロード後にセッションと自分の街が復元される。
 3. 街、カタログ、ランキングが実データで表示される。
-4. 他ユーザーの街とユーザーページを閲覧できる。
+4. 他ユーザーの街を `/town/:userId` で閲覧できる。
 5. 公開レスポンスに coins、email、歩数、Health 情報が含まれない。
 6. 歩数同期の再実行でコインが二重付与されない。
 7. 建物配置と移動ができる。
@@ -366,13 +367,14 @@ Phase 0 で採用された操作だけを実装する。
 | P0 | Phase 0 契約確定 | 物理名、code、未確定操作を推測すると手戻りが発生する |
 | P0 | Phase 1 通信基盤・本番fail-closed | 不正レスポンスとモック誤起動を先に防ぐ |
 | P0 | Phase 2 `getBuildingCatalog()` / `getMyTown()` | トップ画面表示に両方必要 |
-| P1 | Phase 2 `getPublicTown()` | 公開街とユーザーページを本番化する |
+| P1 | Phase 2 `getPublicTown()` | 公開街を本番化する |
 | P1 | Phase 3 カタログ表示統一 | 価格と効果のハードコードを解消する |
 | P1 | Phase 4 `placeBuilding()` / `moveBuilding()` | 実装済み街編集UIを本番へ接続する |
 | P1 | Phase 5 `getPopulationRanking()` | 人口変動を実ランキングへ反映する |
 | P1 | Phase 7 日次歩数のタイムゾーン統一 | Dashboardなしで暫定処理を解消する |
-| P2 | Phase 6 `renameBuilding()` | バックエンド列・RPCの準備後に接続する |
-| 保留 | `placeRoadLine()` / `unlockLand()` | 上位契約とバックエンド実装が確定するまで本番では無効化する |
+| P2 | Phase 6 `renameBuilding()` | バックエンド RPC の準備後に接続する（列は追加済み） |
+| P2 | Phase 6 `placeRoadLine()` | 実装対象として確定済み。バックエンド RPC の準備後に接続する |
+| 保留 | `unlockLand()` | 上位契約とバックエンド実装が確定するまで本番では無効化する |
 
 `getDashboard()` は優先度表に含めず、実装しない。
 
@@ -380,7 +382,7 @@ Phase 0 で採用された操作だけを実装する。
 
 - `getDashboard()` や `DashboardApi` を追加していない。
 - 関連文書から `getDashboard()` をフロントエンド必須 API とする記述が整理されている。
-- Supabaseモードで `/`、`/town/:userId`、`/users/:userId`、`/ranking` が実データを表示する。
+- Supabaseモードで `/`、`/town/:userId`、`/ranking` が実データを表示する。
 - `createUnavailableSupabaseTownApi()` と `createUnavailableSupabaseRankingApi()` が実 Service に置き換わっている。
 - Page / Component が mock 実装を直接 import していない状態を維持している。
 - マーケットの価格、サイズ、効果、有効状態が API カタログを正としている。

@@ -75,7 +75,7 @@ POST https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyR
 
 - クライアントシークレットは Supabase Secrets に保存する。
 - 認可コードとトークンの交換は Edge Function が行う。
-- 更新トークンはサーバー側で暗号化して保存する。
+- 更新トークンは暗号化した上で、Data API から到達できない `private` スキーマのテーブル（`private.health_tokens`）へ保存する。暗号鍵は Supabase EF Secrets に保存する。
 - Google Health API は Edge Function から呼び出す。
 - フロントエンドへ返すのは接続状態、同期日時、正規化した歩数だけとする。
 
@@ -170,7 +170,7 @@ supabase.auth.signInWithOAuth({
 4. `error` がある場合は安全なエラーコードを付けてフロントエンドへ戻す。
 5. `code` を Google Token Endpoint へ送り、トークンと交換する。
 6. 付与されたスコープに必須スコープが含まれることを確認する。
-7. 更新トークンを暗号化して `health_connections` へ保存する。
+7. 更新トークンを暗号化して `private.health_tokens` へ保存し、`health_connections` の接続状態（`status`、`scopes`、`connected_at`）を更新する。
 8. 接続成功ページへリダイレクトする。
 
 Callback では、リクエストの Cookie だけに依存してユーザーを決定しない。保存済み `state` と開始時の認証ユーザーを結び付ける。
@@ -197,7 +197,7 @@ type GoogleHealthConnectionStatus =
 `sync-health-steps` Edge Function の処理:
 
 1. Supabase JWT からユーザーを決定する。
-2. `health_connections` から暗号化された認可情報を取得する。
+2. `health_connections` から接続状態を確認し、`private.health_tokens` から暗号化された更新トークンを取得する。
 3. 更新トークンから有効なアクセストークンを取得する。
 4. 対象日とタイムゾーンから civil time の閉開区間を作る。
 5. Google Health API の `steps:dailyRollUp` を呼ぶ。
@@ -314,6 +314,7 @@ sequenceDiagram
 erDiagram
     AUTH_USER ||--|| PROFILE : has
     AUTH_USER ||--o| HEALTH_CONNECTION : authorizes
+    AUTH_USER ||--o| HEALTH_TOKEN : stores
     AUTH_USER ||--o{ OAUTH_STATE : starts
     AUTH_USER ||--o{ DAILY_STEP_RECORD : records
 
@@ -326,11 +327,15 @@ erDiagram
     HEALTH_CONNECTION {
       uuid user_id PK
       text provider
-      text encrypted_refresh_token
       text scopes
       text status
       timestamptz connected_at
       timestamptz last_synced_at
+      timestamptz updated_at
+    }
+    HEALTH_TOKEN {
+      uuid user_id PK
+      text encrypted_refresh_token
       timestamptz updated_at
     }
     OAUTH_STATE {
@@ -352,7 +357,9 @@ erDiagram
     }
 ```
 
-`health_connections` は通常のユーザー向け Data API から直接読み書きできないようにする。更新トークン列は RLS だけに依存せず、アプリケーションレベルでも暗号化する。
+`health_connections` は公開スキーマの接続状態テーブルで、`status`、`scopes`、`connected_at`、`last_synced_at`だけを持ち、更新トークンを含めない。更新トークン本体は`private.health_tokens`（非公開スキーマ）に暗号化して保存し、Data
+APIから`anon` / `authenticated`ロールでは読み書きできないようにする。読み書きはEdge Functionが呼び出すSECURITY
+DEFINER関数だけに限定し、RLSだけに依存せずアプリケーションレベルでも暗号化する。暗号鍵はSupabase EF Secretsに保存する。
 
 ## 8. アプリケーション API スキーマ
 
@@ -500,7 +507,7 @@ api.setSteps('2026-08-25', 12345)
 - Client Secret、Access Token、Refresh Token を Git、ブラウザ、URL、ログへ出さない。
 - Health のスコープは歩数読み取り専用だけに限定する。
 - 更新トークンは暗号化し、Edge Function 以外から読み取れないようにする。
-- Supabase JWT のユーザーと `health_connections.user_id` を必ず一致させる。
+- Supabase JWT のユーザーと `health_connections.user_id` / `private.health_tokens.user_id` を必ず一致させる。
 - Google API 応答をスキーマ検証し、歩数値を信用して直接DBへ書かない。
 - OAuth Callback のエラーをそのまま画面へ表示せず、安定した内部エラーコードへ変換する。
 - トークンを含む可能性がある HTTP ヘッダー・本文を監視ログへ残さない。
@@ -553,7 +560,7 @@ Google公式資料では、未確認の新規OAuthクライアントはテスト
 
 1. 本書のモック API を使ったログイン・Health 接続 UI
 2. Supabase Google Provider とセッション復元
-3. `oauth_states`、`health_connections` の migration と RLS
+3. `oauth_states`、`health_connections`、`private.health_tokens` の migration と RLS
 4. `begin-google-health-auth` と Callback Edge Function
 5. `steps:dailyRollUp` を使う歩数取得アダプター
 6. 既存 `sync-health-steps` の差分精算との接続
