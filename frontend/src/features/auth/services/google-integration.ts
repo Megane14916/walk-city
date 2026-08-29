@@ -5,6 +5,7 @@ import type { DailySteps, GetDailyStepsInput } from '../../health/types'
 import type { GoogleIntegrationApi } from '../api'
 import type {
   GoogleIntegrationState,
+  InitializeUserResult,
   StartGoogleHealthConnectionResult,
 } from '../types'
 
@@ -13,6 +14,7 @@ export type GoogleIntegrationFunctionNames = {
   startHealthConnection: string
   disconnectHealth: string
   getDailySteps: string
+  initializeUser: string
 }
 
 export type SupabaseGoogleIntegrationApiOptions = {
@@ -25,6 +27,7 @@ const DEFAULT_FUNCTION_NAMES: GoogleIntegrationFunctionNames = {
   startHealthConnection: 'begin-google-health-auth',
   disconnectHealth: 'disconnect-google-health',
   getDailySteps: 'get-daily-steps',
+  initializeUser: 'initialize-user',
 }
 
 const API_ERROR_CODES = new Set<ApiErrorCode>([
@@ -142,6 +145,15 @@ function isDailySteps(value: unknown): value is DailySteps {
   )
 }
 
+function isInitializeUserResult(value: unknown): value is InitializeUserResult {
+  return (
+    isRecord(value) &&
+    typeof value.profileId === 'string' &&
+    typeof value.townId === 'string' &&
+    typeof value.created === 'boolean'
+  )
+}
+
 function parseFunctionResult<T>(
   value: unknown,
   isData: (data: unknown) => data is T,
@@ -241,6 +253,14 @@ export function createSupabaseGoogleIntegrationApi(
       const { error } = await supabase.auth.signOut()
       if (error) return failure('INTERNAL_ERROR')
       return success({ session: null, healthConnection: null })
+    },
+
+    async initializeUser() {
+      return invoke(
+        functionNames.initializeUser,
+        isInitializeUserResult,
+        'INTERNAL_ERROR',
+      )
     },
 
     async startGoogleHealthConnection() {

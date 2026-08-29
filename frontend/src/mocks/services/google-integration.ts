@@ -7,6 +7,7 @@ import type {
   GoogleHealthConnection,
   GoogleIntegrationErrorCode,
   GoogleIntegrationState,
+  InitializeUserResult,
   StartGoogleHealthConnectionResult,
 } from '../../features/auth/types'
 import type { DailySteps, GetDailyStepsInput } from '../../features/health/types'
@@ -18,6 +19,7 @@ export type MockGoogleOperation =
   | 'getGoogleIntegrationState'
   | 'signInWithGoogle'
   | 'signOut'
+  | 'initializeUser'
   | 'startGoogleHealthConnection'
   | 'disconnectGoogleHealth'
   | 'getDailySteps'
@@ -184,6 +186,19 @@ export function createMockGoogleIntegrationApi(
       signedIn = false
       notifyAuthChange()
       return success(state())
+    },
+
+    async initializeUser() {
+      await wait()
+      const failed = configuredFailure<InitializeUserResult>('initializeUser')
+      if (failed) return failed
+      if (!signedIn) return failure('UNAUTHENTICATED')
+
+      return success({
+        profileId: MOCK_AUTH_USER.id,
+        townId: '20000000-0000-4000-8000-000000000001',
+        created: false,
+      })
     },
 
     subscribeToAuthChanges(listener) {

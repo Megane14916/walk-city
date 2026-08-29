@@ -54,6 +54,24 @@ describe('createSupabaseGoogleIntegrationApi', () => {
     })
   })
 
+  it('initializes the authenticated user with an empty request body', async () => {
+    const response = {
+      profileId: '10000000-0000-4000-8000-000000000001',
+      townId: '20000000-0000-4000-8000-000000000001',
+      created: true,
+    }
+    const { client, invoke } = createClientDouble({
+      functionData: { ok: true, data: response },
+    })
+    const api = createSupabaseGoogleIntegrationApi(client)
+
+    await expect(api.initializeUser()).resolves.toEqual({
+      ok: true,
+      data: response,
+    })
+    expect(invoke).toHaveBeenCalledWith('initialize-user', { body: {} })
+  })
+
   it('rejects an invalid Edge Function response', async () => {
     const { client } = createClientDouble({ functionData: { token: 'secret' } })
     const api = createSupabaseGoogleIntegrationApi(client)

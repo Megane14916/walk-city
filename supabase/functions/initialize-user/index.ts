@@ -71,7 +71,7 @@ export default {
         }>;
       };
 
-      const { data, error } = await supabaseAdmin.rpc("private.initialize_user", {
+      const { data, error } = await supabaseAdmin.rpc("initialize_user", {
         p_user_id: userId,
       });
 
