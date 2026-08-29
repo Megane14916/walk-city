@@ -163,20 +163,19 @@ Map 座標は左上を原点 `(0, 0)` とし、`x` は右、`y` は下へ増加�
 - 建物の回転・削除・売却
 - 土地開放の確定 UI
 - 障害物のゲームルール
-- 道路隣接の独自判定
 - 建物価格や歩数報酬式のハードコード
-- 役所効果の適用範囲・重複計算
-- 商業施設・工場のボーナス計算
+- 商業施設のボーナス計算
 
 ## 3. 画面一覧
 
 | Page | URL | 役割 | 主な取得データ | 主な操作 |
 |---|---|---|---|---|
 | `LoginPage` | `/login` | Google ログインと認証状態の表示 | 認証・Health 連携状態 | Google ログイン開始 |
-| `TownPage`（自分） | `/` | 自分の街、ダッシュボード、街編集 | Dashboard、自分の Town、カタログ | 歩数同期、Health 連携、配置、移動 |
-| `TownPage`（訪問） | `/town/:userId` | 他ユーザーの街の閲覧 | 公開 Town、必要なカタログ | パン、ズーム、ユーザーページへ遷移 |
+| `TownPage`（自分） | `/` | 自分の街、ダッシュボード、街編集 | 自分の Town、カタログ、日次歩数、Health 接続状態 | 歩数同期、Health 連携、配置、移動 |
+| `TownPage`（訪問） | `/town/:userId` | 他ユーザーの街の閲覧 | 公開 Town、必要なカタログ | パン、ズーム |
 | `RankingPage` | `/ranking` | 人口ランキング | RankingPage | 追加取得、ユーザー選択 |
-| `UserPage` | `/users/:userId` | 対象ユーザーの公開情報と街への導線 | 公開 API で取得可能な User / Town 要約 | 対象ユーザーの街を訪問 |
+
+`/users/:userId`（`UserPage`）は実装しない。対象ユーザーの街を確認する手段は `/town/:userId` に一本化する（[ユーザーページDesignDoc.md](./ユーザーページDesignDoc.md)）。
 
 ### 3.1 `LoginPage`
 
@@ -205,15 +204,9 @@ PC では Map とショップを横並び、スマートフォンでは Map の�
 
 ### 3.4 `RankingPage`
 
-初回取得、空状態、追加取得中、追加取得失敗を別々に表示する。`nextCursor` が `null` の場合は追加取得を終了する。各項目はユーザーページ `/users/:userId` へ遷移でき、自分の項目は `isCurrentUser` を用いて視覚的・テキスト的に識別する。
+初回取得、空状態、追加取得中、追加取得失敗を別々に表示する。`nextCursor` が `null` の場合は追加取得を終了する。各項目は `/town/:userId` へ遷移でき、自分の項目は `isCurrentUser` を用いて視覚的・テキスト的に識別する。
 
 同率順位、1回の取得上限、カーソル形式は API 仕様確定まで画面側で仮定しない。
-
-### 3.5 `UserPage`
-
-初期版では、公開 API から取得できる表示名、街名、人口などの要約と「街を訪問」導線を表示する。プロフィールの追加項目は仕様・API が確定してから拡張する。専用 API が未定の間、取得可能な公開街データから表示できる範囲を超えて、フロントエンド独自のプロフィールデータを作らない。
-
-対象が存在しない場合は `ErrorMessage` で案内し、ランキングへ戻る導線を提供する。
 
 ## 4. ルーティング設計
 
@@ -225,7 +218,6 @@ PC では Map とショップを横並び、スマートフォンでは Map の�
 | `/login` | `LoginPage` | 不要 | `guest` | 認証済みなら `/` へ置換遷移 |
 | `/town/:userId` | `TownPage` | 必須 | `public` | 他ユーザーの街。自分の ID なら `/` へ置換遷移 |
 | `/ranking` | `RankingPage` | 必須 | `ranking` | 全ユーザー人口ランキング |
-| `/users/:userId` | `UserPage` | 必須 | `publicUser` | ユーザーページ |
 
 初期版ではゲーム画面を認証必須とする。「公開街」は他ユーザーへ公開してよいデータ範囲を意味し、匿名公開を意味しない。匿名閲覧を追加する場合は RLS、API、ルートガードを同時に見直す。
 
@@ -296,10 +288,9 @@ Google 認証設計で使用する `/auth/callback` は、ユーザー向け画�
 - Health 連携完了またはスキップ: `/` へ `replace`
 - ログアウト成功: `/login` へ `replace`
 - 認証切れ: 編集・同期を停止し `/login` へ誘導
-- ランキング項目選択: `/users/:userId`
-- ユーザーページの「街を訪問」: `/town/:userId`
+- ランキング項目選択: `/town/:userId`
 - 他ユーザー街で自分の `userId` を検出: `/` へ `replace`
-- 存在しないユーザー・街: URL は維持し、ページ内エラーと戻る導線を表示
+- 存在しない街: URL は維持し、ページ内エラーと戻る導線を表示
 
 ## 5. ディレクトリ構成
 
@@ -313,8 +304,7 @@ frontend/src/
 │   │   ├── AuthCallbackPage.tsx
 │   │   ├── HealthConnectionPage.tsx
 │   │   ├── TownPage.tsx
-│   │   ├── RankingPage.tsx
-│   │   └── UserPage.tsx
+│   │   └── RankingPage.tsx
 │   │
 │   ├── router.tsx
 │   ├── App.tsx
@@ -598,7 +588,7 @@ type ApiResult<T> =
 | Service | 主な関数 | 通信先 |
 |---|---|---|
 | `auth` | `getGoogleIntegrationState`, `signInWithGoogle`, `signOut`, `startGoogleHealthConnection`, `disconnectGoogleHealth` | Supabase Auth / Edge Function |
-| `health` | `getDashboard`, `syncSteps` | View / Query、`sync-health-steps` Edge Function |
+| `health` | `getDailySteps`, `syncSteps` | View / Query、`sync-health-steps` Edge Function |
 | `town` | `getBuildingCatalog`, `getMyTown`, `getPublicTown`, `placeBuilding`, `moveBuilding` | Query / View / RPC |
 | `ranking` | `getPopulationRanking` | View / RPC |
 
@@ -624,7 +614,7 @@ type QueryState<T> = {
 
 | 操作 | 成功時 | 失敗・競合時 |
 |---|---|---|
-| `syncSteps()` | `StepSyncStatus` の歩数・残高・同期日時を反映し、必要なら Dashboard を再取得 | 推測更新しない。再試行を表示 |
+| `syncSteps()` | `StepSyncStatus` の歩数・残高・同期日時を反映し、必要なら自分の Town を再取得 | 推測更新しない。再試行を表示 |
 | `placeBuilding()` | 返却された建物・残高・人口を反映し、必要なら自分の街を再取得 | プレビューを維持。`CONFLICT` 等では街を再取得 |
 | `moveBuilding()` | 返却された建物座標・人口を反映し、必要なら自分の街を再取得 | 元データを維持。結果不明なら同じ `requestId` で再送または再取得 |
 | Health 連携・解除 | 接続状態を再取得 | 接続済みと推測しない |
@@ -656,7 +646,7 @@ type QueryState<T> = {
 
 ```text
 ['auth', 'integration-state']
-['dashboard', currentUserId]
+['daily-steps', currentUserId, date]
 ['town', 'self', currentUserId]
 ['town', 'public', userId]
 ['building-catalog', catalogVersion?]
@@ -698,7 +688,7 @@ type AuthState =
 3. Google / Supabase の OAuth が完了し、アプリへ戻る。
 4. Auth Provider がセッションを復元する。
 5. バックエンドが初回ユーザーの `profiles` と `towns` を冪等に作成する。
-6. フロントエンドは `/` へ置換遷移し、Dashboard と自分の街を取得する。
+6. フロントエンドは `/` へ置換遷移し、自分の街とカタログを取得する。
 
 ログイン時に要求するのは本人識別に必要なスコープに限定し、Health の歩数読み取りスコープを混ぜない。ログイン開始中はボタンを無効化する。
 
@@ -794,7 +784,7 @@ API 契約のフィールド名を UI 内で別名へ無秩序に変換しない
 
 ### 10.4 API 関数
 
-- 読み取り: `get` + 対象名 (`getDashboard`, `getPublicTown`)
+- 読み取り: `get` + 対象名 (`getMyTown`, `getPublicTown`)
 - 更新: 動詞 + 対象名 (`placeBuilding`, `moveBuilding`, `syncSteps`)
 - 認証開始: `signInWithGoogle`
 - セッション終了: `signOut`
