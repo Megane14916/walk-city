@@ -26,7 +26,7 @@ const DEFAULT_FUNCTION_NAMES: GoogleIntegrationFunctionNames = {
   getState: 'get-google-integration-state',
   startHealthConnection: 'begin-google-health-auth',
   disconnectHealth: 'disconnect-google-health',
-  getDailySteps: 'get-daily-steps',
+  getDailySteps: 'sync-health-steps',
   initializeUser: 'initialize-user',
 }
 
@@ -132,15 +132,19 @@ function isStartGoogleHealthConnectionResult(
   return value.next === 'connected' && isGoogleIntegrationState(value.state)
 }
 
-function isDailySteps(value: unknown): value is DailySteps {
+type StepSyncDailyPayload = Pick<
+  DailySteps,
+  'date' | 'timezone' | 'steps' | 'syncedAt'
+>
+
+function isStepSyncDailyPayload(value: unknown): value is StepSyncDailyPayload {
   return (
     isRecord(value) &&
     typeof value.date === 'string' &&
-    typeof value.timezone === 'string' &&
+    value.timezone === 'Asia/Tokyo' &&
     typeof value.steps === 'number' &&
     Number.isSafeInteger(value.steps) &&
     value.steps >= 0 &&
-    value.source === 'google_health' &&
     typeof value.syncedAt === 'string'
   )
 }
@@ -280,12 +284,15 @@ export function createSupabaseGoogleIntegrationApi(
     },
 
     async getDailySteps(input: GetDailyStepsInput) {
-      return invoke(
+      if (input.timezone !== 'Asia/Tokyo') return failure('INVALID_INPUT')
+      const result = await invoke(
         functionNames.getDailySteps,
-        isDailySteps,
+        isStepSyncDailyPayload,
         'HEALTH_PROVIDER_ERROR',
-        input,
       )
+      return result.ok
+        ? success({ ...result.data, source: 'google_health' })
+        : result
     },
   }
 }

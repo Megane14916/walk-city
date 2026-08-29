@@ -220,6 +220,20 @@ describe('AppRoutes', () => {
     ).not.toBeNull()
   })
 
+  it('shows a safe error returned by the Health OAuth callback', async () => {
+    const api = createMockGoogleIntegrationApi({
+      latencyMs: 0,
+      initiallySignedIn: true,
+    })
+    renderRoute(`${paths.healthConnect}?health_error=OAUTH_STATE_MISMATCH`, api)
+
+    expect(
+      await screen.findByText(
+        '認証状態を確認できませんでした。もう一度お試しください。',
+      ),
+    ).not.toBeNull()
+  })
+
   it('shows a re-consent action when Health permission is required', async () => {
     const api = createMockGoogleIntegrationApi({
       latencyMs: 0,

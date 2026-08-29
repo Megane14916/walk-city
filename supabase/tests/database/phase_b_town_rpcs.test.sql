@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(32);
+select plan(35);
 
 select has_function('public', 'place_building', array['text', 'integer', 'integer', 'uuid'], 'place_building RPC exists');
 select has_function('public', 'move_building', array['uuid', 'integer', 'integer', 'uuid'], 'move_building RPC exists');
@@ -65,6 +65,15 @@ select is(
   'CONFLICT',
   'reusing a request ID with different input is rejected'
 );
+select is(
+  public.place_road_line(
+    'road', '[{"x":40,"y":44},{"x":40,"y":45}]'::jsonb,
+    'c0000000-0000-4000-8000-000000000009'
+  )->'error'->>'code',
+  'CELL_OCCUPIED',
+  'a new road request never skips an occupied cell'
+);
+select is((select count(*) from public.placed_buildings where building_type_code = 'road'), 2::bigint, 'occupied road rejection creates no partial line');
 
 insert into phase_b_results values (
   'house',
@@ -141,6 +150,11 @@ select is(
   public.unlock_land(55, 40, 'c0000000-0000-4000-8000-000000000007')->'error'->>'code',
   'INVALID_INPUT',
   'land coordinates must align to the 20-cell grid'
+);
+select is(
+  public.unlock_land(100, 40, 'c0000000-0000-4000-8000-00000000000a')->'error'->>'code',
+  'OUT_OF_MAP',
+  'land outside the 100 by 100 map is rejected explicitly'
 );
 select is((select count(*) from public.coin_ledger where reason = 'land_unlock'), 1::bigint, 'unlock idempotency writes one ledger row');
 

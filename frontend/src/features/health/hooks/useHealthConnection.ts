@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useApi } from '../../../app/providers'
 import { useAuth } from '../../auth/hooks'
 import type { GoogleHealthConnection } from '../../auth/types'
@@ -22,13 +23,27 @@ function todayInTokyo() {
 }
 
 export function useHealthConnection() {
+  const location = useLocation()
   const { googleIntegrationApi } = useApi()
   const { integrationState, refresh } = useAuth()
   const [today] = useState(todayInTokyo)
   const [dailySteps, setDailySteps] = useState<DailySteps | null>(null)
   const [pending, setPending] =
     useState<HealthConnectionPendingAction>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() => {
+    const code = new URLSearchParams(location.search).get('health_error')
+    if (code === 'OAUTH_CANCELLED') return 'Google認証がキャンセルされました。'
+    if (code === 'OAUTH_STATE_MISMATCH') {
+      return '認証状態を確認できませんでした。もう一度お試しください。'
+    }
+    if (code === 'HEALTH_PROVIDER_ERROR') {
+      return 'Google Healthとの通信に失敗しました。'
+    }
+    if (code === 'HEALTH_PERMISSION_REQUIRED') {
+      return '歩数を読み取る権限が必要です。'
+    }
+    return null
+  })
   const [notice, setNotice] = useState<string | null>(null)
   const connection = integrationState?.healthConnection ?? null
 

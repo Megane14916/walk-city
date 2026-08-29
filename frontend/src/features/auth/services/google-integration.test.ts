@@ -105,7 +105,10 @@ describe('createSupabaseGoogleIntegrationApi', () => {
           date: '2026-08-30',
           timezone: 'Asia/Tokyo',
           steps: 1234,
-          source: 'google_health',
+          newlyRewardedSteps: 1234,
+          coinsAwarded: 123,
+          coinBalance: 1123,
+          appliedBonuses: [],
           syncedAt: '2026-08-30T00:00:00.000Z',
         },
         error: null,
@@ -121,10 +124,7 @@ describe('createSupabaseGoogleIntegrationApi', () => {
       ['get-google-integration-state', { body: {} }],
       ['begin-google-health-auth', { body: {} }],
       ['disconnect-google-health', { body: {} }],
-      [
-        'get-daily-steps',
-        { body: { date: '2026-08-30', timezone: 'Asia/Tokyo' } },
-      ],
+      ['sync-health-steps', { body: {} }],
     ])
   })
 

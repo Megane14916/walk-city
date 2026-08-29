@@ -241,9 +241,11 @@ declare
   v_response jsonb;
 begin
   if p_request_id is null or p_x is null or p_y is null
-    or p_x < 0 or p_y < 0 or p_x % 20 <> 0 or p_y % 20 <> 0
-    or p_x + 20 > 100 or p_y + 20 > 100 then
+    or p_x % 20 <> 0 or p_y % 20 <> 0 then
     perform private.raise_api_error('INVALID_INPUT');
+  end if;
+  if p_x < 0 or p_y < 0 or p_x + 20 > 100 or p_y + 20 > 100 then
+    perform private.raise_api_error('OUT_OF_MAP');
   end if;
 
   v_hash := private.input_hash(jsonb_build_object('x', p_x, 'y', p_y));

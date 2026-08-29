@@ -18,14 +18,7 @@ const VALID_STATUS: StepSyncStatus = {
   newlyRewardedSteps: 1_500,
   coinsAwarded: 150,
   coinBalance: 850,
-  appliedBonuses: [
-    {
-      sourceBuildingType: 'commercial',
-      sourceCount: 1,
-      effectType: 'step_coin_bonus_flat',
-      amount: 50,
-    },
-  ],
+  appliedBonuses: [],
   syncedAt: '2026-08-27T12:00:00+09:00',
 }
 
