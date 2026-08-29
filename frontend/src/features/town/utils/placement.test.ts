@@ -3,7 +3,7 @@ import { MOCK_BUILDING_CATALOG, MOCK_MY_TOWN } from '../../../mocks/data/towns'
 import { evaluatePlacementPreview } from './placement'
 
 const house = MOCK_BUILDING_CATALOG.find(
-  (item) => item.code === 'house-small',
+  (item) => item.code === 'small_house',
 )!
 
 const townWithRightBlockUnlocked = {

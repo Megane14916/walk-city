@@ -5,12 +5,14 @@ export type BuildingDetailPanelProps = {
   building: PlacedBuilding
   item: BuildingCatalogItem
   editable: boolean
+  canRename?: boolean
   isSaving: boolean
   isDeleting: boolean
   errorMessage: string | null
   onClose: () => void
   onRename: (customName: string | null) => void
   onDeleteRoad: () => void
+  onMove?: () => void
 }
 
 const categoryLabels: Record<string, string> = {
@@ -50,12 +52,14 @@ export function BuildingDetailPanel({
   building,
   item,
   editable,
+  canRename = true,
   isSaving,
   isDeleting,
   errorMessage,
   onClose,
   onRename,
   onDeleteRoad,
+  onMove,
 }: BuildingDetailPanelProps) {
   const isRoad = item.category === 'road'
   const isBridge = building.roadStructureId !== null
@@ -178,8 +182,17 @@ export function BuildingDetailPanel({
           </p>
         )}
       </section>
-
-      {editable && !isRoad && (
+      {editable && !isRoad && onMove && (
+        <button
+          className="mt-3 min-h-11 w-full cursor-pointer rounded-xl border border-[#b9d0c5] bg-[#dceee6] px-4 text-[11px] font-black text-[#245f51] hover:bg-[#cfe8dc]"
+          type="button"
+          onClick={onMove}
+          disabled={isSaving}
+        >
+          この建物を移動する
+        </button>
+      )}
+      {editable && !isRoad && canRename && (
         <form
           className="mt-3 rounded-2xl border border-[#cfe0d8] bg-[#e8f3ee] p-3"
           onSubmit={submitName}

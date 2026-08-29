@@ -11,13 +11,13 @@ import {
 import { MARKET_ITEMS } from '../../features/market/data/market-items'
 
 describe('town map fixtures', () => {
-  it('keeps every effect-free model aligned with the market catalog', () => {
+  it('keeps every market model aligned with the building catalog', () => {
     const modelCodes = [
-      'park',
+      'small_park',
       'hospital',
-      'commercial-facility',
+      'commercial',
       'farm',
-      'city-hall',
+      'town_hall',
       'factory',
     ]
 
@@ -33,7 +33,6 @@ describe('town map fixtures', () => {
         width: marketItem?.width,
         height: marketItem?.height,
         enabled: true,
-        effects: [],
       })
     }
   })

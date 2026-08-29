@@ -66,17 +66,17 @@ describe('createMockTownApi building names', () => {
   })
 })
 
-describe('createMockTownApi effect-free model placement', () => {
+describe('createMockTownApi market model placement', () => {
   it.each([
-    ['park', 150, 41, 50],
-    ['hospital', 600, 40, 49],
-    ['commercial-facility', 300, 41, 50],
-    ['farm', 100, 40, 49],
-    ['city-hall', 3_000, 40, 49],
-    ['factory', 700, 40, 49],
+    ['small_park', 150, 41, 50, 60],
+    ['hospital', 600, 40, 49, 60],
+    ['commercial', 300, 41, 50, 60],
+    ['farm', 100, 40, 49, 65],
+    ['town_hall', 3_000, 40, 49, 60],
+    ['factory', 700, 40, 49, 60],
   ])(
-    'places %s, deducts only its price, and applies no population effect',
-    async (buildingTypeCode, costCoins, anchorX, anchorY) => {
+    'places %s, deducts its price, and applies its catalog population effect',
+    async (buildingTypeCode, costCoins, anchorX, anchorY, population) => {
       const initialCoins = 10_000
       const api = createMockTownApi({
         latencyMs: 0,
@@ -98,10 +98,10 @@ describe('createMockTownApi effect-free model placement', () => {
         data: {
           building: { buildingTypeCode, anchorX, anchorY },
           coinBalance: initialCoins - costCoins,
-          population: 60,
+          population,
         },
       })
-      expect(api.getTownSnapshot().town.population).toBe(60)
+      expect(api.getTownSnapshot().town.population).toBe(population)
     },
   )
 })
@@ -152,7 +152,7 @@ describe('createMockTownApi fixed river validation', () => {
 
     expect(
       await api.placeBuilding({
-        buildingTypeCode: 'house-small',
+        buildingTypeCode: 'small_house',
         anchorX: 68,
         anchorY: 50,
         requestId: 'river-building',

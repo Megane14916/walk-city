@@ -1,12 +1,10 @@
 import type { GoogleIntegrationApi } from '../../features/auth/api'
 import type { StepSyncApi } from '../../features/health/api'
-import type { RankingApi } from '../../features/ranking/api'
 import type { TownApi } from '../../features/town/api'
 import {
   getSupabaseClientConfig,
   type SupabaseClientEnvironment,
 } from '../../lib/supabase-config'
-import type { ApiResult } from '../../types/common'
 import {
   createMockGoogleIntegrationApi,
   createMockRankingApi,
@@ -20,20 +18,43 @@ export type ApiMode = 'mock' | 'supabase'
 
 export type ApiEnvironment = SupabaseClientEnvironment & {
   VITE_API_MODE?: string
+  PROD?: boolean
 }
 
-export function resolveApiMode(value: string | undefined): ApiMode {
-  const mode = value?.trim() || 'mock'
-  if (mode === 'mock' || mode === 'supabase') return mode
+export function resolveApiMode(
+  value: string | undefined,
+  isProduction = false,
+): ApiMode {
+  const configuredMode = value?.trim()
+  if (!configuredMode) {
+    if (isProduction) {
+      throw new Error(
+        '本番環境ではVITE_API_MODE=supabaseの設定が必要です。',
+      )
+    }
+    return 'mock'
+  }
 
-  throw new Error(
-    `VITE_API_MODEはmockまたはsupabaseを指定してください。現在値: ${mode}`,
-  )
+  if (configuredMode !== 'mock' && configuredMode !== 'supabase') {
+    throw new Error(
+      `VITE_API_MODEはmockまたはsupabaseを指定してください。現在値: ${configuredMode}`,
+    )
+  }
+
+  if (isProduction && configuredMode !== 'supabase') {
+    throw new Error(
+      '本番環境ではVITE_API_MODE=supabase以外を使用できません。',
+    )
+  }
+
+  return configuredMode
 }
 
 type SupabaseServiceBundle = {
   googleIntegrationApi: GoogleIntegrationApi
   stepSyncApi: StepSyncApi
+  rankingApi: import('../../features/ranking/api').RankingApi
+  townApi: TownApi
 }
 
 function createLazySupabaseServiceBundle(
@@ -47,16 +68,22 @@ function createLazySupabaseServiceBundle(
       import('../../lib/supabase'),
       import('../../features/auth/services'),
       import('../../features/health/services'),
+      import('../../features/ranking/services'),
+      import('../../features/town/services'),
     ]).then(
       ([
         { createBrowserSupabaseClient },
         { createSupabaseGoogleIntegrationApi },
         { createSupabaseStepSyncApi },
+        { createSupabaseRankingApi },
+        { createSupabaseTownApi },
       ]) => {
         const supabase = createBrowserSupabaseClient(environment)
         return {
           googleIntegrationApi: createSupabaseGoogleIntegrationApi(supabase),
           stepSyncApi: createSupabaseStepSyncApi(supabase),
+          rankingApi: createSupabaseRankingApi(supabase),
+          townApi: createSupabaseTownApi(supabase),
         }
       },
     )
@@ -102,67 +129,53 @@ function createLazySupabaseServiceBundle(
     },
   }
 
-  return { googleIntegrationApi, stepSyncApi }
-}
-
-function createUnavailableSupabaseTownApi(): TownApi {
-  const unavailable = <T>(): ApiResult<T> => ({
-    ok: false,
-    error: {
-      code: 'INTERNAL_ERROR',
-      message: '街データAPIは現在準備中です。',
+  const rankingApi: import('../../features/ranking/api').RankingApi = {
+    async getPopulationRanking(input) {
+      return (await loadService()).rankingApi.getPopulationRanking(input)
     },
-  })
+  }
 
-  return {
+  const townApi: TownApi = {
+    supportsBuildingRename: false,
     async getBuildingCatalog() {
-      return unavailable()
+      return (await loadService()).townApi.getBuildingCatalog()
     },
     async getMyTown() {
-      return unavailable()
+      return (await loadService()).townApi.getMyTown()
     },
-    async getPublicTown() {
-      return unavailable()
+    async getPublicTown(userId) {
+      return (await loadService()).townApi.getPublicTown(userId)
     },
-    async placeBuilding() {
-      return unavailable()
+    async placeBuilding(input) {
+      return (await loadService()).townApi.placeBuilding(input)
     },
-    async placeRoadLine() {
-      return unavailable()
+    async placeRoadLine(input) {
+      return (await loadService()).townApi.placeRoadLine(input)
     },
-    async moveBuilding() {
-      return unavailable()
+    async moveBuilding(input) {
+      return (await loadService()).townApi.moveBuilding(input)
     },
-    async deleteRoad() {
-      return unavailable()
+    async deleteRoad(input) {
+      return (await loadService()).townApi.deleteRoad(input)
     },
-    async renameBuilding() {
-      return unavailable()
+    async renameBuilding(input) {
+      return (await loadService()).townApi.renameBuilding(input)
     },
-    async unlockLand() {
-      return unavailable()
+    async unlockLand(input) {
+      return (await loadService()).townApi.unlockLand(input)
     },
   }
-}
 
-function createUnavailableSupabaseRankingApi(): RankingApi {
-  return {
-    async getPopulationRanking() {
-      return {
-        ok: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'ランキングAPIは現在準備中です。',
-        },
-      }
-    },
-  }
+  return { googleIntegrationApi, stepSyncApi, rankingApi, townApi }
 }
 
 export function createApiServices(
   environment: ApiEnvironment = import.meta.env,
 ): ApiServices {
-  const mode = resolveApiMode(environment.VITE_API_MODE)
+  const mode = resolveApiMode(
+    environment.VITE_API_MODE,
+    environment.PROD === true,
+  )
   if (mode === 'mock') {
     const store = createMockWalkCityStore()
     return {
@@ -176,7 +189,5 @@ export function createApiServices(
   const supabaseServices = createLazySupabaseServiceBundle(environment)
   return {
     ...supabaseServices,
-    rankingApi: createUnavailableSupabaseRankingApi(),
-    townApi: createUnavailableSupabaseTownApi(),
   }
 }

@@ -19,7 +19,12 @@ import {
   useTownOverview,
   type TownPageMode,
 } from '../hooks'
-import type { BuildingCatalogItem, Cell, UnlockedArea } from '../types'
+import type {
+  BuildingCatalogItem,
+  Cell,
+  PlacedBuilding,
+  UnlockedArea,
+} from '../types'
 import {
   evaluateLandUnlockPreview,
   evaluatePlacementPreview,
@@ -28,6 +33,7 @@ import {
 } from '../utils'
 import { TownMap } from './TownMap'
 import { BuildingDetailPanel } from './BuildingDetailPanel'
+import { MoveBuildingControls } from './MoveBuildingControls'
 
 export type TownOverviewProps = {
   api: TownApi
@@ -45,6 +51,13 @@ export type TownOverviewProps = {
 type DashboardPanel = 'ranking' | 'market' | null
 
 type PlacementSession = {
+  item: BuildingCatalogItem
+  anchor: Cell | null
+  requestId: string
+}
+
+type MoveSession = {
+  building: PlacedBuilding
   item: BuildingCatalogItem
   anchor: Cell | null
   requestId: string
@@ -105,14 +118,17 @@ export function TownOverview({
   const stepSync = useStepSync(mode.type === 'self' ? stepSyncApi : undefined)
   const [activePanel, setActivePanel] = useState<DashboardPanel>(null)
   const [placement, setPlacement] = useState<PlacementSession | null>(null)
+  const [move, setMove] = useState<MoveSession | null>(null)
   const [landUnlock, setLandUnlock] = useState<LandUnlockSession | null>(null)
   const [roadPlacement, setRoadPlacement] =
     useState<RoadPlacementSession | null>(null)
   const [isSubmittingPlacement, setIsSubmittingPlacement] = useState(false)
+  const [isSubmittingMove, setIsSubmittingMove] = useState(false)
   const [isSubmittingLandUnlock, setIsSubmittingLandUnlock] = useState(false)
   const [isSubmittingRoadPlacement, setIsSubmittingRoadPlacement] =
     useState(false)
   const [placementError, setPlacementError] = useState<string | null>(null)
+  const [moveError, setMoveError] = useState<string | null>(null)
   const [landUnlockError, setLandUnlockError] = useState<string | null>(null)
   const [roadPlacementError, setRoadPlacementError] = useState<string | null>(
     null,
@@ -164,6 +180,29 @@ export function TownOverview({
       operation: 'place',
     })
   }, [placement, state.data])
+
+  const movePreview = useMemo(() => {
+    if (!state.data || !move?.anchor) return null
+
+    if (
+      move.anchor.x === move.building.anchorX &&
+      move.anchor.y === move.building.anchorY
+    ) {
+      return {
+        status: 'unknown' as const,
+        message: '現在と同じ位置です。別の移動先を選んでください。',
+      }
+    }
+
+    return evaluatePlacementPreview({
+      town: state.data.town,
+      catalog: state.data.catalog,
+      item: move.item,
+      anchor: move.anchor,
+      operation: 'move',
+      excludedBuildingId: move.building.id,
+    })
+  }, [move, state.data])
 
   const landUnlockPreview = useMemo(() => {
     if (!state.data || !landUnlock?.area) return null
@@ -248,6 +287,7 @@ export function TownOverview({
       !stepSyncApi ||
       stepSync.isSyncing ||
       isSubmittingPlacement ||
+      isSubmittingMove ||
       isSubmittingLandUnlock ||
       isSubmittingRoadPlacement
     ) {
@@ -274,6 +314,8 @@ export function TownOverview({
   const togglePanel = (panel: Exclude<DashboardPanel, null>) => {
     setSelectedBuildingId(null)
     setRenameBuildingError(null)
+    setMove(null)
+    setMoveError(null)
     setActivePanel((current) => (current === panel ? null : panel))
   }
 
@@ -281,6 +323,8 @@ export function TownOverview({
     if (mode.type !== 'self' || !town.editable) return
     setSelectedBuildingId(null)
     setRenameBuildingError(null)
+    setMove(null)
+    setMoveError(null)
 
     if (
       marketItem.code === LAND_UNLOCK_ITEM_CODE &&
@@ -410,6 +454,7 @@ export function TownOverview({
       !placement?.anchor ||
       placementPreview?.status !== 'valid' ||
       isSubmittingPlacement ||
+      isSubmittingMove ||
       stepSync.isSyncing ||
       isSubmittingLandUnlock ||
       isSubmittingRoadPlacement
@@ -436,12 +481,45 @@ export function TownOverview({
     setPlacement(null)
   }
 
+  const confirmBuildingMove = async () => {
+    if (
+      !move?.anchor ||
+      movePreview?.status !== 'valid' ||
+      isSubmittingMove ||
+      isSubmittingPlacement ||
+      isSubmittingLandUnlock ||
+      isSubmittingRoadPlacement ||
+      stepSync.isSyncing
+    ) {
+      return
+    }
+
+    setIsSubmittingMove(true)
+    setMoveError(null)
+    const result = await state.moveBuilding({
+      buildingId: move.building.id,
+      anchorX: move.anchor.x,
+      anchorY: move.anchor.y,
+      requestId: move.requestId,
+    })
+    setIsSubmittingMove(false)
+
+    if (!result.ok) {
+      setMoveError(result.error.message)
+      return
+    }
+
+    setFeedback(`${move.building.customName ?? move.item.name}を移動しました。`)
+    setMove(null)
+  }
+
   const confirmLandUnlock = async () => {
     if (
       !landUnlock?.area ||
       landUnlockPreview?.status !== 'valid' ||
       isSubmittingLandUnlock ||
       isSubmittingPlacement ||
+      isSubmittingMove ||
       stepSync.isSyncing ||
       isSubmittingRoadPlacement
     ) {
@@ -472,6 +550,7 @@ export function TownOverview({
       roadLinePreview?.status.status !== 'valid' ||
       isSubmittingRoadPlacement ||
       isSubmittingPlacement ||
+      isSubmittingMove ||
       isSubmittingLandUnlock ||
       stepSync.isSyncing
     ) {
@@ -523,6 +602,53 @@ export function TownOverview({
     setRenameBuildingError(null)
     setDeleteRoadError(null)
     setDeleteRoadRequestId(null)
+  }
+
+  const startBuildingMove = () => {
+    if (
+      !selectedBuilding ||
+      !selectedBuildingItem ||
+      mode.type !== 'self' ||
+      !town.editable ||
+      isRenamingBuilding
+    ) {
+      return
+    }
+
+    setMove({
+      building: selectedBuilding,
+      item: selectedBuildingItem,
+      anchor: null,
+      requestId: createRequestId(),
+    })
+    setPlacement(null)
+    setLandUnlock(null)
+    setRoadPlacement(null)
+    setSelectedBuildingId(null)
+    setRenameBuildingError(null)
+    setMoveError(null)
+    setFeedback(null)
+    setActivePanel(null)
+  }
+
+  const selectMoveAnchor = (anchor: Cell) => {
+    setMove((current) => {
+      if (!current) return current
+      const isSameAnchor =
+        current.anchor?.x === anchor.x && current.anchor?.y === anchor.y
+
+      return {
+        ...current,
+        anchor,
+        requestId: isSameAnchor ? current.requestId : createRequestId(),
+      }
+    })
+    setMoveError(null)
+  }
+
+  const cancelBuildingMove = () => {
+    setMove(null)
+    setMoveError(null)
   }
 
   const renameSelectedBuilding = async (customName: string | null) => {
@@ -707,6 +833,7 @@ export function TownOverview({
                     !stepSyncApi ||
                     stepSync.isSyncing ||
                     isSubmittingPlacement ||
+                    isSubmittingMove ||
                     isSubmittingLandUnlock ||
                     isSubmittingRoadPlacement
                   }
@@ -774,10 +901,20 @@ export function TownOverview({
             placement
               ? {
                   item: placement.item,
+                  operation: 'place',
                   anchor: placement.anchor,
                   preview: placementPreview,
                   onSelectAnchor: selectPlacementAnchor,
                 }
+              : move
+                ? {
+                    item: move.item,
+                    operation: 'move',
+                    displayName: move.building.customName ?? move.item.name,
+                    anchor: move.anchor,
+                    preview: movePreview,
+                    onSelectAnchor: selectMoveAnchor,
+                  }
               : null
           }
           landUnlock={
@@ -887,6 +1024,7 @@ export function TownOverview({
           building={selectedBuilding}
           item={selectedBuildingItem}
           editable={mode.type === 'self' && town.editable}
+          canRename={api.supportsBuildingRename !== false}
           isSaving={isRenamingBuilding}
           isDeleting={isDeletingRoad}
           errorMessage={
@@ -897,6 +1035,11 @@ export function TownOverview({
           onClose={closeBuildingDetail}
           onRename={(customName) => void renameSelectedBuilding(customName)}
           onDeleteRoad={() => void deleteSelectedRoad()}
+          onMove={
+            selectedBuildingItem.category === 'road'
+              ? undefined
+              : startBuildingMove
+          }
         />
       )}
 
@@ -908,12 +1051,32 @@ export function TownOverview({
           isSubmitting={isSubmittingPlacement}
           isConfirmBlocked={
             stepSync.isSyncing ||
+            isSubmittingMove ||
             isSubmittingLandUnlock ||
             isSubmittingRoadPlacement
           }
           errorMessage={placementError}
           onCancel={cancelPlacement}
           onConfirm={confirmPlacement}
+        />
+      )}
+
+      {move && (
+        <MoveBuildingControls
+          item={move.item}
+          displayName={move.building.customName ?? move.item.name}
+          anchor={move.anchor}
+          preview={movePreview}
+          isSubmitting={isSubmittingMove}
+          isConfirmBlocked={
+            stepSync.isSyncing ||
+            isSubmittingPlacement ||
+            isSubmittingLandUnlock ||
+            isSubmittingRoadPlacement
+          }
+          errorMessage={moveError}
+          onCancel={cancelBuildingMove}
+          onConfirm={() => void confirmBuildingMove()}
         />
       )}
 
@@ -925,6 +1088,7 @@ export function TownOverview({
           isConfirmBlocked={
             stepSync.isSyncing ||
             isSubmittingPlacement ||
+            isSubmittingMove ||
             isSubmittingLandUnlock
           }
           errorMessage={roadPlacementError}
@@ -942,6 +1106,7 @@ export function TownOverview({
           isConfirmBlocked={
             stepSync.isSyncing ||
             isSubmittingPlacement ||
+            isSubmittingMove ||
             isSubmittingRoadPlacement
           }
           errorMessage={landUnlockError}

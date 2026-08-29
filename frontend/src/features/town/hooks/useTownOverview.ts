@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ApiError, ApiResult } from '../../../types/common'
+import type { ApiError, ApiErrorCode, ApiResult } from '../../../types/common'
 import type { TownApi } from '../api'
 import type {
   BuildingCatalogItem,
   DeleteRoadInput,
   DeleteRoadResult,
+  MoveBuildingInput,
   PlaceBuildingInput,
   PlaceRoadLineInput,
   PlaceRoadLineResult,
@@ -22,12 +23,21 @@ type TownOverviewData = {
   catalog: BuildingCatalogItem[]
 }
 
+const REFRESH_AFTER_MUTATION_ERROR = new Set<ApiErrorCode>([
+  'CONFLICT',
+  'CELL_OCCUPIED',
+  'INSUFFICIENT_COINS',
+])
+
 export type TownOverviewState = {
   data: TownOverviewData | null
   isLoading: boolean
   error: ApiError | null
   placeBuilding: (
     input: PlaceBuildingInput,
+  ) => Promise<ApiResult<TownMutationResult>>
+  moveBuilding: (
+    input: MoveBuildingInput,
   ) => Promise<ApiResult<TownMutationResult>>
   placeRoadLine: (
     input: PlaceRoadLineInput,
@@ -129,7 +139,10 @@ export function useTownOverview(
         return { ok: false, error: UNEXPECTED_ERROR }
       }
 
-      if (!result.ok) return result
+      if (!result.ok) {
+        if (REFRESH_AFTER_MUTATION_ERROR.has(result.error.code)) retry()
+        return result
+      }
 
       setData((current) => {
         if (!current) return current
@@ -160,9 +173,50 @@ export function useTownOverview(
 
       return result
     },
-    [api],
+    [api, retry],
   )
+  const moveBuilding = useCallback(
+    async (
+      input: MoveBuildingInput,
+    ): Promise<ApiResult<TownMutationResult>> => {
+      let result: ApiResult<TownMutationResult>
 
+      try {
+        result = await api.moveBuilding(input)
+      } catch {
+        return { ok: false, error: UNEXPECTED_ERROR }
+      }
+
+      if (!result.ok) {
+        if (REFRESH_AFTER_MUTATION_ERROR.has(result.error.code)) retry()
+        return result
+      }
+
+      setData((current) => {
+        if (!current || current.town.editable !== true) return current
+
+        return {
+          ...current,
+          town: {
+            ...current.town,
+            town: {
+              ...current.town.town,
+              coins: result.data.coinBalance,
+              population: result.data.population,
+            },
+            buildings: current.town.buildings.map((building) =>
+              building.id === result.data.building.id
+                ? result.data.building
+                : building,
+            ),
+          },
+        }
+      })
+
+      return result
+    },
+    [api, retry],
+  )
   const applyStepSyncResult = useCallback((result: StepSyncStatus) => {
     setData((current) => {
       if (!current || current.town.editable !== true) return current
@@ -192,7 +246,10 @@ export function useTownOverview(
         return { ok: false, error: UNEXPECTED_ERROR }
       }
 
-      if (!result.ok) return result
+      if (!result.ok) {
+        if (REFRESH_AFTER_MUTATION_ERROR.has(result.error.code)) retry()
+        return result
+      }
 
       setData((current) => {
         if (!current || current.town.editable !== true) return current
@@ -219,7 +276,7 @@ export function useTownOverview(
 
       return result
     },
-    [api],
+    [api, retry],
   )
 
   const unlockLand = useCallback(
@@ -232,7 +289,10 @@ export function useTownOverview(
         return { ok: false, error: UNEXPECTED_ERROR }
       }
 
-      if (!result.ok) return result
+      if (!result.ok) {
+        if (REFRESH_AFTER_MUTATION_ERROR.has(result.error.code)) retry()
+        return result
+      }
 
       setData((current) => {
         if (!current || current.town.editable !== true) return current
@@ -260,7 +320,7 @@ export function useTownOverview(
 
       return result
     },
-    [api],
+    [api, retry],
   )
 
   const renameBuilding = useCallback(
@@ -339,6 +399,7 @@ export function useTownOverview(
     isLoading: !isCurrentRequest || isLoading,
     error: isCurrentRequest ? error : null,
     placeBuilding,
+    moveBuilding,
     placeRoadLine,
     unlockLand,
     renameBuilding,

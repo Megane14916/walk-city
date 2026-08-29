@@ -41,11 +41,13 @@ const CATEGORY_ICONS: Record<string, string> = {
 }
 
 const BUILDING_ICONS: Record<string, string> = {
-  park: '♧',
+  small_house: '⌂',
+  apartment: '⌂',
+  small_park: '♧',
   hospital: '＋',
-  'commercial-facility': '◇',
+  commercial: '◇',
   farm: '⌗',
-  'city-hall': '▦',
+  town_hall: '▦',
   factory: '▥',
 }
 
@@ -224,7 +226,9 @@ export const MapBuilding = memo(function MapBuilding({
         className="text-[clamp(14px,2vw,23px)] leading-none font-black drop-shadow-[0_1px_0_rgba(255,255,255,.8)]"
         aria-hidden="true"
       >
-        {BUILDING_ICONS[item?.code ?? ''] ?? CATEGORY_ICONS[category] ?? '?'}
+        {BUILDING_ICONS[item?.assetKey ?? ''] ??
+          CATEGORY_ICONS[category] ??
+          '?'}
       </span>
       {width > 1 && (
         <span className="absolute right-1 bottom-0.5 left-1 truncate rounded bg-white/70 px-1 text-center text-[7px] leading-3 font-black">

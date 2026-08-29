@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { normalizeSupabaseError } from '../../../lib/supabase-api'
 import type { ApiErrorCode, ApiResult } from '../../../types/common'
 import type { DailySteps, GetDailyStepsInput } from '../../health/types'
 import type { GoogleIntegrationApi } from '../api'
@@ -186,7 +187,15 @@ export function createSupabaseGoogleIntegrationApi(
     const { data, error } = await supabase.functions.invoke(functionName, {
       body: body ?? {},
     })
-    if (error) return failure(fallbackCode)
+    if (error) {
+      return {
+        ok: false,
+        error: await normalizeSupabaseError(error, {
+          fallbackCode,
+          fallbackMessage: errorMessages[fallbackCode],
+        }),
+      }
+    }
     return parseFunctionResult(data, isData, fallbackCode)
   }
 
