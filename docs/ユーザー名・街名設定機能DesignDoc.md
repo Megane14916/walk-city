@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 | --- | --- |
 | 対象プロダクト | Walk City |
-| ステータス | Phase 3 Complete（DB制約・RPC・権限・canonical表示名取得を実装済み） |
+| ステータス | Phase 4 Complete（Supabase実API接続・契約検証・local E2E確認済み） |
 | 作成日 | 2026-08-30 |
 | 契約確定日 | 2026-08-30 |
 | 対象機能 | 公開ユーザー名と街名の変更、設定ボタン、設定モーダル |
@@ -725,10 +725,14 @@ Phase 3完了時点で、local database resetと全6 database testファイル�
 
 ### Phase 4: 実 API 接続
 
-17. `SupabaseSettingsApi` とレスポンス契約検証を実装する。
-18. 保存後の town local state と AuthProvider refresh を接続する。
-19. mock / Supabase の共通契約テストを通す。
-20. local Supabase で end-to-end の保存、再読込、ランキング、公開街を確認する。
+ステータス: **完了（2026-08-30）**
+
+17. `SupabaseSettingsApi`を実装し、入力の事前検証、RPC呼び出し、snake_case変換、success/error envelopeとtimestampの実行時検証を追加した。
+18. Supabaseモードの準備中エラーを実adapterへ置き換え、Phase 2で実装したtown local state即時反映とAuthProvider refreshへ接続した。
+19. mock / Supabase adapterの共通`SettingsApi`契約テストに加え、正常、入力不正、RPCエラー、通信失敗、不正レスポンスのテストを追加した。
+20. local SupabaseのHTTP E2Eで保存、再読込、ランキング、公開街への反映を確認し、Edge Functionがcanonicalな`profiles.display_name`を返すことも確認した。
+
+Phase 4完了時点で、フロントエンド全42テストファイル・333テスト、lint、型チェック、production build、全6 database testファイル・194テストが成功している。
 
 ### Phase 5: 品質確認
 

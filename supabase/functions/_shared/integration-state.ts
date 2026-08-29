@@ -48,10 +48,11 @@ export async function integrationState(
   const connection = isObject(data) ? data : null;
   const profile = isObject(profileResult.data) ? profileResult.data : null;
   const metadata = isObject(user.user_metadata) ? user.user_metadata : {};
-  if (typeof profile?.display_name !== "string" || !profile.display_name) {
-    throw new Error("PROFILE_NOT_FOUND");
-  }
-  const displayName = profile.display_name;
+  const displayName = typeof profile?.display_name === "string" && profile.display_name
+    ? profile.display_name
+    : [metadata.full_name, metadata.name, metadata.user_name]
+      .find((value) => typeof value === "string" && value.trim()) ??
+      user.email?.split("@")[0] ?? `user-${user.id.replaceAll("-", "").slice(0, 8)}`;
   const avatar = [metadata.avatar_url, metadata.picture]
     .find((value) => typeof value === "string" && value.trim());
 

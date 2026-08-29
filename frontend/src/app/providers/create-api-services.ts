@@ -72,6 +72,7 @@ function createLazySupabaseServiceBundle(
       import('../../features/auth/services'),
       import('../../features/health/services'),
       import('../../features/ranking/services'),
+      import('../../features/settings/services'),
       import('../../features/town/services'),
     ]).then(
       ([
@@ -79,6 +80,7 @@ function createLazySupabaseServiceBundle(
         { createSupabaseGoogleIntegrationApi },
         { createSupabaseStepSyncApi },
         { createSupabaseRankingApi },
+        { createSupabaseSettingsApi },
         { createSupabaseTownApi },
       ]) => {
         const supabase = createBrowserSupabaseClient(environment)
@@ -86,17 +88,7 @@ function createLazySupabaseServiceBundle(
           googleIntegrationApi: createSupabaseGoogleIntegrationApi(supabase),
           stepSyncApi: createSupabaseStepSyncApi(supabase),
           rankingApi: createSupabaseRankingApi(supabase),
-          settingsApi: {
-            async updateUserSettings() {
-              return {
-                ok: false as const,
-                error: {
-                  code: 'INTERNAL_ERROR' as const,
-                  message: '設定APIはSupabase接続準備中です。',
-                },
-              }
-            },
-          },
+          settingsApi: createSupabaseSettingsApi(supabase),
           townApi: createSupabaseTownApi(supabase),
         }
       },
