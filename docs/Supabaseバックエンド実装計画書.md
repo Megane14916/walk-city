@@ -420,7 +420,7 @@ Phase 0の9商品へseedを修正する。
 | `small_house` | 50 | `population_flat +10` |
 | `apartment` | 200 | `population_flat +50` |
 | `small_park` | 150 | 隣接する住宅（小）ごとに人口 +5（最大+20） |
-| `hospital` | 600 | 町全体の人口 +10% |
+| `hospital` | 600 | 住宅（小）ごとに人口 +5、住宅（大）ごとに人口 +10 |
 | `commercial` | 300 | 歩数コイン +10%（最大3軒） |
 | `farm` | 100 | `population_flat +20` |
 | `road` | 0 | 隣接土地へ建物を配置可能（強制はマップルール） |
