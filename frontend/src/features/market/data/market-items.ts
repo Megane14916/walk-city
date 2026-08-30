@@ -45,7 +45,7 @@ export const MARKET_ITEMS: MarketItem[] = [
   {
     code: 'commercial',
     name: '商業施設',
-    effect: null,
+    effect: '歩数同期時の獲得コイン+10%（最大3軒分、工場と合計最大50%）',
     costCoins: 300,
     width: 1,
     height: 1,
@@ -81,7 +81,7 @@ export const MARKET_ITEMS: MarketItem[] = [
   {
     code: 'factory',
     name: '工場',
-    effect: null,
+    effect: '歩数同期時の獲得コイン+25%（最大2軒分、商業施設と合計最大50%）',
     costCoins: 700,
     width: 2,
     height: 2,
