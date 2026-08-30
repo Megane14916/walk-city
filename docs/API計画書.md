@@ -386,7 +386,7 @@ type StartGoogleHealthConnectionResult =
 | `small_house` | 住宅（小） |    1×1 |        50 |  true   | 人口 +10                                    |
 | `apartment`   | 住宅（大） |    2×2 |       200 |  true   | 人口 +50                                    |
 | `small_park`  | 公園       |    1×1 |       150 |  true   | 隣接住宅（小）ごとに人口 +5（最大+20） |
-| `hospital`    | 病院       |    2×2 |       600 |  true   | 町全体の人口 +10%                      |
+| `hospital`    | 病院       |    2×2 |       600 |  true   | 住宅（小）ごとに人口 +5、住宅（大）ごとに人口 +10 |
 | `commercial`  | 商業施設   |    1×1 |       300 |  true   | 歩数コイン +10%                          |
 | `farm`        | 農場       |    2×2 |       100 |  true   | 人口 +20                                  |
 | `road`        | 道路       |    1×1 |         0 |  true   | 隣接土地へ建物を配置可能                    |
