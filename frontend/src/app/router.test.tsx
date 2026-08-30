@@ -15,6 +15,7 @@ import {
   createMockGoogleIntegrationApi,
   mockGoogleIntegrationApi,
   mockRankingApi,
+  mockSettingsApi,
   mockStepSyncApi,
   mockTownApi,
 } from '../mocks/services'
@@ -38,6 +39,7 @@ function renderRoute(
           googleIntegrationApi,
           stepSyncApi: mockStepSyncApi,
           rankingApi: mockRankingApi,
+          settingsApi: mockSettingsApi,
           townApi: mockTownApi,
         }}
       >
@@ -53,6 +55,7 @@ function renderRoute(
 beforeEach(() => {
   mockGoogleIntegrationApi.reset()
   mockRankingApi.reset()
+  mockSettingsApi.reset()
   mockStepSyncApi.reset()
   mockTownApi.reset()
 })
@@ -395,6 +398,32 @@ describe('AppRoutes', () => {
     expect(
       screen.getByRole('application', { name: /グリーンタウンのマップ/ }),
     ).not.toBeNull()
+  })
+
+  it('opens settings over the own town and applies both saved names', async () => {
+    await mockGoogleIntegrationApi.signInWithGoogle()
+    const getAuthState = vi.spyOn(
+      mockGoogleIntegrationApi,
+      'getGoogleIntegrationState',
+    )
+    renderRoute(paths.root)
+    await screen.findByRole('heading', { name: 'グリーンタウン' })
+
+    fireEvent.click(screen.getByRole('button', { name: '設定' }))
+    fireEvent.change(screen.getByLabelText('ユーザー名'), {
+      target: { value: 'ルーター利用者' },
+    })
+    fireEvent.change(screen.getByLabelText('街の名前'), {
+      target: { value: 'ルーターシティ' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '変更を保存' }))
+
+    expect(
+      await screen.findByRole('heading', { name: 'ルーターシティ' }),
+    ).not.toBeNull()
+    expect(screen.getByText('ルーター利用者')).not.toBeNull()
+    expect(screen.getByTestId('current-path').textContent).toBe(paths.root)
+    await vi.waitFor(() => expect(getAuthState.mock.calls.length).toBeGreaterThan(1))
   })
 
   it('opens the market item list over the town map', async () => {

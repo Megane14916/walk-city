@@ -7,6 +7,7 @@ import { useAuth } from '../../features/auth/hooks'
 import {
   createMockGoogleIntegrationApi,
   createMockRankingApi,
+  createMockSettingsApi,
   createMockStepSyncApi,
   createMockTownApi,
   createMockWalkCityStore,
@@ -59,6 +60,7 @@ function renderProvider(
           googleIntegrationApi: api,
           stepSyncApi: createMockStepSyncApi({ latencyMs: 0, store }),
           rankingApi: createMockRankingApi({ latencyMs: 0, store }),
+          settingsApi: createMockSettingsApi({ latencyMs: 0, store }),
           townApi: createMockTownApi({ latencyMs: 0, store }),
         }}
       >

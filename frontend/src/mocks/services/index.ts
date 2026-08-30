@@ -1,5 +1,6 @@
 export * from './google-integration'
 export * from './ranking'
+export * from './settings'
 export * from './step-sync'
 export * from './town'
 export * from './walk-city-store'

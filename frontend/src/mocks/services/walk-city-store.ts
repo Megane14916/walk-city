@@ -10,6 +10,7 @@ export type MockWalkCityStoreOptions = {
 
 export type MockWalkCityStore = {
   getMutableTown(): TownDetail
+  setUserSettings(displayName: string, townName: string): void
   getSteps(date: string): number
   setSteps(date: string, steps: number): void
   getRewardedSteps(date: string): number
@@ -61,6 +62,11 @@ export function createMockWalkCityStore(
   return {
     getMutableTown() {
       return town
+    },
+
+    setUserSettings(displayName, townName) {
+      town.town.owner.displayName = displayName
+      town.town.name = townName
     },
 
     getSteps(date) {
