@@ -400,7 +400,7 @@ type RenameBuildingResult = {
 | `small_house` | 住宅（小） | 1×1 | 50 | true | population_flat +10 | 効果は`BE確定`、価格は`仮決定` |
 | `apartment` | 住宅（大） | 2×2 | 200 | true | population_flat +50 | ユーザー決定、価格は`仮決定` |
 | `small_park` | 公園 | 1×1 | 150 | true | 隣接する住宅（小）ごとに人口 +5（最大+20） | 価格は現行値 |
-| `hospital` | 病院 | 2×2 | 600 | true | 町全体の人口 +10%（1軒分のみ） | 価格は現行値 |
+| `hospital` | 病院 | 2×2 | 600 | true | 住宅（小）ごとに人口 +5、住宅（大）ごとに人口 +10（1軒分のみ） | 価格は現行値 |
 | `commercial` | 商業施設 | 1×1 | 300 | true | 歩数コイン +10%（最大3軒） | 価格は現行値 |
 | `farm` | 農場 | 2×2 | 100 | true | population_flat +20 | 価格は現行値 |
 | `road` | 道路 | 1×1 | 0 | true | 上下左右に隣接する土地へ建物を配置可能 | 道路隣接・橋変換はマップルール |
@@ -417,7 +417,7 @@ type RenameBuildingResult = {
 ## 9. 人口・ランキングの整合性
 
 - 人口は配置済み建物と`building_effects`からバックエンドで計算する（`BE確定`: §7.4）。
-- 住宅（小）・住宅（大）・農場の固定加算、公園・役所の条件付き加算、病院の10%加算をサーバーで一括再計算する。
+- 住宅（小）・住宅（大）・農場の固定加算と、公園・役所・病院の条件付き加算をサーバーで一括再計算する。
 - `place_building`、`place_road_line`、`move_building`のトランザクション内で必要に応じて`towns.population`を更新する。
 - `population_ranking_view`は保存済みの`towns.population`だけを参照する。
 - フロントエンドは順位・人口を計算しない。
