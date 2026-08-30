@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, Link } from 'react-router-dom'
 import { LoginButton } from '../../features/auth/components'
 import { useAuth } from '../../features/auth/hooks'
 import { OnboardingLayout } from '../layouts/OnboardingLayout'
@@ -65,6 +65,18 @@ export function LoginPage() {
         <p className="mx-2 mt-[17px] mb-0 flex items-start gap-2 text-[11px] leading-[1.65] text-[#858b88] before:mt-[3px] before:text-[7px] before:text-[#58a889] before:content-['●']">
           ログイン時点では健康データへアクセスしません。
           歩数連携は次の画面で選べます。
+        </p>
+
+        <p className="mx-2 mt-3 mb-0 text-center text-[11px] leading-[1.65] text-[#858b88]">
+          続行すると、Walk Cityの
+          <Link className="font-bold text-[#438c76] no-underline hover:underline" to={paths.terms}>
+            利用規約
+          </Link>
+          と
+          <Link className="font-bold text-[#438c76] no-underline hover:underline" to={paths.privacy}>
+            プライバシーポリシー
+          </Link>
+          に同意したものとみなされます。
         </p>
 
         <div className="mt-[37px] grid grid-cols-3 gap-4 border-t border-[#dedfd7] pt-[25px] max-[560px]:grid-cols-1 max-[560px]:gap-3 [&>div]:flex [&>div]:gap-2.5 [&>div>span]:text-[10px] [&>div>span]:font-black [&>div>span]:text-[#53a283] [&_p]:m-0 [&_b]:block [&_b]:text-xs [&_b]:text-[#193b38] [&_small]:mt-1.5 [&_small]:block [&_small]:text-[10px] [&_small]:leading-[1.5] [&_small]:text-[#89908d] max-[560px]:[&_small]:hidden">
