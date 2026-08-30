@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
+import type { ApiResult } from '../../../types/common'
 import type { SettingsApi } from '../api'
 import { useUserSettings } from '../hooks'
 import {
@@ -15,6 +16,7 @@ export type UserSettingsDialogProps = {
   loginHref: string
   onSaved: (settings: UserSettings) => void
   onClose: () => void
+  onSignOut?: () => Promise<ApiResult<unknown>>
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -30,6 +32,7 @@ export function UserSettingsDialog({
   loginHref,
   onSaved,
   onClose,
+  onSignOut,
 }: UserSettingsDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const backdropRef = useRef<HTMLDivElement>(null)
@@ -39,6 +42,23 @@ export function UserSettingsDialog({
     api,
     initialSettings: { displayName, townName },
   })
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState<string | null>(null)
+
+  const handleSignOut = async () => {
+    if (!onSignOut || isSigningOut) return
+
+    setSignOutError(null)
+    setIsSigningOut(true)
+    try {
+      const result = await onSignOut()
+      if (!result.ok) setSignOutError(result.error.message)
+    } catch {
+      setSignOutError('ログアウトできませんでした。もう一度お試しください。')
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
 
   useEffect(() => {
     submittingRef.current = form.isSubmitting
@@ -274,6 +294,27 @@ export function UserSettingsDialog({
               {form.isSubmitting ? '保存中…' : '変更を保存'}
             </button>
           </div>
+
+          {onSignOut && (
+            <div className="mt-1 border-t border-[#d8dfd8] pt-5">
+              <button
+                className="min-h-12 w-full cursor-pointer rounded-[14px] border border-[#e0c3bd] bg-white px-4 text-xs font-black text-[#8b473e] hover:bg-[#fbeeeb] disabled:cursor-wait disabled:opacity-50"
+                type="button"
+                onClick={handleSignOut}
+                disabled={isSigningOut}
+              >
+                {isSigningOut ? 'ログアウト中…' : 'ログアウト'}
+              </button>
+              {signOutError && (
+                <p
+                  className="m-0 mt-2 rounded-[10px] bg-[#fde8e4] px-3 py-2.5 text-[10px] text-[#903f3c]"
+                  role="alert"
+                >
+                  {signOutError}
+                </p>
+              )}
+            </div>
+          )}
         </form>
       </div>
     </div>,

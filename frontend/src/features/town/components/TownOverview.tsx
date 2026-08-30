@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import type { ApiResult } from '../../../types/common'
 import type { GoogleIntegrationApi } from '../../auth/api'
 import type { GoogleIntegrationState } from '../../auth/types'
 import type { StepSyncApi } from '../../health/api'
@@ -46,6 +47,7 @@ export type TownOverviewProps = {
   rankingApi?: RankingApi
   settingsApi?: SettingsApi
   refreshAuth?: () => Promise<unknown>
+  onSignOut?: () => Promise<ApiResult<unknown>>
   getUserHref?: (userId: string) => string
   myTownHref?: string
   healthConnectionHref?: string
@@ -114,6 +116,7 @@ export function TownOverview({
   rankingApi,
   settingsApi,
   refreshAuth,
+  onSignOut,
   getUserHref = (userId) => `/town/${encodeURIComponent(userId)}`,
   myTownHref = '/',
   healthConnectionHref = '/health/connect',
@@ -1101,6 +1104,7 @@ export function TownOverview({
           loginHref={loginHref}
           onSaved={applySavedSettings}
           onClose={closeSettings}
+          onSignOut={onSignOut}
         />
       )}
 
