@@ -125,6 +125,7 @@ export function TownOverview({
   const stepSync = useStepSync(mode.type === 'self' ? stepSyncApi : undefined)
   const [activePanel, setActivePanel] = useState<DashboardPanel>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [placement, setPlacement] = useState<PlacementSession | null>(null)
   const [move, setMove] = useState<MoveSession | null>(null)
   const [landUnlock, setLandUnlock] = useState<LandUnlockSession | null>(null)
@@ -747,11 +748,11 @@ export function TownOverview({
     <section className="min-h-svh text-[#183b37]" aria-labelledby="town-title">
       <header className="sticky top-0 z-50 border-b border-[#cad4cc] bg-[rgba(247,246,240,.94)] shadow-[0_8px_28px_rgba(23,57,52,.08)] backdrop-blur-md">
         <nav
-          className="mx-auto flex min-h-[84px] w-full max-w-[1600px] items-center gap-2 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="relative mx-auto flex min-h-[84px] w-full max-w-[1600px] items-center gap-2 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[670px]:min-h-[72px] max-[670px]:overflow-visible"
           aria-label="ユーザーダッシュボード"
         >
           <div
-            className="flex min-w-[220px] shrink-0 items-center gap-3 rounded-[15px] border border-[#d7ddd6] bg-white/70 px-3 py-2 shadow-sm"
+            className="flex min-w-[220px] shrink-0 items-center gap-3 rounded-[15px] border border-[#d7ddd6] bg-white/70 px-3 py-2 shadow-sm max-[670px]:min-w-0 max-[670px]:flex-1"
             aria-label="ユーザー情報"
           >
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[13px_13px_13px_4px] bg-[#ffcf57] text-base font-black text-[#103b37] shadow-[inset_0_-2px_0_rgba(0,0,0,.1)]">
@@ -770,6 +771,26 @@ export function TownOverview({
             </div>
           </div>
 
+          <button
+            className="ml-auto hidden h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-[13px] border border-[#d7ddd6] bg-white/80 text-xl text-[#315f56] shadow-sm max-[670px]:grid"
+            type="button"
+            onClick={() => setIsMobileMenuOpen((current) => !current)}
+            aria-label={isMobileMenuOpen ? 'メニューを閉じる' : 'メニューを開く'}
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="mobile-dashboard-menu"
+          >
+            <i className="fa fa-bars menu-icon" aria-hidden="true" />
+          </button>
+
+          <div
+            id="mobile-dashboard-menu"
+            className={`contents max-[670px]:absolute max-[670px]:left-3 max-[670px]:right-3 max-[670px]:top-[calc(100%+8px)] max-[670px]:z-50 max-[670px]:max-h-[calc(100svh-100px)] max-[670px]:flex-col max-[670px]:items-stretch max-[670px]:gap-2 max-[670px]:overflow-y-auto max-[670px]:rounded-[18px] max-[670px]:border max-[670px]:border-[#cad4cc] max-[670px]:bg-[#f7f6f0] max-[670px]:p-3 max-[670px]:shadow-[0_18px_45px_rgba(23,57,52,.2)] max-[670px]:[&>a]:w-full max-[670px]:[&>a]:min-w-0 max-[670px]:[&>button]:w-full max-[670px]:[&>button]:min-w-0 ${
+              isMobileMenuOpen
+                ? 'max-[670px]:flex'
+                : 'max-[670px]:hidden'
+            }`}
+            onClickCapture={() => setIsMobileMenuOpen(false)}
+          >
           {mode.type === 'public' && (
             <a
               className="inline-flex min-h-[58px] min-w-[142px] shrink-0 items-center justify-center gap-2 rounded-[15px] border border-[#b9d8ca] bg-[#dceee6] px-4 text-[11px] font-black text-[#245f51] no-underline shadow-sm transition-[background,transform] hover:-translate-y-px hover:bg-[#cfe8dc]"
@@ -838,8 +859,8 @@ export function TownOverview({
             </button>
           )}
 
-          <div className="ml-auto flex shrink-0 items-center gap-2 max-[760px]:ml-0">
-            <dl className="m-0 flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2 max-[760px]:ml-0 max-[670px]:w-full max-[670px]:flex-col max-[670px]:items-stretch">
+            <dl className="m-0 flex items-center gap-2 max-[670px]:grid max-[670px]:w-full max-[670px]:grid-cols-[repeat(auto-fit,minmax(90px,1fr))] max-[670px]:[&>div]:min-w-0 max-[670px]:[&>div]:px-2">
               <div className="min-w-[120px] rounded-[15px] border border-[#d6cfe6] bg-[#f2eef9] px-4 py-2.5 shadow-sm">
                 <dt className="text-[8px] font-black tracking-[.1em] text-[#766394]">
                   人口
@@ -905,6 +926,7 @@ export function TownOverview({
                     : 'Healthを連携'}
                 </a>
               ))}
+          </div>
           </div>
         </nav>
         {mode.type === 'self' && stepSync.error && (
