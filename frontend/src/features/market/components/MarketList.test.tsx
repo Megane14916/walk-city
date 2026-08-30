@@ -33,6 +33,11 @@ describe('MarketList', () => {
         '住宅（小）1軒につき人口+5、住宅（大）1軒につき人口+10',
       ),
     ).not.toBeNull()
+    expect(
+      within(rows[4]).getByText(
+        '歩数同期時の獲得コイン+10%（最大3軒分、工場と合計最大50%）',
+      ),
+    ).not.toBeNull()
     expect(within(rows[5]).getByText('人口を20人増加')).not.toBeNull()
     expect(
       within(rows[6]).getByText('上下左右に隣接する土地へ建物を配置可能'),
@@ -42,14 +47,18 @@ describe('MarketList', () => {
         '住宅（小）1軒につき人口+20、住宅（大）1軒につき人口+30',
       ),
     ).not.toBeNull()
+    expect(
+      within(rows[8]).getByText(
+        '歩数同期時の獲得コイン+25%（最大2軒分、商業施設と合計最大50%）',
+      ),
+    ).not.toBeNull()
     expect(within(rows[9]).getByText('未開放領域アンロック')).not.toBeNull()
   })
 
-  it('keeps unimplemented model effects empty while showing configured costs', () => {
+  it('shows configured costs and dimensions', () => {
     render(<MarketList items={MARKET_ITEMS} />)
 
     const rows = screen.getAllByRole('listitem')
-    expect(within(rows[4]).queryByText(/人口/)).toBeNull()
     expect(within(rows[2]).getByText('150')).not.toBeNull()
     expect(within(rows[6]).getByText('0')).not.toBeNull()
     expect(within(rows[9]).getByText('20×20')).not.toBeNull()
