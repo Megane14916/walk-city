@@ -247,13 +247,87 @@ function placementError(
   return null
 }
 
-function populationIncrease(item: BuildingCatalogItem): number {
-  return item.effects.reduce((total, effect) => {
-    if (effect.type !== 'population_flat' || effect.value === null) {
-      return total
+function calculateTownPopulation(
+  town: TownDetail,
+  catalog: BuildingCatalogItem[],
+): number {
+  let population = 0
+  const adjacentResidentialBonuses = new Map<string, number>()
+
+  for (const building of town.buildings) {
+    const item = catalogItemFor(catalog, building)
+    if (!item) continue
+
+    for (const effect of item.effects) {
+      if (effect.value === null) continue
+
+      if (effect.type === 'population_flat') {
+        population += effect.value
+        continue
+      }
+      const targetBuildingTypeCode =
+        effect.type === 'adjacent_small_house_population_flat'
+          ? 'small_house'
+          : effect.type === 'adjacent_apartment_population_flat'
+            ? 'apartment'
+            : null
+      if (targetBuildingTypeCode === null) continue
+
+      for (const target of town.buildings) {
+        if (target.buildingTypeCode !== targetBuildingTypeCode) continue
+        const targetItem = catalogItemFor(catalog, target)
+        if (!targetItem) continue
+
+        const targetRight = target.anchorX + targetItem.width - 1
+        const targetBottom = target.anchorY + targetItem.height - 1
+        const isAdjacent =
+          ((building.anchorX === target.anchorX - 1 ||
+            building.anchorX === targetRight + 1) &&
+            building.anchorY >= target.anchorY &&
+            building.anchorY <= targetBottom) ||
+          ((building.anchorY === target.anchorY - 1 ||
+            building.anchorY === targetBottom + 1) &&
+            building.anchorX >= target.anchorX &&
+            building.anchorX <= targetRight)
+        if (!isAdjacent) continue
+
+        adjacentResidentialBonuses.set(
+          target.id,
+          Math.max(adjacentResidentialBonuses.get(target.id) ?? 0, effect.value),
+        )
+      }
     }
-    return total + effect.value
-  }, 0)
+  }
+
+  for (const bonus of adjacentResidentialBonuses.values()) {
+    population += bonus
+  }
+
+  for (const sourceBuildingTypeCode of ['hospital', 'town_hall']) {
+    const source = town.buildings.find(
+      (building) =>
+        building.buildingTypeCode === sourceBuildingTypeCode,
+    )
+    if (!source) continue
+
+    const sourceItem = catalogItemFor(catalog, source)
+    for (const effect of sourceItem?.effects ?? []) {
+      if (effect.value === null) continue
+      const targetBuildingTypeCode =
+        effect.type === 'small_house_population_flat'
+          ? 'small_house'
+          : effect.type === 'apartment_population_flat'
+            ? 'apartment'
+            : null
+      if (targetBuildingTypeCode === null) continue
+      population +=
+        town.buildings.filter(
+          (building) =>
+            building.buildingTypeCode === targetBuildingTypeCode,
+        ).length * effect.value
+    }
+  }
+  return population
 }
 
 function samePlaceInput(
@@ -481,7 +555,7 @@ export function createMockTownApi(
 
       town.buildings.push(building)
       town.town.coins = coinBalance - item.costCoins
-      town.town.population += populationIncrease(item)
+      town.town.population = calculateTownPopulation(town, catalog)
 
       const result: TownMutationResult = {
         building: { ...building },
@@ -640,6 +714,7 @@ export function createMockTownApi(
       building.anchorX = input.anchorX
       building.anchorY = input.anchorY
       building.updatedAt = timestamp
+      town.town.population = calculateTownPopulation(town, catalog)
 
       const result: TownMutationResult = {
         building: { ...building },

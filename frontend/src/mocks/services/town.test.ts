@@ -69,10 +69,10 @@ describe('createMockTownApi building names', () => {
 describe('createMockTownApi market model placement', () => {
   it.each([
     ['small_park', 150, 41, 50, 60],
-    ['hospital', 600, 40, 49, 60],
+    ['hospital', 600, 40, 49, 75],
     ['commercial', 300, 41, 50, 60],
-    ['farm', 100, 40, 49, 65],
-    ['town_hall', 3_000, 40, 49, 60],
+    ['farm', 100, 40, 49, 80],
+    ['town_hall', 3_000, 40, 49, 110],
     ['factory', 700, 40, 49, 60],
   ])(
     'places %s, deducts its price, and applies its catalog population effect',
@@ -104,6 +104,124 @@ describe('createMockTownApi market model placement', () => {
       expect(api.getTownSnapshot().town.population).toBe(population)
     },
   )
+
+  it('applies a park bonus once per adjacent small house and recalculates it after moving', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'small_park',
+        anchorX: 42,
+        anchorY: 49,
+        requestId: 'place-first-adjacent-park',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { population: 65 } })
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'small_park',
+        anchorX: 44,
+        anchorY: 49,
+        requestId: 'place-second-adjacent-park',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { population: 65 } })
+
+    await expect(
+      api.moveBuilding({
+        buildingId: 'mock-house-001',
+        anchorX: 41,
+        anchorY: 50,
+        requestId: 'move-house-away-from-parks',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { population: 60 } })
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'small_park',
+        anchorX: 45,
+        anchorY: 49,
+        requestId: 'place-first-apartment-park',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { population: 70 } })
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'small_park',
+        anchorX: 48,
+        anchorY: 49,
+        requestId: 'place-second-apartment-park',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { population: 70 } })
+  })
+
+  it('applies one hospital effect and recalculates it when housing increases', async () => {
+    const api = createMockTownApi({ latencyMs: 0 })
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'hospital',
+        anchorX: 40,
+        anchorY: 49,
+        requestId: 'place-first-hospital',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { population: 75 } })
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'hospital',
+        anchorX: 49,
+        anchorY: 49,
+        requestId: 'place-second-hospital',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { population: 75 } })
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'small_house',
+        anchorX: 45,
+        anchorY: 49,
+        requestId: 'place-house-after-hospital',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { population: 90 } })
+  })
+
+  it('applies one town hall effect to both housing types', async () => {
+    const initialCoins = 10_000
+    const api = createMockTownApi({
+      latencyMs: 0,
+      initialTown: {
+        ...MOCK_MY_TOWN,
+        town: { ...MOCK_MY_TOWN.town, coins: initialCoins },
+      },
+    })
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'town_hall',
+        anchorX: 40,
+        anchorY: 49,
+        requestId: 'place-first-town-hall',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { population: 110 } })
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'town_hall',
+        anchorX: 49,
+        anchorY: 49,
+        requestId: 'place-second-town-hall',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { population: 110 } })
+
+    await expect(
+      api.placeBuilding({
+        buildingTypeCode: 'small_house',
+        anchorX: 45,
+        anchorY: 49,
+        requestId: 'place-house-after-town-hall',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { population: 140 } })
+  })
 })
 
 describe('createMockTownApi road line placement', () => {
@@ -124,7 +242,7 @@ describe('createMockTownApi road line placement', () => {
           anchorX: cell.x,
           anchorY: cell.y,
         })),
-        coinBalance: 2_000,
+        coinBalance: 10_000,
       },
     })
 
@@ -193,7 +311,7 @@ describe('createMockTownApi fixed river validation', () => {
         placementKind: 'bridge',
         roadStructureId: 'mock-road-structure-001',
         totalCostCoins: 1_000,
-        coinBalance: 1_000,
+        coinBalance: 9_000,
         buildings: input.cells.map((cell) => ({
           buildingTypeCode: 'road',
           anchorX: cell.x,
@@ -255,12 +373,12 @@ describe('createMockTownApi road deletion', () => {
         deletionKind: 'road',
         deletedBuildingIds: ['mock-road-001'],
         deletedRoadStructureId: null,
-        coinBalance: 2_000,
+        coinBalance: 10_000,
         population: 60,
       },
     })
     expect(await api.deleteRoad(input)).toEqual(first)
-    expect(api.getTownSnapshot().town.coins).toBe(2_000)
+    expect(api.getTownSnapshot().town.coins).toBe(10_000)
     expect(
       api
         .getTownSnapshot()
@@ -308,7 +426,7 @@ describe('createMockTownApi road deletion', () => {
       data: {
         deletionKind: 'bridge',
         deletedRoadStructureId: 'mock-road-structure-001',
-        coinBalance: 1_000,
+        coinBalance: 9_000,
         population: 60,
       },
     })
