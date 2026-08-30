@@ -6,12 +6,16 @@ import { AuthCallbackPage } from './routes/AuthCallbackPage'
 import { HealthConnectionPage } from './routes/HealthConnectionPage'
 import { LoginPage } from './routes/LoginPage'
 import { NotFoundPage } from './routes/NotFoundPage'
+import { PrivacyPolicyPage } from './routes/PrivacyPolicyPage'
+import { TermsOfServicePage } from './routes/TermsOfServicePage'
 import { TownPage } from './routes/TownPage'
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path={paths.login} element={<LoginPage />} />
+      <Route path={paths.privacy} element={<PrivacyPolicyPage />} />
+      <Route path={paths.terms} element={<TermsOfServicePage />} />
       <Route path={paths.authCallback} element={<AuthCallbackPage />} />
       <Route
         path={paths.healthConnect}

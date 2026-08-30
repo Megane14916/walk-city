@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import { paths } from '../paths'
 
 export type OnboardingLayoutProps = {
   children: ReactNode
@@ -75,7 +77,8 @@ export function OnboardingLayout({ children }: OnboardingLayoutProps) {
         <footer className="mt-auto flex min-h-[61px] items-center justify-between px-[clamp(26px,5vw,72px)] text-[9px] text-[#969b98]">
           <span>© 2026 Walk City</span>
           <nav className="flex gap-[19px]" aria-label="フッターリンク">
-            <a className="text-inherit no-underline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[rgba(40,124,100,.32)]" href="#privacy">プライバシー</a>
+            <Link className="text-inherit no-underline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[rgba(40,124,100,.32)]" to={paths.terms}>利用規約</Link>
+            <Link className="text-inherit no-underline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[rgba(40,124,100,.32)]" to={paths.privacy}>プライバシー</Link>
             <a className="text-inherit no-underline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[rgba(40,124,100,.32)]" href="#help">ヘルプ</a>
           </nav>
         </footer>
