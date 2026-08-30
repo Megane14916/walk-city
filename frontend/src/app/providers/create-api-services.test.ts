@@ -42,7 +42,7 @@ describe('createApiServices', () => {
     })
     expect(townResult).toMatchObject({
       ok: true,
-      data: { town: { coins: 2_000 } },
+      data: { town: { coins: 10_000 } },
     })
     expect(rankingResult).toMatchObject({
       ok: true,

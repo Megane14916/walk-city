@@ -205,6 +205,124 @@ describe('createSupabaseTownApi', () => {
     })
   })
 
+  it('describes the park adjacency effect from the catalog', async () => {
+    const mock = createSupabaseMock({
+      building_catalog_view: {
+        data: [
+          {
+            ...CATALOG_ROW,
+            code: 'small_park',
+            name: '公園',
+            category: 'nature',
+            cost_coins: '150',
+            description: '隣接する住宅の人口を増加する公園です',
+            effects: [
+              {
+                effect_type: 'adjacent_small_house_population_flat',
+                value: '5',
+                target_category: 'residential',
+                scope: 'orthogonal_adjacent',
+                stacking_rule: 'unique_target',
+                metadata: {},
+              },
+              {
+                effect_type: 'adjacent_apartment_population_flat',
+                value: '10',
+                target_category: 'residential',
+                scope: 'orthogonal_adjacent',
+                stacking_rule: 'unique_target',
+                metadata: {},
+              },
+            ],
+          },
+        ],
+        error: null,
+      },
+    })
+    const api = createSupabaseTownApi(mock.client)
+
+    await expect(api.getBuildingCatalog()).resolves.toMatchObject({
+      ok: true,
+      data: [
+        {
+          code: 'small_park',
+          effects: [
+            {
+              type: 'adjacent_small_house_population_flat',
+              value: 5,
+              description:
+                '上下左右に隣接する住宅（小）1軒につき人口を5増やします',
+            },
+            {
+              type: 'adjacent_apartment_population_flat',
+              value: 10,
+              description:
+                '上下左右に隣接する住宅（大）1軒につき人口を10増やします',
+            },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('describes both hospital housing effects from the catalog', async () => {
+    const mock = createSupabaseMock({
+      building_catalog_view: {
+        data: [
+          {
+            ...CATALOG_ROW,
+            code: 'hospital',
+            name: '病院',
+            category: 'public',
+            cost_coins: '600',
+            description: '町内の住宅数に応じて人口を増加する病院です',
+            effects: [
+              {
+                effect_type: 'small_house_population_flat',
+                value: '5',
+                target_category: 'residential',
+                scope: 'town',
+                stacking_rule: 'single_source',
+                metadata: {},
+              },
+              {
+                effect_type: 'apartment_population_flat',
+                value: '10',
+                target_category: 'residential',
+                scope: 'town',
+                stacking_rule: 'single_source',
+                metadata: {},
+              },
+            ],
+          },
+        ],
+        error: null,
+      },
+    })
+    const api = createSupabaseTownApi(mock.client)
+
+    await expect(api.getBuildingCatalog()).resolves.toMatchObject({
+      ok: true,
+      data: [
+        {
+          code: 'hospital',
+          effects: [
+            {
+              type: 'small_house_population_flat',
+              value: 5,
+              description: '町内の住宅（小）1軒につき人口を5増やします',
+            },
+            {
+              type: 'apartment_population_flat',
+              value: 10,
+              description: '町内の住宅（大）1軒につき人口を10増やします',
+            },
+          ],
+        },
+      ],
+    })
+  })
+
   it('maps the authenticated town and includes its coin balance', async () => {
     const mock = createSupabaseMock({
       my_town_details_view: { data: MY_TOWN_ROW, error: null },

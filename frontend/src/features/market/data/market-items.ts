@@ -27,7 +27,7 @@ export const MARKET_ITEMS: MarketItem[] = [
   {
     code: 'small_park',
     name: '公園',
-    effect: null,
+    effect: '隣接する住宅（小）は人口+5、住宅（大）は人口+10（最大+40）',
     costCoins: 150,
     width: 1,
     height: 1,
@@ -36,7 +36,7 @@ export const MARKET_ITEMS: MarketItem[] = [
   {
     code: 'hospital',
     name: '病院',
-    effect: null,
+    effect: '住宅（小）1軒につき人口+5、住宅（大）1軒につき人口+10',
     costCoins: 600,
     width: 2,
     height: 2,
@@ -54,7 +54,7 @@ export const MARKET_ITEMS: MarketItem[] = [
   {
     code: 'farm',
     name: '農場',
-    effect: null,
+    effect: '人口を20人増加',
     costCoins: 100,
     width: 2,
     height: 2,
@@ -63,7 +63,7 @@ export const MARKET_ITEMS: MarketItem[] = [
   {
     code: 'road',
     name: '道路',
-    effect: null,
+    effect: '上下左右に隣接する土地へ建物を配置可能',
     costCoins: 0,
     width: 1,
     height: 1,
@@ -72,7 +72,7 @@ export const MARKET_ITEMS: MarketItem[] = [
   {
     code: 'town_hall',
     name: '役所',
-    effect: null,
+    effect: '住宅（小）1軒につき人口+20、住宅（大）1軒につき人口+30',
     costCoins: 3000,
     width: 2,
     height: 2,

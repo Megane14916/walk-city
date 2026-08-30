@@ -329,7 +329,7 @@ Phase 0当初の一覧にはないが、現行フロントと最新バックエ�
 `private.recalculate_town_population(p_town_id uuid)`へ集約する。
 
 - `population_flat`だけを対象に配置数×効果値を集計する。
-- `small_house +10`、`apartment +50`を設定データから計算する。`farm`、`town_hall`に人口効果はない。
+- `small_house +10`、`apartment +50`、`farm +20`と、公園・病院・役所の条件付き人口効果を設定データから計算する。
 - 未知のeffect typeを暗黙実行しない。
 - `place_building`、`move_building`、`place_road_line`から呼ぶ。
 
@@ -420,12 +420,12 @@ Phase 0の9商品へseedを修正する。
 |---|---:|---|
 | `small_house` | 50 | `population_flat +10` |
 | `apartment` | 200 | `population_flat +50` |
-| `small_park` | 150 | 隣接する住宅（小）ごとに人口 +5（最大+20） |
-| `hospital` | 600 | 住宅（小）ごとに人口 +5、住宅（大）ごとに人口 +10 |
+| `small_park` | 150 | 隣接する住宅（小）ごとに人口 +5、住宅（大）ごとに人口 +10（最大+40） |
+| `hospital` | 600 | 町内の住宅（小）ごとに人口 +5、住宅（大）ごとに人口 +10（配置順不問） |
 | `commercial` | 300 | 歩数コイン +10%（最大3軒） |
 | `farm` | 100 | `population_flat +20` |
 | `road` | 0 | 隣接土地へ建物を配置可能（強制はマップルール） |
-| `town_hall` | 3000 | 住宅（小）ごとに人口 +20（1軒分のみ） |
+| `town_hall` | 3000 | 町内の住宅（小）ごとに人口 +20、住宅（大）ごとに人口 +30（1軒分のみ、配置順不問） |
 | `factory` | 700 | 歩数コイン +25%（最大2軒） |
 
 ## 7. 実装フェーズと順序

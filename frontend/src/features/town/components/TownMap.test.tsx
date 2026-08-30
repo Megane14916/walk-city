@@ -219,7 +219,7 @@ describe('TownOverview', () => {
     expect(
       await screen.findByRole('heading', { name: 'グリーンタウン' }),
     ).not.toBeNull()
-    expect(screen.getByText('2,000')).not.toBeNull()
+    expect(screen.getByText('10,000')).not.toBeNull()
     const menu = screen.getByRole('navigation', {
       name: 'ユーザーダッシュボード',
     })
@@ -291,7 +291,7 @@ describe('TownOverview', () => {
     expect(
       await screen.findByText('住宅（小）を配置しました。'),
     ).not.toBeNull()
-    expect(screen.getByText('1,950')).not.toBeNull()
+    expect(screen.getByText('9,950')).not.toBeNull()
     expect(within(menu).getByText('70人')).not.toBeNull()
     expect(api.getTownSnapshot().town.population).toBe(70)
     expect(api.getTownSnapshot().buildings.at(-1)).toMatchObject({
@@ -323,7 +323,7 @@ describe('TownOverview', () => {
     expect((submit as HTMLButtonElement).disabled).toBe(true)
     expect(placeBuilding).toHaveBeenCalledTimes(1)
     await screen.findByText('住宅（小）を配置しました。')
-    expect(api.getTownSnapshot().town.coins).toBe(1_950)
+    expect(api.getTownSnapshot().town.coins).toBe(9_950)
   })
 
   it('selects a building, shows its details, and changes its display name', async () => {
@@ -361,7 +361,7 @@ describe('TownOverview', () => {
         ?.customName,
     ).toBe('わが家')
     expect(api.getTownSnapshot().town.population).toBe(60)
-    expect(api.getTownSnapshot().town.coins).toBe(2_000)
+    expect(api.getTownSnapshot().town.coins).toBe(10_000)
 
     fireEvent.click(screen.getByRole('button', { name: '初期名に戻す' }))
     expect(
@@ -402,7 +402,7 @@ describe('TownOverview', () => {
     expect(
       await screen.findByText('住宅（小）を移動しました。'),
     ).not.toBeNull()
-    expect(api.getTownSnapshot().town.coins).toBe(2_000)
+    expect(api.getTownSnapshot().town.coins).toBe(10_000)
     expect(api.getTownSnapshot().town.population).toBe(60)
     expect(
       api
@@ -517,7 +517,7 @@ describe('TownOverview', () => {
     fireEvent.click(screen.getByRole('button', { name: '削除する' }))
 
     expect(await screen.findByText('道路 1セルを削除しました。')).not.toBeNull()
-    expect(api.getTownSnapshot().town.coins).toBe(2_000)
+    expect(api.getTownSnapshot().town.coins).toBe(10_000)
     expect(
       api
         .getTownSnapshot()
@@ -580,7 +580,7 @@ describe('TownOverview', () => {
     expect(
       await screen.findByText('住宅（大）を配置しました。'),
     ).not.toBeNull()
-    expect(screen.getByText('1,800')).not.toBeNull()
+    expect(screen.getByText('9,800')).not.toBeNull()
     expect(api.getTownSnapshot().town.population).toBe(110)
     expect(api.getTownSnapshot().buildings.at(-1)).toMatchObject({
       buildingTypeCode: 'apartment',
@@ -589,7 +589,7 @@ describe('TownOverview', () => {
     })
   })
 
-  it('purchases and places an effect-free model without changing population', async () => {
+  it('places a park without changing population when no small house is adjacent', async () => {
     const api = createMockTownApi({ latencyMs: 0 })
     render(<TownOverview api={api} />)
     await screen.findByRole('heading', { name: 'グリーンタウン' })
@@ -612,7 +612,7 @@ describe('TownOverview', () => {
     )
 
     expect(await screen.findByText('公園を配置しました。')).not.toBeNull()
-    expect(screen.getByText('1,850')).not.toBeNull()
+    expect(screen.getByText('9,850')).not.toBeNull()
     expect(api.getTownSnapshot().town.population).toBe(60)
     expect(api.getTownSnapshot().buildings.at(-1)).toMatchObject({
       buildingTypeCode: 'small_park',
@@ -786,11 +786,11 @@ describe('TownOverview', () => {
     fireEvent.click(screen.getByRole('button', { name: '歩数を同期 ↻' }))
 
     expect(await screen.findByText('6,500歩')).not.toBeNull()
-    expect(await screen.findByText('2,650')).not.toBeNull()
+    expect(await screen.findByText('10,650')).not.toBeNull()
     expect(
       screen.getByText('6,500歩を同期し、650コイン獲得しました。'),
     ).not.toBeNull()
-    expect(api.getTownSnapshot().town.coins).toBe(2_650)
+    expect(api.getTownSnapshot().town.coins).toBe(10_650)
 
     fireEvent.click(screen.getByRole('button', { name: '歩数を同期 ↻' }))
     expect(
@@ -798,7 +798,7 @@ describe('TownOverview', () => {
         '歩数は最新です。新しく付与されたコインはありません。',
       ),
     ).not.toBeNull()
-    expect(api.getTownSnapshot().town.coins).toBe(2_650)
+    expect(api.getTownSnapshot().town.coins).toBe(10_650)
   })
 
   it('shows a reconnection action for a permission error', async () => {
@@ -837,7 +837,7 @@ describe('TownOverview', () => {
     expect(
       within(alert).getByRole('link', { name: '再連携' }).getAttribute('href'),
     ).toBe('/health/connect')
-    expect(api.getTownSnapshot().town.coins).toBe(2_000)
+    expect(api.getTownSnapshot().town.coins).toBe(10_000)
   })
 
   it('does not expose or invoke step sync in a public town', async () => {

@@ -33,7 +33,7 @@ insert into public.building_effects (
 )
 values
   (
-    '20000000-0000-4000-8000-000000000003',
+    '20000000-0000-4000-8000-000000000010',
     'commercial',
     'step_coin_bonus_percent',
     10,
@@ -43,7 +43,7 @@ values
     '{"maxEffectiveCount":3,"combinedCapPercent":50,"priority":1}'::jsonb
   ),
   (
-    '20000000-0000-4000-8000-000000000004',
+    '20000000-0000-4000-8000-000000000011',
     'factory',
     'step_coin_bonus_percent',
     25,

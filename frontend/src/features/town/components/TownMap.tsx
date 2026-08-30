@@ -708,7 +708,7 @@ export function TownMap({
         </div>
 
         <div
-          className="absolute right-4 bottom-4 z-40 flex items-center gap-1 rounded-[14px] border border-white/70 bg-[rgba(247,246,240,.91)] p-1.5 shadow-[0_8px_20px_rgba(24,61,55,.16)] backdrop-blur-sm"
+          className="absolute right-4 bottom-4 z-40 flex items-center gap-1 rounded-[14px] border border-white/70 bg-[rgba(247,246,240,.91)] p-1.5 shadow-[0_8px_20px_rgba(24,61,55,.16)] backdrop-blur-sm max-[670px]:right-3 max-[670px]:bottom-[72px]"
           aria-label="マップ表示操作"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
@@ -723,7 +723,7 @@ export function TownMap({
             −
           </button>
           <button
-            className="grid h-10 min-w-10 cursor-pointer place-items-center rounded-[10px] border-0 bg-transparent px-2 text-[10px] font-black text-[#315f56] hover:bg-white"
+            className="grid h-10 min-w-10 cursor-pointer place-items-center rounded-[10px] border-0 bg-transparent px-2 text-[10px] font-black text-[#315f56] hover:bg-white max-[670px]:h-8 max-[670px]:min-w-8 max-[670px]:px-1 max-[670px]:text-[8px]"
             type="button"
             onClick={() => setView(initialView)}
             aria-label="開放エリアを中央に戻す"
