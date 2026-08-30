@@ -467,7 +467,7 @@ Supabase Edge Function `sync-health-steps` を呼び出す。クライアント�
 
 基本報酬は10歩につき1コイン、端数切り捨て、日次上限なしとする。同日の追加同期では`max(0, floor(totalSteps / 10) - floor(previousRewardedSteps / 10))`を基本付与額とし、分割同期で10歩未満の端数を失わない。その後、商業施設・工場の合算ボーナス率（最大50%）を適用する。
 
-`appliedBonuses`は商業施設・工場のボーナスが実際に適用された場合に内訳を返す。`amount`は合算上限適用後のパーセントポイントとし、新規獲得コインが0なら`[]`を返す。
+`appliedBonuses`は商業施設・工場のボーナスが実際に適用された場合に内訳を返す。`effectType`は`step_coin_bonus_percent`とする。`sourceCount`はその種類の実際の配置数で、上限超過分も含める。`amount`は種類別・合算上限適用後のパーセントポイントとし、新規獲得コインが0なら`[]`を返す。
 
 冪等性:
 

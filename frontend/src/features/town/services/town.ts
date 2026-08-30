@@ -144,6 +144,9 @@ function effectDescription(type: string, value: number | null): string {
   if (type === 'population_flat' && value !== null) {
     return `人口を${value}増やします`
   }
+  if (type === 'step_coin_bonus_percent' && value !== null) {
+    return `歩数同期時の獲得コインを${value}%増やします`
+  }
   if (type === 'adjacent_small_house_population_flat' && value !== null) {
     return `上下左右に隣接する住宅（小）1軒につき人口を${value}増やします`
   }

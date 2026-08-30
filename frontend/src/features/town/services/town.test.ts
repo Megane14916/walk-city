@@ -60,6 +60,32 @@ const CATALOG_ROW = {
   ],
 }
 
+const COMMERCIAL_CATALOG_ROW = {
+  code: 'commercial',
+  name: '商業施設',
+  category: 'commercial',
+  width: 1,
+  height: 1,
+  cost_coins: '300',
+  enabled: true,
+  description: '歩数同期時のコイン獲得を増やす商業施設です',
+  catalog_version: 1,
+  effects: [
+    {
+      effect_type: 'step_coin_bonus_percent',
+      value: '10',
+      target_category: null,
+      scope: 'step_sync',
+      stacking_rule: 'commercial_first_combined_cap',
+      metadata: {
+        maxEffectiveCount: 3,
+        combinedCapPercent: 50,
+        priority: 1,
+      },
+    },
+  ],
+}
+
 const BUILDING_ROW = {
   id: '10000000-0000-4000-8000-000000000001',
   building_type_code: 'small_house',
@@ -143,6 +169,40 @@ describe('createSupabaseTownApi', () => {
       ],
     })
     expect(mock.from).toHaveBeenCalledWith('building_catalog_view')
+  })
+
+  it('maps the step coin percentage effect and its description', async () => {
+    const mock = createSupabaseMock({
+      building_catalog_view: {
+        data: [COMMERCIAL_CATALOG_ROW],
+        error: null,
+      },
+    })
+
+    await expect(
+      createSupabaseTownApi(mock.client).getBuildingCatalog(),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: [
+        {
+          code: 'commercial',
+          effects: [
+            {
+              type: 'step_coin_bonus_percent',
+              value: 10,
+              scope: 'step_sync',
+              stackingRule: 'commercial_first_combined_cap',
+              description: '歩数同期時の獲得コインを10%増やします',
+              metadata: {
+                maxEffectiveCount: 3,
+                combinedCapPercent: 50,
+                priority: 1,
+              },
+            },
+          ],
+        },
+      ],
+    })
   })
 
   it('describes the park adjacency effect from the catalog', async () => {

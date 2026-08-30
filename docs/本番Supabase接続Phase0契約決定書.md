@@ -460,7 +460,7 @@ POST https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyR
 - 基本報酬は「10歩につき1コイン」、端数切り捨て、日次上限なしとする（`ユーザー決定`）。
 - 同日の追加同期で端数を失わないよう、今回付与額は`max(0, floor(total_steps / 10) - floor(previous_rewarded_steps / 10))`で計算する。
 - 商業施設は1軒につき10%、最大3軒、工場は1軒につき25%、最大2軒とし、合計ボーナス率を50%以下にする。
-- `appliedBonuses`はボーナスが実際に適用された場合に内訳を返し、新規獲得コインが0の場合は`[]`を返す。
+- `appliedBonuses`はボーナスが実際に適用された場合に内訳を返す。`effectType`は`step_coin_bonus_percent`、`sourceCount`は上限超過分を含む実際の配置数、`amount`は上限適用後の有効率とする。新規獲得コインが0の場合は`[]`を返す。
 
 ## 11. エラー契約
 

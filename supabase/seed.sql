@@ -23,22 +23,77 @@ set name = excluded.name,
     enabled = excluded.enabled,
     catalog_version = excluded.catalog_version;
 
+delete from public.building_effects
+where building_type_code in ('commercial', 'factory')
+  and effect_type in ('step_coin_bonus_flat', 'step_coin_bonus_percent');
+
 insert into public.building_effects (
   id, building_type_code, effect_type, value,
-  metadata
+  target_category, scope, stacking_rule, metadata
 )
 values
-  ('20000000-0000-4000-8000-000000000001', 'small_house', 'population_flat', 10, '{}'::jsonb),
-  ('20000000-0000-4000-8000-000000000002', 'apartment', 'population_flat', 50, '{}'::jsonb),
-  ('20000000-0000-4000-8000-000000000003', 'farm', 'population_flat', 20, '{}'::jsonb),
-  ('20000000-0000-4000-8000-000000000004', 'small_park', 'adjacent_small_house_population_flat', 5, '{}'::jsonb),
-  ('20000000-0000-4000-8000-000000000005', 'small_park', 'adjacent_apartment_population_flat', 10, '{}'::jsonb),
-  ('20000000-0000-4000-8000-000000000006', 'hospital', 'small_house_population_flat', 5, '{}'::jsonb),
-  ('20000000-0000-4000-8000-000000000007', 'hospital', 'apartment_population_flat', 10, '{}'::jsonb),
-  ('20000000-0000-4000-8000-000000000008', 'town_hall', 'small_house_population_flat', 20, '{}'::jsonb),
-  ('20000000-0000-4000-8000-000000000009', 'town_hall', 'apartment_population_flat', 30, '{}'::jsonb)
+  (
+    '20000000-0000-4000-8000-000000000001',
+    'small_house', 'population_flat', 10,
+    null, null, null, '{}'::jsonb
+  ),
+  (
+    '20000000-0000-4000-8000-000000000002',
+    'apartment', 'population_flat', 50,
+    null, null, null, '{}'::jsonb
+  ),
+  (
+    '20000000-0000-4000-8000-000000000003',
+    'farm', 'population_flat', 20,
+    null, null, null, '{}'::jsonb
+  ),
+  (
+    '20000000-0000-4000-8000-000000000004',
+    'small_park', 'adjacent_small_house_population_flat', 5,
+    'residential', 'orthogonal_adjacent', 'unique_target', '{}'::jsonb
+  ),
+  (
+    '20000000-0000-4000-8000-000000000005',
+    'small_park', 'adjacent_apartment_population_flat', 10,
+    'residential', 'orthogonal_adjacent', 'unique_target', '{}'::jsonb
+  ),
+  (
+    '20000000-0000-4000-8000-000000000006',
+    'hospital', 'small_house_population_flat', 5,
+    'residential', 'town', 'single_source', '{}'::jsonb
+  ),
+  (
+    '20000000-0000-4000-8000-000000000007',
+    'hospital', 'apartment_population_flat', 10,
+    'residential', 'town', 'single_source', '{}'::jsonb
+  ),
+  (
+    '20000000-0000-4000-8000-000000000008',
+    'town_hall', 'small_house_population_flat', 20,
+    'residential', 'town', 'single_source', '{}'::jsonb
+  ),
+  (
+    '20000000-0000-4000-8000-000000000009',
+    'town_hall', 'apartment_population_flat', 30,
+    'residential', 'town', 'single_source', '{}'::jsonb
+  ),
+  (
+    '20000000-0000-4000-8000-000000000010',
+    'commercial', 'step_coin_bonus_percent', 10,
+    null, 'step_sync', 'commercial_first_combined_cap',
+    '{"maxEffectiveCount":3,"combinedCapPercent":50,"priority":1}'::jsonb
+  ),
+  (
+    '20000000-0000-4000-8000-000000000011',
+    'factory', 'step_coin_bonus_percent', 25,
+    null, 'step_sync', 'commercial_first_combined_cap',
+    '{"maxEffectiveCount":2,"combinedCapPercent":50,"priority":2}'::jsonb
+  )
 on conflict (id) do update
 set building_type_code = excluded.building_type_code,
     effect_type = excluded.effect_type,
     value = excluded.value,
+    target_category = excluded.target_category,
+    scope = excluded.scope,
+    stacking_rule = excluded.stacking_rule,
     metadata = excluded.metadata;

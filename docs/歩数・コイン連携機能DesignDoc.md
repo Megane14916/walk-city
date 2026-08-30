@@ -139,7 +139,7 @@ export type StepSyncStatus = {
 }
 ```
 
-フロントエンドは各数値を 0 以上の `Number.isSafeInteger` として検証する。`date` は `YYYY-MM-DD`、`timezone` は空でない文字列、`syncedAt` は解釈可能な ISO 8601 文字列として検証する。`appliedBonuses`は空配列または商業施設・工場の適用内訳とし、各要素の`sourceBuildingType`、`sourceCount`、`effectType`、`amount`を検証する。`amount`は合算上限適用後のパーセントポイントとする。
+フロントエンドは各数値を 0 以上の `Number.isSafeInteger` として検証する。`date` は `YYYY-MM-DD`、`timezone` は空でない文字列、`syncedAt` は解釈可能な ISO 8601 文字列として検証する。`appliedBonuses`は空配列または商業施設・工場の適用内訳とし、各要素の`sourceBuildingType`、`sourceCount`、`effectType`、`amount`を検証する。`effectType`は`step_coin_bonus_percent`、`sourceCount`はその種類の実際の配置数（上限超過分を含む）、`amount`は種類別・合算上限適用後のパーセントポイントとする。
 
 `coinsAwarded` が `0` でも成功である。再同期時に新しい歩数がなければ、成功状態を保ったまま「新しく反映された歩数はありません」と表示する。
 

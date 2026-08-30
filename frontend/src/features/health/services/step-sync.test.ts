@@ -47,6 +47,43 @@ describe('StepSyncStatus validation', () => {
     })
   })
 
+  it('accepts capped bonuses while preserving actual building counts', () => {
+    expect(
+      isStepSyncStatus(
+        cloneStatus({
+          appliedBonuses: [
+            {
+              sourceBuildingType: 'commercial',
+              sourceCount: 4,
+              effectType: 'step_coin_bonus_percent',
+              amount: 30,
+            },
+            {
+              sourceBuildingType: 'factory',
+              sourceCount: 3,
+              effectType: 'step_coin_bonus_percent',
+              amount: 20,
+            },
+          ],
+        }),
+      ),
+    ).toBe(true)
+    expect(
+      isStepSyncStatus(
+        cloneStatus({
+          appliedBonuses: [
+            {
+              sourceBuildingType: 'factory',
+              sourceCount: 3,
+              effectType: 'step_coin_bonus_percent',
+              amount: 50,
+            },
+          ],
+        }),
+      ),
+    ).toBe(true)
+  })
+
   it.each([
     ['invalid calendar date', { date: '2026-02-30' }],
     ['unexpected timezone', { timezone: 'Australia/Sydney' }],
@@ -57,14 +94,60 @@ describe('StepSyncStatus validation', () => {
     ['invalid timestamp', { syncedAt: '2026-08-27' }],
     ['missing bonuses', { appliedBonuses: null }],
     [
-      'negative bonus amount',
+      'legacy bonus effect',
       {
         appliedBonuses: [
           {
             sourceBuildingType: 'commercial',
             sourceCount: 1,
             effectType: 'step_coin_bonus_flat',
-            amount: -1,
+            amount: 10,
+          },
+        ],
+      },
+    ],
+    [
+      'incorrect capped amount',
+      {
+        appliedBonuses: [
+          {
+            sourceBuildingType: 'commercial',
+            sourceCount: 4,
+            effectType: 'step_coin_bonus_percent',
+            amount: 40,
+          },
+        ],
+      },
+    ],
+    [
+      'reversed bonus order',
+      {
+        appliedBonuses: [
+          {
+            sourceBuildingType: 'factory',
+            sourceCount: 1,
+            effectType: 'step_coin_bonus_percent',
+            amount: 25,
+          },
+          {
+            sourceBuildingType: 'commercial',
+            sourceCount: 1,
+            effectType: 'step_coin_bonus_percent',
+            amount: 10,
+          },
+        ],
+      },
+    ],
+    [
+      'bonus with no awarded coins',
+      {
+        coinsAwarded: 0,
+        appliedBonuses: [
+          {
+            sourceBuildingType: 'commercial',
+            sourceCount: 1,
+            effectType: 'step_coin_bonus_percent',
+            amount: 10,
           },
         ],
       },

@@ -345,6 +345,7 @@ Phase 0当初の一覧にはないが、現行フロントと最新バックエ�
 - 商業施設・工場のボーナスを、合計最大50%で基本付与額に適用する。
 - 基本報酬とtown残高を同一トランザクションで更新する。
 - 結果に`newlyRewardedSteps`と`appliedBonuses`を含める。後者は商業施設・工場のボーナス内訳を返し、ボーナスなしの場合は空配列とする。
+- `appliedBonuses.effectType`は`step_coin_bonus_percent`、`sourceCount`は上限超過分を含む実際の配置数、`amount`は種類別・合算上限適用後のパーセントポイントとする。
 
 ### 5.9 `rename_building`
 

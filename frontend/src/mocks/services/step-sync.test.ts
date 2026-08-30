@@ -1,10 +1,51 @@
 import { describe, expect, it } from 'vitest'
+import type { PlacedBuilding, TownDetail } from '../../features/town/types'
+import { MOCK_MY_TOWN } from '../data/towns'
 import { createMockTownApi } from './town'
 import { createMockStepSyncApi } from './step-sync'
 import { createMockWalkCityStore } from './walk-city-store'
 
 const FIXED_NOW = new Date('2026-08-27T03:00:00.000Z')
 const DATE = '2026-08-27'
+
+function bonusBuilding(
+  buildingTypeCode: 'commercial' | 'factory',
+  index: number,
+): PlacedBuilding {
+  return {
+    id: `${buildingTypeCode}-${index}`,
+    buildingTypeCode,
+    customName: null,
+    anchorX: 60 + index,
+    anchorY: buildingTypeCode === 'commercial' ? 60 : 65,
+    roadStructureId: null,
+    roadVariant: null,
+    createdAt: FIXED_NOW.toISOString(),
+    updatedAt: FIXED_NOW.toISOString(),
+  }
+}
+
+function townWithBonuses(
+  commercialCount: number,
+  factoryCount: number,
+): TownDetail {
+  return {
+    ...MOCK_MY_TOWN,
+    town: {
+      ...MOCK_MY_TOWN.town,
+      owner: { ...MOCK_MY_TOWN.town.owner },
+    },
+    buildings: [
+      ...MOCK_MY_TOWN.buildings.map((building) => ({ ...building })),
+      ...Array.from({ length: commercialCount }, (_, index) =>
+        bonusBuilding('commercial', index),
+      ),
+      ...Array.from({ length: factoryCount }, (_, index) =>
+        bonusBuilding('factory', index),
+      ),
+    ],
+  }
+}
 
 describe('createMockStepSyncApi', () => {
   it('updates the Town balance in the shared store', async () => {
@@ -67,6 +108,114 @@ describe('createMockStepSyncApi', () => {
         coinsAwarded: 25,
         coinBalance: 10_125,
       },
+    })
+  })
+
+  it('applies a commercial bonus to the step reward', async () => {
+    const store = createMockWalkCityStore({
+      initialTown: townWithBonuses(1, 0),
+      stepsByDate: { [DATE]: 1_000 },
+    })
+    const api = createMockStepSyncApi({
+      latencyMs: 0,
+      now: () => FIXED_NOW,
+      store,
+      coinsPerStep: 0.1,
+    })
+
+    await expect(api.syncSteps()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        coinsAwarded: 110,
+        coinBalance: 2_110,
+        appliedBonuses: [
+          {
+            sourceBuildingType: 'commercial',
+            sourceCount: 1,
+            effectType: 'step_coin_bonus_percent',
+            amount: 10,
+          },
+        ],
+      },
+    })
+  })
+
+  it('caps each building type and the combined bonus at 50 percent', async () => {
+    const store = createMockWalkCityStore({
+      initialTown: townWithBonuses(4, 3),
+      stepsByDate: { [DATE]: 1_000 },
+    })
+    const api = createMockStepSyncApi({
+      latencyMs: 0,
+      now: () => FIXED_NOW,
+      store,
+      coinsPerStep: 0.1,
+    })
+
+    await expect(api.syncSteps()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        coinsAwarded: 150,
+        coinBalance: 2_150,
+        appliedBonuses: [
+          {
+            sourceBuildingType: 'commercial',
+            sourceCount: 4,
+            amount: 30,
+          },
+          {
+            sourceBuildingType: 'factory',
+            sourceCount: 3,
+            amount: 20,
+          },
+        ],
+      },
+    })
+  })
+
+  it('caps a factory-only bonus at two buildings', async () => {
+    const store = createMockWalkCityStore({
+      initialTown: townWithBonuses(0, 3),
+      stepsByDate: { [DATE]: 1_000 },
+    })
+    const api = createMockStepSyncApi({
+      latencyMs: 0,
+      now: () => FIXED_NOW,
+      store,
+      coinsPerStep: 0.1,
+    })
+
+    await expect(api.syncSteps()).resolves.toMatchObject({
+      ok: true,
+      data: {
+        coinsAwarded: 150,
+        appliedBonuses: [
+          {
+            sourceBuildingType: 'factory',
+            sourceCount: 3,
+            effectType: 'step_coin_bonus_percent',
+            amount: 50,
+          },
+        ],
+      },
+    })
+  })
+
+  it('does not report bonuses when no base coins are awarded', async () => {
+    const store = createMockWalkCityStore({
+      initialTown: townWithBonuses(1, 1),
+      stepsByDate: { [DATE]: 9 },
+    })
+    const api = createMockStepSyncApi({
+      latencyMs: 0,
+      now: () => FIXED_NOW,
+      store,
+      coinsPerStep: 0.1,
+    })
+
+    await expect(api.syncSteps()).resolves.toMatchObject({
+      ok: true,
+      data: { coinsAwarded: 0, appliedBonuses: [] },
     })
   })
 

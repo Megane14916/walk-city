@@ -41,8 +41,13 @@ select col_type_is('public', 'unlocked_areas', 'unlocked_at', 'timestamp with ti
 select hasnt_column('public', 'building_effects', 'description', 'effect description is not stored');
 
 select is((select count(*) from public.building_types), 9::bigint, 'seed has nine formal catalog rows');
-select is((select count(*) from public.building_effects), 9::bigint, 'residential, farm, park, hospital, and town-hall population effects are seeded');
-select is((select count(*) from public.building_effects where effect_type not in ('population_flat', 'adjacent_small_house_population_flat', 'adjacent_apartment_population_flat', 'small_house_population_flat', 'apartment_population_flat')), 0::bigint, 'only supported population effects remain');
+select is((select count(*) from public.building_effects), 11::bigint, 'population and step coin effects are seeded');
+select is(
+  (select count(*) from public.building_effects where effect_type = 'step_coin_bonus_percent'),
+  2::bigint,
+  'commercial and factory percentage effects are seeded'
+);
+select is((select count(*) from public.building_effects where effect_type not in ('population_flat', 'adjacent_small_house_population_flat', 'adjacent_apartment_population_flat', 'small_house_population_flat', 'apartment_population_flat', 'step_coin_bonus_percent')), 0::bigint, 'only supported effects remain');
 select is((select value from public.building_effects where building_type_code = 'farm' and effect_type = 'population_flat'), 20::numeric, 'farm adds twenty population');
 select is((select value from public.building_effects where building_type_code = 'small_park' and effect_type = 'adjacent_small_house_population_flat'), 5::numeric, 'park adds five population per adjacent small house');
 select is((select value from public.building_effects where building_type_code = 'small_park' and effect_type = 'adjacent_apartment_population_flat'), 10::numeric, 'park adds ten population per adjacent apartment');

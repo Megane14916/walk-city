@@ -1,5 +1,8 @@
 import type { StepSyncApi } from '../../features/health/api'
-import type { StepSyncStatus } from '../../features/health/types'
+import type {
+  AppliedBonus,
+  StepSyncStatus,
+} from '../../features/health/types'
 import type { ApiErrorCode, ApiResult } from '../../types/common'
 import {
   createMockWalkCityStore,
@@ -33,6 +36,11 @@ export type MockStepSyncApi = StepSyncApi & {
 }
 
 const TIMEZONE = 'Asia/Tokyo'
+const COMMERCIAL_BONUS_PERCENT = 10
+const COMMERCIAL_MAX_COUNT = 3
+const FACTORY_BONUS_PERCENT = 25
+const FACTORY_MAX_COUNT = 2
+const COMBINED_BONUS_CAP_PERCENT = 50
 const errorMessages: Record<MockStepSyncErrorCode, string> = {
   UNAUTHENTICATED: 'Googleでログインしてください。',
   HEALTH_NOT_CONNECTED: 'Google Healthが連携されていません。',
@@ -57,6 +65,48 @@ function dateInTokyo(date: Date): string {
     month: '2-digit',
     day: '2-digit',
   }).format(date)
+}
+
+function calculateAppliedBonuses(
+  store: MockWalkCityStore,
+): { totalPercent: number; bonuses: AppliedBonus[] } {
+  const buildings = store.getMutableTown().buildings
+  const commercialCount = buildings.filter(
+    (building) => building.buildingTypeCode === 'commercial',
+  ).length
+  const factoryCount = buildings.filter(
+    (building) => building.buildingTypeCode === 'factory',
+  ).length
+  const commercialAmount =
+    Math.min(commercialCount, COMMERCIAL_MAX_COUNT) *
+    COMMERCIAL_BONUS_PERCENT
+  const factoryAmount = Math.min(
+    Math.min(factoryCount, FACTORY_MAX_COUNT) * FACTORY_BONUS_PERCENT,
+    COMBINED_BONUS_CAP_PERCENT - commercialAmount,
+  )
+  const bonuses: AppliedBonus[] = []
+
+  if (commercialCount > 0) {
+    bonuses.push({
+      sourceBuildingType: 'commercial',
+      sourceCount: commercialCount,
+      effectType: 'step_coin_bonus_percent',
+      amount: commercialAmount,
+    })
+  }
+  if (factoryCount > 0 && factoryAmount > 0) {
+    bonuses.push({
+      sourceBuildingType: 'factory',
+      sourceCount: factoryCount,
+      effectType: 'step_coin_bonus_percent',
+      amount: factoryAmount,
+    })
+  }
+
+  return {
+    totalPercent: commercialAmount + factoryAmount,
+    bonuses,
+  }
 }
 
 export function createMockStepSyncApi(
@@ -89,10 +139,14 @@ export function createMockStepSyncApi(
       const steps = store.getSteps(date)
       const rewardedSteps = store.getRewardedSteps(date)
       const newlyRewardedSteps = Math.max(0, steps - rewardedSteps)
-      const coinsAwarded = Math.max(
+      const baseCoins = Math.max(
         0,
         Math.floor(steps * coinsPerStep) -
           Math.floor(rewardedSteps * coinsPerStep),
+      )
+      const { totalPercent, bonuses } = calculateAppliedBonuses(store)
+      const coinsAwarded = Math.floor(
+        (baseCoins * (100 + totalPercent)) / 100,
       )
       const coinBalance = store.awardCoins(coinsAwarded)
       if (coinBalance === null) return failure('INTERNAL_ERROR')
@@ -106,7 +160,7 @@ export function createMockStepSyncApi(
         newlyRewardedSteps,
         coinsAwarded,
         coinBalance,
-        appliedBonuses: [],
+        appliedBonuses: baseCoins > 0 ? bonuses : [],
         syncedAt: timestamp.toISOString(),
       })
     },
