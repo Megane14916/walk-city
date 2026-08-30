@@ -13,7 +13,7 @@ export function TownPage() {
     settingsApi,
     townApi,
   } = useApi()
-  const { integrationState, refresh, state } = useAuth()
+  const { integrationState, refresh, signOut, state } = useAuth()
   const isPublicTown = userId !== undefined
 
   if (
@@ -37,6 +37,7 @@ export function TownPage() {
       rankingApi={rankingApi}
       settingsApi={settingsApi}
       refreshAuth={refresh}
+      onSignOut={isPublicTown ? undefined : signOut}
       getUserHref={paths.town}
       myTownHref={paths.root}
       healthConnectionHref={paths.healthConnect}

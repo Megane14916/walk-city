@@ -189,4 +189,61 @@ describe('UserSettingsDialog', () => {
     fireEvent.click(screen.getByTestId('settings-backdrop'))
     expect(onClose).not.toHaveBeenCalled()
   })
+
+  it('does not show a logout button when onSignOut is not provided', () => {
+    render(
+      <UserSettingsDialog
+        api={createMockSettingsApi({ latencyMs: 0 })}
+        displayName="利用者"
+        townName="街"
+        loginHref="/login"
+        onSaved={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: 'ログアウト' })).toBeNull()
+  })
+
+  it('signs out and surfaces an error message on failure', async () => {
+    const onSignOut = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: { message: 'ログアウトに失敗しました。' } })
+    render(
+      <UserSettingsDialog
+        api={createMockSettingsApi({ latencyMs: 0 })}
+        displayName="利用者"
+        townName="街"
+        loginHref="/login"
+        onSaved={vi.fn()}
+        onClose={vi.fn()}
+        onSignOut={onSignOut}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }))
+    expect(onSignOut).toHaveBeenCalledTimes(1)
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'ログアウトに失敗しました。',
+    )
+  })
+
+  it('calls onSignOut when the logout button is clicked', async () => {
+    const onSignOut = vi.fn().mockResolvedValue({ ok: true, data: null })
+    render(
+      <UserSettingsDialog
+        api={createMockSettingsApi({ latencyMs: 0 })}
+        displayName="利用者"
+        townName="街"
+        loginHref="/login"
+        onSaved={vi.fn()}
+        onClose={vi.fn()}
+        onSignOut={onSignOut}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }))
+    await waitFor(() => expect(onSignOut).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
 })
