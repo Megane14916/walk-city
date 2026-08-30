@@ -58,10 +58,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0
-}
-
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0
 }
@@ -84,15 +80,65 @@ function isIsoDateTime(value: unknown): value is string {
   )
 }
 
-function isAppliedBonus(value: unknown): value is AppliedBonus {
-  if (!isRecord(value)) return false
+function areAppliedBonuses(
+  value: unknown,
+  coinsAwarded: number,
+): value is AppliedBonus[] {
+  if (!Array.isArray(value) || value.length > 2) return false
+  if (coinsAwarded === 0 && value.length !== 0) return false
 
-  return (
-    isNonEmptyString(value.sourceBuildingType) &&
-    isNonNegativeSafeInteger(value.sourceCount) &&
-    isNonEmptyString(value.effectType) &&
-    isNonNegativeSafeInteger(value.amount)
+  const bonuses = value.filter(isRecord)
+  if (bonuses.length !== value.length) return false
+  if (
+    bonuses.some(
+      (bonus) =>
+        (bonus.sourceBuildingType !== 'commercial' &&
+          bonus.sourceBuildingType !== 'factory') ||
+        !Number.isSafeInteger(bonus.sourceCount) ||
+        (bonus.sourceCount as number) <= 0 ||
+        bonus.effectType !== 'step_coin_bonus_percent' ||
+        !Number.isSafeInteger(bonus.amount) ||
+        (bonus.amount as number) <= 0,
+    )
+  ) {
+    return false
+  }
+
+  const commercialIndex = bonuses.findIndex(
+    (bonus) => bonus.sourceBuildingType === 'commercial',
   )
+  const factoryIndex = bonuses.findIndex(
+    (bonus) => bonus.sourceBuildingType === 'factory',
+  )
+  if (
+    bonuses.filter((bonus) => bonus.sourceBuildingType === 'commercial')
+      .length > 1 ||
+    bonuses.filter((bonus) => bonus.sourceBuildingType === 'factory').length >
+      1 ||
+    (commercialIndex >= 0 && factoryIndex >= 0 && commercialIndex > factoryIndex)
+  ) {
+    return false
+  }
+
+  const commercialAmount =
+    commercialIndex < 0
+      ? 0
+      : Math.min(bonuses[commercialIndex].sourceCount as number, 3) * 10
+  if (
+    commercialIndex >= 0 &&
+    bonuses[commercialIndex].amount !== commercialAmount
+  ) {
+    return false
+  }
+
+  const factoryAmount =
+    factoryIndex < 0
+      ? 0
+      : Math.min(
+          Math.min(bonuses[factoryIndex].sourceCount as number, 2) * 25,
+          50 - commercialAmount,
+        )
+  return factoryIndex < 0 || bonuses[factoryIndex].amount === factoryAmount
 }
 
 export function isStepSyncStatus(value: unknown): value is StepSyncStatus {
@@ -106,8 +152,7 @@ export function isStepSyncStatus(value: unknown): value is StepSyncStatus {
     value.newlyRewardedSteps <= value.steps &&
     isNonNegativeSafeInteger(value.coinsAwarded) &&
     isNonNegativeSafeInteger(value.coinBalance) &&
-    Array.isArray(value.appliedBonuses) &&
-    value.appliedBonuses.every(isAppliedBonus) &&
+    areAppliedBonuses(value.appliedBonuses, value.coinsAwarded as number) &&
     isIsoDateTime(value.syncedAt)
   )
 }

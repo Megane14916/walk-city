@@ -85,3 +85,73 @@ describe('BuildingDetailPanel road deletion', () => {
     expect(screen.queryByRole('button', { name: /削除/ })).toBeNull()
   })
 })
+
+describe('BuildingDetailPanel building effects', () => {
+  it('shows the commercial coin bonus in the existing detail layout', () => {
+    const commercialItem = MOCK_BUILDING_CATALOG.find(
+      (item) => item.code === 'commercial',
+    )!
+    const commercialBuilding = {
+      ...MOCK_MY_TOWN.buildings.find(
+        (building) => building.id === 'mock-house-001',
+      )!,
+      id: 'mock-commercial-001',
+      buildingTypeCode: 'commercial',
+    }
+
+    render(
+      <BuildingDetailPanel
+        building={commercialBuilding}
+        item={commercialItem}
+        editable
+        isSaving={false}
+        isDeleting={false}
+        errorMessage={null}
+        onClose={vi.fn()}
+        onRename={vi.fn()}
+        onDeleteRoad={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('heading', { name: '商業施設' })).not.toBeNull()
+    expect(screen.getByText('人口への効果')).not.toBeNull()
+    expect(screen.getByText('なし')).not.toBeNull()
+    expect(
+      screen.getByText('歩数同期時の獲得コインを10%増やします'),
+    ).not.toBeNull()
+  })
+
+  it('shows the factory coin bonus without changing the population card', () => {
+    const factoryItem = MOCK_BUILDING_CATALOG.find(
+      (item) => item.code === 'factory',
+    )!
+    const factoryBuilding = {
+      ...MOCK_MY_TOWN.buildings.find(
+        (building) => building.id === 'mock-apartment-001',
+      )!,
+      id: 'mock-factory-001',
+      buildingTypeCode: 'factory',
+    }
+
+    render(
+      <BuildingDetailPanel
+        building={factoryBuilding}
+        item={factoryItem}
+        editable
+        isSaving={false}
+        isDeleting={false}
+        errorMessage={null}
+        onClose={vi.fn()}
+        onRename={vi.fn()}
+        onDeleteRoad={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('heading', { name: '工場' })).not.toBeNull()
+    expect(screen.getByText('人口への効果')).not.toBeNull()
+    expect(screen.getByText('なし')).not.toBeNull()
+    expect(
+      screen.getByText('歩数同期時の獲得コインを25%増やします'),
+    ).not.toBeNull()
+  })
+})

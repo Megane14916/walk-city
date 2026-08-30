@@ -148,13 +148,17 @@ export const MOCK_BUILDING_CATALOG: BuildingCatalogItem[] = [
     '歩数同期時のコイン獲得を増やす商業施設です',
     [
       {
-        type: 'step_coin_bonus_flat',
-        value: 50,
+        type: 'step_coin_bonus_percent',
+        value: 10,
         targetCategory: null,
-        scope: null,
-        stackingRule: null,
-        description: '歩数同期時のコインを50増やします',
-        metadata: {},
+        scope: 'step_sync',
+        stackingRule: 'commercial_first_combined_cap',
+        description: '歩数同期時の獲得コインを10%増やします',
+        metadata: {
+          maxEffectiveCount: 3,
+          combinedCapPercent: 50,
+          priority: 1,
+        },
       },
     ],
   ),
@@ -202,7 +206,22 @@ export const MOCK_BUILDING_CATALOG: BuildingCatalogItem[] = [
     'industry',
     2,
     700,
-    '効果が設定されていない工場です',
+    '歩数同期時のコイン獲得を増やす工場です',
+    [
+      {
+        type: 'step_coin_bonus_percent',
+        value: 25,
+        targetCategory: null,
+        scope: 'step_sync',
+        stackingRule: 'commercial_first_combined_cap',
+        description: '歩数同期時の獲得コインを25%増やします',
+        metadata: {
+          maxEffectiveCount: 2,
+          combinedCapPercent: 50,
+          priority: 2,
+        },
+      },
+    ],
   ),
 ]
 
