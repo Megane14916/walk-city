@@ -23,14 +23,33 @@ describe('MarketList', () => {
     expect(within(rows[1]).getByText('住宅（大）')).not.toBeNull()
     expect(within(rows[1]).getByText('人口を50人増加')).not.toBeNull()
     expect(within(rows[1]).getByText('200')).not.toBeNull()
+    expect(
+      within(rows[2]).getByText(
+        '隣接する住宅（小）は人口+5、住宅（大）は人口+10（最大+40）',
+      ),
+    ).not.toBeNull()
+    expect(
+      within(rows[3]).getByText(
+        '住宅（小）1軒につき人口+5、住宅（大）1軒につき人口+10',
+      ),
+    ).not.toBeNull()
+    expect(within(rows[5]).getByText('人口を20人増加')).not.toBeNull()
+    expect(
+      within(rows[6]).getByText('上下左右に隣接する土地へ建物を配置可能'),
+    ).not.toBeNull()
+    expect(
+      within(rows[7]).getByText(
+        '住宅（小）1軒につき人口+20、住宅（大）1軒につき人口+30',
+      ),
+    ).not.toBeNull()
     expect(within(rows[9]).getByText('未開放領域アンロック')).not.toBeNull()
   })
 
-  it('keeps model effects empty while showing configured costs', () => {
+  it('keeps unimplemented model effects empty while showing configured costs', () => {
     render(<MarketList items={MARKET_ITEMS} />)
 
     const rows = screen.getAllByRole('listitem')
-    expect(within(rows[2]).queryByText(/人口/)).toBeNull()
+    expect(within(rows[4]).queryByText(/人口/)).toBeNull()
     expect(within(rows[2]).getByText('150')).not.toBeNull()
     expect(within(rows[6]).getByText('0')).not.toBeNull()
     expect(within(rows[9]).getByText('20×20')).not.toBeNull()
@@ -57,7 +76,7 @@ describe('MarketList', () => {
     ).toBe('true')
   })
 
-  it('allows every effect-free model to be selected when catalog-backed', () => {
+  it('allows every model to be selected when catalog-backed', () => {
     const modelCodes = [
       'small_park',
       'hospital',
