@@ -14,6 +14,10 @@ import type { DailySteps, GetDailyStepsInput } from '../../features/health/types
 import type { ApiResult } from '../../types/common'
 import { MOCK_DAILY_STEPS_BY_DATE } from '../data/health'
 import { MOCK_AUTH_USER } from '../data/users'
+import {
+  mockWalkCityStore,
+  type MockWalkCityStore,
+} from './walk-city-store'
 
 export type MockGoogleOperation =
   | 'getGoogleIntegrationState'
@@ -31,6 +35,7 @@ export type MockGoogleIntegrationApiOptions = {
   initialHealthConnectionStatus?: GoogleHealthConnection['status']
   stepsByDate?: Record<string, number>
   now?: () => Date
+  store?: MockWalkCityStore
 }
 
 export type MockGoogleIntegrationApi = GoogleIntegrationApi & {
@@ -77,6 +82,7 @@ export function createMockGoogleIntegrationApi(
 ): MockGoogleIntegrationApi {
   const latencyMs = options.latencyMs ?? 150
   const now = options.now ?? (() => new Date())
+  const store = options.store
   const initialSignedIn = options.initiallySignedIn ?? false
   const initialHealthStatus =
     options.initialHealthConnectionStatus ??
@@ -107,7 +113,12 @@ export function createMockGoogleIntegrationApi(
     if (!signedIn) return null
 
     return {
-      user: { ...MOCK_AUTH_USER },
+      user: {
+        ...MOCK_AUTH_USER,
+        displayName:
+          store?.getMutableTown().town.owner.displayName ??
+          MOCK_AUTH_USER.displayName,
+      },
       expiresAt: new Date(now().getTime() + 60 * 60 * 1000).toISOString(),
     }
   }
@@ -284,4 +295,6 @@ export function createMockGoogleIntegrationApi(
   }
 }
 
-export const mockGoogleIntegrationApi = createMockGoogleIntegrationApi()
+export const mockGoogleIntegrationApi = createMockGoogleIntegrationApi({
+  store: mockWalkCityStore,
+})

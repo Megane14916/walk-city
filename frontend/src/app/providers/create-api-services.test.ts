@@ -30,6 +30,11 @@ describe('createApiServices', () => {
       await services.googleIntegrationApi.getGoogleIntegrationState()
     const townResult = await services.townApi.getMyTown()
     const rankingResult = await services.rankingApi.getPopulationRanking({})
+    const settingsResult = await services.settingsApi.updateUserSettings({
+      displayName: 'Provider利用者',
+      townName: 'Providerの街',
+    })
+    const updatedTownResult = await services.townApi.getMyTown()
 
     expect(result).toEqual({
       ok: true,
@@ -45,6 +50,16 @@ describe('createApiServices', () => {
         entries: expect.arrayContaining([
           expect.objectContaining({ isCurrentUser: true, population: 60 }),
         ]),
+      },
+    })
+    expect(settingsResult).toMatchObject({ ok: true })
+    expect(updatedTownResult).toMatchObject({
+      ok: true,
+      data: {
+        town: {
+          name: 'Providerの街',
+          owner: { displayName: 'Provider利用者' },
+        },
       },
     })
     expect(typeof services.stepSyncApi.syncSteps).toBe('function')
@@ -81,6 +96,7 @@ describe('createApiServices', () => {
     expect(typeof services.townApi.unlockLand).toBe('function')
     expect(services.townApi.supportsBuildingRename).toBe(true)
     expect(typeof services.rankingApi.getPopulationRanking).toBe('function')
+    expect(typeof services.settingsApi.updateUserSettings).toBe('function')
     expect(typeof services.stepSyncApi.syncSteps).toBe('function')
     expect(
       typeof services.googleIntegrationApi.getGoogleIntegrationState,

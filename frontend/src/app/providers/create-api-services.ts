@@ -1,5 +1,6 @@
 import type { GoogleIntegrationApi } from '../../features/auth/api'
 import type { StepSyncApi } from '../../features/health/api'
+import type { SettingsApi } from '../../features/settings/api'
 import type { TownApi } from '../../features/town/api'
 import {
   getSupabaseClientConfig,
@@ -8,6 +9,7 @@ import {
 import {
   createMockGoogleIntegrationApi,
   createMockRankingApi,
+  createMockSettingsApi,
   createMockStepSyncApi,
   createMockTownApi,
   createMockWalkCityStore,
@@ -54,6 +56,7 @@ type SupabaseServiceBundle = {
   googleIntegrationApi: GoogleIntegrationApi
   stepSyncApi: StepSyncApi
   rankingApi: import('../../features/ranking/api').RankingApi
+  settingsApi: SettingsApi
   townApi: TownApi
 }
 
@@ -69,6 +72,7 @@ function createLazySupabaseServiceBundle(
       import('../../features/auth/services'),
       import('../../features/health/services'),
       import('../../features/ranking/services'),
+      import('../../features/settings/services'),
       import('../../features/town/services'),
     ]).then(
       ([
@@ -76,6 +80,7 @@ function createLazySupabaseServiceBundle(
         { createSupabaseGoogleIntegrationApi },
         { createSupabaseStepSyncApi },
         { createSupabaseRankingApi },
+        { createSupabaseSettingsApi },
         { createSupabaseTownApi },
       ]) => {
         const supabase = createBrowserSupabaseClient(environment)
@@ -83,6 +88,7 @@ function createLazySupabaseServiceBundle(
           googleIntegrationApi: createSupabaseGoogleIntegrationApi(supabase),
           stepSyncApi: createSupabaseStepSyncApi(supabase),
           rankingApi: createSupabaseRankingApi(supabase),
+          settingsApi: createSupabaseSettingsApi(supabase),
           townApi: createSupabaseTownApi(supabase),
         }
       },
@@ -138,6 +144,12 @@ function createLazySupabaseServiceBundle(
     },
   }
 
+  const settingsApi: SettingsApi = {
+    async updateUserSettings(input) {
+      return (await loadService()).settingsApi.updateUserSettings(input)
+    },
+  }
+
   const townApi: TownApi = {
     supportsBuildingRename: true,
     async getBuildingCatalog() {
@@ -169,7 +181,7 @@ function createLazySupabaseServiceBundle(
     },
   }
 
-  return { googleIntegrationApi, stepSyncApi, rankingApi, townApi }
+  return { googleIntegrationApi, stepSyncApi, rankingApi, settingsApi, townApi }
 }
 
 export function createApiServices(
@@ -182,9 +194,10 @@ export function createApiServices(
   if (mode === 'mock') {
     const store = createMockWalkCityStore()
     return {
-      googleIntegrationApi: createMockGoogleIntegrationApi(),
+      googleIntegrationApi: createMockGoogleIntegrationApi({ store }),
       stepSyncApi: createMockStepSyncApi({ store }),
       rankingApi: createMockRankingApi({ store }),
+      settingsApi: createMockSettingsApi({ store }),
       townApi: createMockTownApi({ store }),
     }
   }
