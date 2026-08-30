@@ -8,6 +8,7 @@ import {
 } from "../_shared/google-health-client.ts";
 import { decryptRefreshToken } from "../_shared/health-token-crypto.ts";
 import { createAdminClient, createUserClient } from "../_shared/supabase-clients.ts";
+import { parseAppliedBonuses } from "./bonus-parser.ts";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -78,8 +79,11 @@ Deno.serve(async (request) => {
     const coinBalance = nonNegativeInteger(rewardData.balance);
     const newlyRewardedSteps = nonNegativeInteger(rewardData.records[0].newly_rewarded_steps);
     const syncedAt = rewardData.synced_at;
+    const appliedBonuses = coinsAwarded === null
+      ? null
+      : parseAppliedBonuses(rewardData.applied_bonuses, coinsAwarded);
     if (coinsAwarded === null || coinBalance === null || newlyRewardedSteps === null ||
-      typeof syncedAt !== "string") {
+      appliedBonuses === null || typeof syncedAt !== "string") {
       throw new Error("STEP_REWARD_RESPONSE_INVALID");
     }
 
@@ -96,7 +100,7 @@ Deno.serve(async (request) => {
       newlyRewardedSteps,
       coinsAwarded,
       coinBalance,
-      appliedBonuses: [],
+      appliedBonuses,
       syncedAt,
     });
   } catch (error) {
