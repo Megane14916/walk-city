@@ -41,8 +41,12 @@ select col_type_is('public', 'unlocked_areas', 'unlocked_at', 'timestamp with ti
 select hasnt_column('public', 'building_effects', 'description', 'effect description is not stored');
 
 select is((select count(*) from public.building_types), 9::bigint, 'seed has nine formal catalog rows');
-select is((select count(*) from public.building_effects), 2::bigint, 'only two residential effects are seeded');
-select is((select count(*) from public.building_effects where effect_type <> 'population_flat'), 0::bigint, 'only population effects remain');
+select is((select count(*) from public.building_effects), 4::bigint, 'residential and step coin effects are seeded');
+select is(
+  (select count(*) from public.building_effects where effect_type = 'step_coin_bonus_percent'),
+  2::bigint,
+  'commercial and factory percentage effects are seeded'
+);
 select is(has_table_privilege('anon', 'public.building_types', 'SELECT'), false, 'anonymous catalog access is disabled');
 select is(has_column_privilege('authenticated', 'public.towns', 'coins', 'SELECT'), false, 'authenticated users cannot query base coins');
 select is(has_table_privilege('authenticated', 'public.building_catalog_view', 'SELECT'), true, 'authenticated users can query catalog view');
